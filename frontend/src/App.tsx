@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { fetchProviders } from "./api";
-import type { Provider } from "./types";
+import { fetchProviders, launchProvider } from "./api";
+import type { Provider, SessionMode } from "./types";
 
 function isAvailable(provider: Provider): boolean {
   return provider.installed && provider.error === null;
@@ -12,6 +12,13 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
+  const [launchTarget, setLaunchTarget] = useState<Provider | null>(null);
+  const [workspacePath, setWorkspacePath] = useState("");
+  const [lastWorkspacePath, setLastWorkspacePath] = useState("");
+  const [sessionMode, setSessionMode] = useState<SessionMode>("new");
+  const [launching, setLaunching] = useState(false);
+  const [launchError, setLaunchError] = useState<string | null>(null);
+  const [launchNotice, setLaunchNotice] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -37,6 +44,50 @@ export default function App() {
   }, [refresh]);
 
   const selected = providers.find((provider) => provider.id === selectedId);
+
+  const openLaunch = (provider: Provider) => {
+    setSelectedId(provider.id);
+    setLaunchTarget(provider);
+    setWorkspacePath(lastWorkspacePath);
+    setSessionMode("new");
+    setLaunchError(null);
+  };
+
+  const closeLaunch = () => {
+    if (!launching) {
+      setLaunchTarget(null);
+      setLaunchError(null);
+    }
+  };
+
+  const submitLaunch = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!launchTarget || launching) {
+      return;
+    }
+
+    setLaunching(true);
+    setLaunchError(null);
+    setLaunchNotice(null);
+    try {
+      const result = await launchProvider({
+        provider_id: launchTarget.id,
+        workspace_path: workspacePath,
+        session_mode: sessionMode,
+      });
+      setLastWorkspacePath(result.workspace_path);
+      setLaunchTarget(null);
+      setLaunchNotice(
+        `${launchTarget.display_name} launched in ${result.workspace_path}`,
+      );
+    } catch (error) {
+      setLaunchError(
+        error instanceof Error ? error.message : "CLI launch failed",
+      );
+    } finally {
+      setLaunching(false);
+    }
+  };
 
   return (
     <main className="shell">
@@ -82,6 +133,12 @@ export default function App() {
         </div>
       )}
 
+      {launchNotice && (
+        <div className="launch-notice" role="status">
+          {launchNotice}
+        </div>
+      )}
+
       <section className="provider-grid" aria-live="polite">
         {providers.map((provider, index) => {
           const available = isAvailable(provider);
@@ -123,10 +180,21 @@ export default function App() {
                   <span className="provider-error">{provider.error}</span>
                 )}
               </button>
-              <details>
-                <summary>Executable path</summary>
-                <code>{provider.path ?? "Not found in PATH"}</code>
-              </details>
+              <div className="provider-footer">
+                <details>
+                  <summary>Executable path</summary>
+                  <code>{provider.path ?? "Not found in PATH"}</code>
+                </details>
+                <button
+                  className="launch-button"
+                  type="button"
+                  aria-label={`Launch ${provider.display_name}`}
+                  disabled={!available}
+                  onClick={() => openLaunch(provider)}
+                >
+                  Launch
+                </button>
+              </div>
             </article>
           );
         })}
@@ -146,6 +214,86 @@ export default function App() {
         </div>
         <p className="selection-note">Resets when this page reloads</p>
       </footer>
+
+      {launchTarget && (
+        <div className="modal-backdrop">
+          <section
+            className="launch-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="launch-heading"
+          >
+            <p className="section-label">LAUNCH CLI</p>
+            <h2 id="launch-heading">{launchTarget.display_name}</h2>
+            <p className="modal-copy">
+              Choose a local workspace and how this CLI session should start.
+            </p>
+
+            <form onSubmit={(event) => void submitLaunch(event)}>
+              <label className="workspace-field">
+                <span>Workspace absolute path</span>
+                <input
+                  type="text"
+                  value={workspacePath}
+                  onChange={(event) => setWorkspacePath(event.target.value)}
+                  placeholder="/Users/name/project"
+                  autoFocus
+                  disabled={launching}
+                  required
+                />
+              </label>
+
+              <fieldset disabled={launching}>
+                <legend>Session</legend>
+                <label>
+                  <input
+                    type="radio"
+                    name="session-mode"
+                    value="new"
+                    checked={sessionMode === "new"}
+                    onChange={() => setSessionMode("new")}
+                  />
+                  New session
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="session-mode"
+                    value="continue"
+                    checked={sessionMode === "continue"}
+                    onChange={() => setSessionMode("continue")}
+                  />
+                  Continue last session
+                </label>
+              </fieldset>
+
+              {launchError && (
+                <div className="modal-error" role="alert">
+                  {launchError}
+                </div>
+              )}
+
+              <div className="modal-actions">
+                <button
+                  className="cancel-button"
+                  type="button"
+                  onClick={closeLaunch}
+                  disabled={launching}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="modal-launch-button"
+                  type="submit"
+                  disabled={launching}
+                >
+                  {launching ? "Launching…" : "Launch"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

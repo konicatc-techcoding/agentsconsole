@@ -171,6 +171,15 @@ h1 {
   background: #28161b;
 }
 
+.launch-notice {
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border: 1px solid #28654d;
+  border-radius: 10px;
+  color: #bdf5da;
+  background: #10261d;
+}
+
 .provider-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -277,9 +286,17 @@ code {
   font-size: 0.78rem;
 }
 
-details {
-  padding: 13px 22px 16px;
+.provider-footer {
+  display: flex;
+  min-height: 49px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px 8px 22px;
   border-top: 1px solid #202733;
+}
+
+details {
+  flex: 1;
   color: #7f8ca0;
   font-size: 0.78rem;
 }
@@ -294,6 +311,27 @@ details code {
   margin-top: 12px;
   color: #b9c5d7;
   white-space: nowrap;
+}
+
+.launch-button {
+  padding: 7px 12px;
+  border: 1px solid #526bff;
+  border-radius: 8px;
+  color: #e5eaff;
+  background: #1a2349;
+  cursor: pointer;
+}
+
+.launch-button:hover:not(:disabled) {
+  border-color: #86a5ff;
+  background: #253269;
+}
+
+.launch-button:disabled {
+  border-color: #303847;
+  color: #687487;
+  background: #151a22;
+  cursor: not-allowed;
 }
 
 .loading-message {
@@ -319,6 +357,124 @@ details code {
   margin-bottom: 0;
   color: #768499;
   font-size: 0.8rem;
+}
+
+.modal-backdrop {
+  position: fixed;
+  z-index: 10;
+  display: grid;
+  inset: 0;
+  overflow: auto;
+  padding: 24px;
+  place-items: center;
+  background: rgb(2 5 10 / 78%);
+  backdrop-filter: blur(8px);
+}
+
+.launch-modal {
+  width: min(520px, 100%);
+  padding: 28px;
+  border: 1px solid #303a4b;
+  border-radius: 18px;
+  background: #111720;
+  box-shadow: 0 30px 90px rgb(0 0 0 / 50%);
+}
+
+.launch-modal h2 {
+  margin-bottom: 10px;
+  font-size: 1.6rem;
+}
+
+.modal-copy {
+  margin-bottom: 24px;
+  color: #98a5b7;
+  line-height: 1.55;
+}
+
+.workspace-field {
+  display: grid;
+  gap: 8px;
+  color: #d9e0eb;
+  font-size: 0.85rem;
+}
+
+.workspace-field input {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid #3a4659;
+  border-radius: 9px;
+  color: #f4f7fb;
+  background: #090d13;
+}
+
+.workspace-field input:focus {
+  border-color: #7188ff;
+  outline: 2px solid rgb(113 136 255 / 20%);
+}
+
+.launch-modal fieldset {
+  display: grid;
+  gap: 10px;
+  margin: 22px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.launch-modal fieldset legend {
+  margin-bottom: 10px;
+  color: #8d9bad;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.launch-modal fieldset label {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  color: #d6dde8;
+}
+
+.modal-error {
+  margin-top: 20px;
+  padding: 11px 12px;
+  border: 1px solid #70404a;
+  border-radius: 9px;
+  color: #ffc7ce;
+  background: #28161b;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 28px;
+}
+
+.cancel-button,
+.modal-launch-button {
+  padding: 10px 16px;
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.cancel-button {
+  border: 1px solid #3a4659;
+  color: #d6dde8;
+  background: #171d27;
+}
+
+.modal-launch-button {
+  min-width: 102px;
+  border: 1px solid #657cff;
+  color: #f2f5ff;
+  background: #4056d6;
+}
+
+.cancel-button:disabled,
+.modal-launch-button:disabled {
+  cursor: wait;
+  opacity: 0.6;
 }
 
 @media (max-width: 760px) {

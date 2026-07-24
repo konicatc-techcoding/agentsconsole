@@ -50,6 +50,48 @@ function mockFetch(data: Provider[] = providers) {
     .mockResolvedValue({ ok: true, json: async () => data } as Response);
 }
 
+function mockApi(options?: { launchError?: string; launchDelay?: boolean }) {
+  let finishLaunch: (() => void) | undefined;
+  const launchGate = options?.launchDelay
+    ? new Promise<void>((resolve) => {
+        finishLaunch = resolve;
+      })
+    : Promise.resolve();
+
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    if (input === "/api/providers") {
+      return {
+        ok: true,
+        json: async () => providers,
+      } as Response;
+    }
+
+    await launchGate;
+    if (options?.launchError) {
+      return {
+        ok: false,
+        status: 400,
+        json: async () => ({
+          detail: {
+            code: "invalid_workspace",
+            message: options.launchError,
+          },
+        }),
+      } as Response;
+    }
+    return {
+      ok: true,
+      json: async () => ({
+        launched: true,
+        provider_id: "codex",
+        workspace_path: "/Users/zack/My Project",
+      }),
+    } as Response;
+  });
+
+  return { fetchMock, finishLaunch };
+}
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -123,6 +165,9 @@ describe("AgentOS Console", () => {
     expect(
       screen.getByRole("button", { name: /Hermes CLI.*Available/s }),
     ).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Launch Antigravity CLI" }),
+    ).toBeDisabled();
   });
 
   it("refreshes discovery without a page reload", async () => {
@@ -146,5 +191,167 @@ describe("AgentOS Console", () => {
     expect(screen.queryByText(/Create task/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Terminal/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Prompt submission/i)).not.toBeInTheDocument();
+  });
+
+  it("launches a selected provider and remembers the successful workspace", async () => {
+    const { fetchMock } = mockApi();
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Launch Codex CLI" }),
+    );
+    expect(
+      screen.getByText("Current selection: Codex CLI"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Codex CLI" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "New session" })).toBeChecked();
+
+    await user.type(
+      screen.getByRole("textbox", { name: "Workspace absolute path" }),
+      "/Users/zack/My Project",
+    );
+    await user.click(screen.getByRole("button", { name: "Launch" }));
+
+    expect(
+      await screen.findByText(
+        "Codex CLI launched in /Users/zack/My Project",
+      ),
+    ).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/launch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        provider_id: "codex",
+        workspace_path: "/Users/zack/My Project",
+        session_mode: "new",
+      }),
+    });
+
+    await user.click(screen.getByRole("button", { name: "Launch Claude CLI" }));
+    expect(
+      screen.getByRole("textbox", { name: "Workspace absolute path" }),
+    ).toHaveValue("/Users/zack/My Project");
+    expect(screen.getByRole("radio", { name: "New session" })).toBeChecked();
+  });
+
+  it("clears the successful workspace after a full remount", async () => {
+    const { fetchMock } = mockApi();
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    const view = render(<App />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Launch Codex CLI" }),
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Workspace absolute path" }),
+      "/Users/zack/My Project",
+    );
+    await user.click(screen.getByRole("button", { name: "Launch" }));
+    await screen.findByText("Codex CLI launched in /Users/zack/My Project");
+
+    view.unmount();
+    render(<App />);
+    expect(await screen.findByText("No CLI selected")).toBeInTheDocument();
+    await user.click(
+      await screen.findByRole("button", { name: "Launch Codex CLI" }),
+    );
+    expect(
+      screen.getByRole("textbox", { name: "Workspace absolute path" }),
+    ).toHaveValue("");
+  });
+
+  it("keeps the launch modal open when the API rejects a workspace", async () => {
+    const { fetchMock } = mockApi({
+      launchError: "Workspace does not exist",
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Launch Codex CLI" }),
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Workspace absolute path" }),
+      "/missing",
+    );
+    await user.click(screen.getByRole("button", { name: "Launch" }));
+
+    expect(await screen.findByText("Workspace does not exist")).toHaveAttribute(
+      "role",
+      "alert",
+    );
+    expect(
+      screen.getByRole("heading", { name: "Codex CLI" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
+  });
+
+  it("locks modal controls while a launch request is pending", async () => {
+    const { fetchMock, finishLaunch } = mockApi({ launchDelay: true });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Launch Codex CLI" }),
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Workspace absolute path" }),
+      "/Users/zack/My Project",
+    );
+    await user.click(screen.getByRole("button", { name: "Launch" }));
+
+    expect(screen.getByRole("button", { name: "Launching…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+    expect(
+      screen.getByRole("textbox", { name: "Workspace absolute path" }),
+    ).toBeDisabled();
+
+    finishLaunch?.();
+    expect(
+      await screen.findByText(
+        "Codex CLI launched in /Users/zack/My Project",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("sends continue mode but resets the next modal to new session", async () => {
+    const { fetchMock } = mockApi();
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Launch Codex CLI" }),
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Workspace absolute path" }),
+      "/Users/zack/My Project",
+    );
+    await user.click(
+      screen.getByRole("radio", { name: "Continue last session" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Launch" }));
+
+    await screen.findByText("Codex CLI launched in /Users/zack/My Project");
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/launch",
+      expect.objectContaining({
+        body: JSON.stringify({
+          provider_id: "codex",
+          workspace_path: "/Users/zack/My Project",
+          session_mode: "continue",
+        }),
+      }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Launch Codex CLI" }));
+    expect(screen.getByRole("radio", { name: "New session" })).toBeChecked();
   });
 });

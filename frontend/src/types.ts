@@ -7,3 +7,17 @@ export interface Provider {
   version: string | null;
   error: string | null;
 }
+
+export type SessionMode = "new" | "continue";
+
+export interface LaunchRequest {
+  provider_id: string;
+  workspace_path: string;
+  session_mode: SessionMode;
+}
+
+export interface LaunchResponse {
+  launched: boolean;
+  provider_id: string;
+  workspace_path: string;
+}

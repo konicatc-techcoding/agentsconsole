@@ -1,8 +1,12 @@
 """Local API for the AgentOS Console."""
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from typing import Literal
 
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+from .launcher import LaunchError, LaunchResult, launch_provider
 from .providers import ProviderResult, detect_providers
 
 app = FastAPI(title="AgentOS Console", version="0.1.0")
@@ -10,9 +14,15 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
     allow_credentials=False,
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+
+class LaunchRequest(BaseModel):
+    provider_id: str
+    workspace_path: str
+    session_mode: Literal["new", "continue"]
 
 
 @app.get("/api/providers")
@@ -20,3 +30,20 @@ def providers() -> list[ProviderResult]:
     """Return fresh, server-controlled CLI discovery results."""
 
     return detect_providers()
+
+
+@app.post("/api/launch")
+def launch(request: LaunchRequest) -> LaunchResult:
+    """Open a fixed provider command in a local Terminal.app window."""
+
+    try:
+        return launch_provider(
+            request.provider_id,
+            request.workspace_path,
+            request.session_mode,
+        )
+    except LaunchError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc

@@ -1,8 +1,9 @@
 # AgentOS Console
 
 A localhost-only control surface for discovering the AI command-line tools
-installed on this Mac. This first slice is intentionally read-only: it can
-detect and select a provider, but it cannot launch a task or send a prompt.
+installed on this Mac. It can detect and select a provider, then open its
+native interactive CLI in Terminal.app. It does not send prompts or manage
+launched processes.
 
 ## Requirements
 
@@ -34,6 +35,21 @@ npm run dev
 
 Open `http://127.0.0.1:5173`. Vite proxies `/api` requests to the local
 FastAPI server.
+
+## Launching a CLI
+
+On macOS, each available provider card has a `Launch` button. Choose an
+existing absolute workspace path and start either a new session or the most
+recent session for that provider. A successful request opens a separate
+Terminal.app window in the selected workspace and leaves all interaction and
+approval handling to the native CLI.
+
+The launch endpoint accepts only the fixed provider commands documented by
+the UI. It rejects relative, missing, file, and filesystem-root workspaces,
+does not accept custom arguments or permission-bypass flags, and does not
+track or stop the Terminal process after launch. Workspace selection stays in
+React memory and resets on a full page reload. Non-macOS launch requests return
+an unsupported-platform error.
 
 ## Verification
 
