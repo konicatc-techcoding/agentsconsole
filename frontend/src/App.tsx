@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { fetchProviders, launchProvider, validateWorkspace } from "./api";
+import { defaultRuntime } from "./runtime";
+import type { RuntimeAdapter } from "./runtime/types";
 import type { Provider, SessionMode } from "./types";
 
 const WORKSPACE_PREFERENCES_KEY = "agentos-console.workspace-preferences.v1";
@@ -72,7 +73,11 @@ function saveWorkspacePreferences(preferences: WorkspacePreferences): boolean {
   }
 }
 
-export default function App() {
+interface AppProps {
+  runtime?: RuntimeAdapter;
+}
+
+export default function App({ runtime = defaultRuntime }: AppProps) {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,7 +98,7 @@ export default function App() {
     setLoading(true);
     setPageError(null);
     try {
-      const discovered = await fetchProviders();
+      const discovered = await runtime.fetchProviders();
       setProviders(discovered);
       setSelectedId((current) => {
         const selected = discovered.find((provider) => provider.id === current);
@@ -106,7 +111,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [runtime]);
 
   useEffect(() => {
     void refresh();
@@ -157,7 +162,7 @@ export default function App() {
     setLaunchError(null);
     setSaveNotice(null);
     try {
-      const result = await validateWorkspace(workspacePath);
+      const result = await runtime.validateWorkspace(workspacePath);
       const previous = workspacePreferences[launchTarget.id];
       const next = {
         ...workspacePreferences,
@@ -191,7 +196,7 @@ export default function App() {
     setLaunchError(null);
     setLaunchNotice(null);
     try {
-      const result = await launchProvider({
+      const result = await runtime.launchProvider({
         provider_id: launchTarget.id,
         workspace_path: workspacePath,
         session_mode: sessionMode,

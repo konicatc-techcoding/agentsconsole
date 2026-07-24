@@ -5,28 +5,28 @@
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md，確認 LOO-7 規格與 agent-ready 狀態，接著從更新後的 main
-開始建立 macOS Tauri Foundation；若尚未安裝 Rust，使用官方 rustup stable。
+請先讀取 status.md，接著執行 $finn-review，review LOO-7 的 Tauri
+Foundation PR；不得由 builder 自行 merge。
 ```
 
-LOO-5 與 LOO-6 均已完成、通過 review 並合併至 `main`。下一項工作是
-LOO-7：建立 macOS Tauri Foundation 並保留 Web runtime。LOO-7 規格已建立，
-目前仍在 Backlog，尚未加上 `agent-ready`。
+LOO-7 已完成 Tauri 2 macOS Foundation、runtime adapter、Rust commands、
+完整自動測試與真實 App smoke，目前準備建立 PR 交給 `$finn-review`。
 
 ## Source of truth
 
 - Workspace：`/Users/zackchiu/CodexCLI/agentsconsole`
-- Git branch：`main`
+- Git branch：`LOO-7-tauri-foundation`
 - 已合併基線：`5c776d2 Launch CLI sessions in Terminal (#2)`
 - LOO-6 Linear 狀態：`Done`
 - LOO-6 Linear URL：<https://linear.app/loopent/issue/LOO-6/從-provider-卡片在-macos-terminal-啟動-cli-session>
 - LOO-6 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/2>
 - PR #2 狀態：Merged
 - PR #2 merge commit：`5c776d2c0203942f5aa168695c05bf2bad5ec3df`
-- 下一項 Linear issue：`LOO-7 建立 macOS Tauri Foundation 並保留 Web runtime`
+- 目前 Linear issue：`LOO-7 建立 macOS Tauri Foundation 並保留 Web runtime`
 - LOO-7 URL：<https://linear.app/loopent/issue/LOO-7/建立-macos-tauri-foundation-並保留-web-runtime>
-- LOO-7 狀態：`Backlog`
-- LOO-7 label：尚無 `agent-ready`
+- LOO-7 狀態：`In Progress`
+- LOO-7 label：`agent-ready`
+- LOO-7 assignee：Zack Chiu
 - LOO-7 relation：`blocked by LOO-6` 關聯仍保留；LOO-6 已 Done，前置條件已完成
 - 上一項 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/1>
 - 上一項 PR 狀態：Merged
@@ -128,9 +128,9 @@ LOO-6 已加入從每張可用 provider 卡片啟動 macOS Terminal.app 的功�
 Backend 測試仍有一則 Starlette TestClient 的 upstream deprecation warning，
 不影響測試結果或 runtime。
 
-## 下一項：LOO-7 Tauri Foundation
+## LOO-7 Tauri Foundation
 
-LOO-7 已完成規格確認，但尚未進入實作：
+LOO-7 已完成實作：
 
 - 使用 Tauri 2 建立 macOS App shell，沿用現有 React/Vite UI。
 - App 名稱為 `AgentOS Console`，bundle identifier 為
@@ -141,11 +141,36 @@ LOO-7 已完成規格確認，但尚未進入實作：
 - Rust 承接 Provider discovery、workspace validation 與固定
   Terminal.app launch；Tauri runtime 不依賴 FastAPI。
 - Web runtime、FastAPI 與現有 localStorage schema 均保留。
-- Rust 使用官方 `rustup` stable；目前本機尚未安裝 `rustc` 與 `cargo`。
+- Rust 使用官方 `rustup` stable；本機已安裝並驗證 `rustc 1.97.1`、
+  `cargo 1.97.1` 與 `aarch64-apple-darwin` target。
+- Rust Provider discovery 保留 PATH 實際命中的 executable path，不將
+  Codex symlink 改寫成內部 standalone release path。
+- Tauri capability 僅使用 core default；App 只註冊三個固定 commands，
+  沒有 shell 或 filesystem plugin。
 - 本階段不做 embedded PTY、2×2 terminal 版面、App-managed JSON/Markdown
   storage、跨平台、簽署、公證或 updater。
 
 完整 acceptance criteria、non-goals 與驗證方式以 Linear `LOO-7` 為準。
+
+## LOO-7 驗證結果
+
+- Rust tests：13 passed
+- Frontend tests：18 passed
+- Backend tests：34 passed
+- Frontend production build：passed
+- Unsigned Tauri macOS `.app` build：passed
+- 真實 Tauri App smoke（未啟動 FastAPI）：
+  - `AI Agent Console` 首頁與既有四張卡片正常
+  - 四個 Provider 均為 Available
+  - Codex executable path 為 `/Users/zackchiu/.local/bin/codex`
+  - filesystem root Save 安全拒絕
+  - 有效 workspace Save 成功
+  - Codex New 與 Continue 均成功在 Terminal.app 啟動
+  - recent workspace selector 正常帶入啟動過的 workspace
+- Web runtime smoke：
+  - 四個 Provider 均為 Available
+  - FastAPI workspace Save 與 Codex Launch 成功
+  - Browser console 無 warning 或 error
 
 ## 本機預覽方式
 
@@ -169,14 +194,9 @@ npm run dev
 
 ## 接續流程
 
-1. 使用者再次確認 LOO-7 規格後，在 Linear 加上 `agent-ready`。
-2. 執行 `$finn-build` 領取 LOO-7，從已同步的 `main` 建立功能分支。
-3. 依已選方向使用官方 `rustup` 安裝 stable Rust，驗證 `rustc`、`cargo`
-   與 macOS target。
-4. 先建立最小 Tauri shell 與 runtime adapter，再移植 Rust discovery、
-   workspace validation 與 fixed launcher。
-5. 執行 Rust、backend、frontend 測試、Web/Tauri build 與實機 smoke test，
-   再開 PR 交給 `$finn-review`。
+1. 完成最終 diff review。
+2. 開啟 LOO-7 PR，將 URL 回填 Linear，狀態移至 `In Review`。
+3. 執行 `$finn-review`；builder 不得自行 merge。
 
 ## 本檔注意事項
 

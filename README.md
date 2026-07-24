@@ -1,18 +1,31 @@
 # AgentOS Console
 
-A localhost-only control surface for discovering the AI command-line tools
-installed on this Mac. It can detect and select a provider, then open its
-native interactive CLI in Terminal.app. It does not send prompts or manage
-launched processes.
+A local control surface for discovering the AI command-line tools installed
+on this Mac. It runs either as a browser-based React/FastAPI application or as
+a native Tauri 2 macOS application using the same React UI. It can detect and
+select a provider, then open its native interactive CLI in Terminal.app. It
+does not send prompts or manage launched processes.
 
 ## Requirements
 
 - Python 3.12 or newer
 - Node.js 22 or newer
-- Any of the supported CLIs available on the backend process `PATH`:
+- macOS with Xcode command-line build tools
+- For the native app, stable Rust installed through official
+  [rustup](https://rustup.rs/), not Homebrew
+- Any of the supported CLIs available on the active runtime's `PATH`:
   `hermes`, `codex`, `claude`, or `agy`
 
-## Backend
+Install the frontend dependencies once:
+
+```bash
+cd frontend
+npm install
+```
+
+## Web mode
+
+Start FastAPI from the repository root:
 
 ```bash
 python3 -m venv .venv
@@ -23,18 +36,49 @@ python3 -m venv .venv
 The provider endpoint is available at
 `http://127.0.0.1:8000/api/providers`.
 
-## Frontend
-
-In another terminal:
+In another terminal, start Vite:
 
 ```bash
 cd frontend
-npm install
 npm run dev
 ```
 
 Open `http://127.0.0.1:5173`. Vite proxies `/api` requests to the local
 FastAPI server.
+
+## Tauri macOS mode
+
+Install the official stable toolchain and verify the native target:
+
+```bash
+rustup toolchain install stable --profile minimal
+rustup component add rustfmt
+rustc --version
+cargo --version
+rustup target list --installed
+```
+
+Start the native development app from `frontend/`:
+
+```bash
+cd frontend
+npm run tauri:dev
+```
+
+Tauri starts the Vite development server itself. Do not start FastAPI for this
+mode: Provider discovery, workspace validation, and fixed Terminal.app launch
+are handled by typed Rust commands inside the app.
+
+Build an unsigned macOS application:
+
+```bash
+cd frontend
+npm run tauri:build
+```
+
+The app is written to
+`src-tauri/target/release/bundle/macos/AgentOS Console.app`. This build does
+not sign, notarize, create a DMG, or configure an updater.
 
 ## Launching a CLI
 
@@ -45,8 +89,8 @@ CLI. The modal's `Start` button opens a separate Terminal.app window and
 leaves all interaction and approval handling to the native CLI. Starting a
 session does not change the saved default workspace.
 
-Workspace preferences are stored separately for each provider in this
-browser's local storage:
+Workspace preferences are stored separately for each provider in the current
+browser or WebView origin's local storage:
 
 - `New session` starts in the default workspace. An optional single-level
   folder name creates a new child folder and starts there.
@@ -55,16 +99,17 @@ browser's local storage:
   back to the saved default.
 
 These recent paths identify workspaces, not native CLI session IDs. Browser
-site data is the current source of truth; a future native app may replace it
-with app-managed data and a generated Markdown summary.
+site data remains the current source of truth. Web and Tauri use separate
+origin storage and do not synchronize. App-managed files are outside this
+foundation's scope.
 
-The launch endpoint accepts only the fixed provider commands documented by
-the UI. It rejects relative, missing, file, and filesystem-root base
-workspaces. New folder names cannot be absolute, nested, `.` or `..`, and an
-existing name is never overwritten or reused. The endpoint does not accept
-custom arguments or permission-bypass flags and does not track or stop the
-Terminal process after launch. Non-macOS launch requests return an
-unsupported-platform error without creating a folder.
+Both runtimes accept only the fixed provider commands documented by the UI.
+They reject relative, missing, file, and filesystem-root base workspaces. New
+folder names cannot be absolute, nested, `.` or `..`, and an existing name is
+never overwritten or reused. Neither runtime accepts custom arguments or
+permission-bypass flags, and neither tracks or stops the Terminal process
+after launch. The Web backend retains its non-macOS unsupported-platform
+boundary.
 
 `POST /api/workspaces/validate` applies the same base-workspace validation
 without opening Terminal.app.
@@ -76,7 +121,13 @@ without opening Terminal.app.
 cd frontend
 npm test
 npm run build
+cd ../src-tauri
+cargo test
+cd ../frontend
+npm run tauri:build
 ```
 
-The tests mock CLI discovery and never invoke the real tools installed on the
-machine.
+The automated tests mock CLI discovery and Terminal launch. They never invoke
+the real tools installed on the machine. Manual Tauri verification should be
+performed without FastAPI running and should cover real discovery, valid and
+invalid Save, and one New and Continue launch.
