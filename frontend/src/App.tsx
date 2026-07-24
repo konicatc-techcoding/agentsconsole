@@ -240,39 +240,29 @@ export default function App() {
 
   return (
     <main className="shell">
-      <header className="topbar">
-        <div className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            AO
-          </span>
-          <div>
-            <p className="eyebrow">LOCAL CONTROL PLANE</p>
-            <h1>AgentOS Console</h1>
-          </div>
-        </div>
-        <button
-          className="refresh-button"
-          type="button"
-          onClick={() => void refresh()}
-          disabled={loading}
-        >
-          <span aria-hidden="true">↻</span>
-          {loading ? "Discovering…" : "Refresh"}
-        </button>
-      </header>
-
       <section className="intro" aria-labelledby="provider-heading">
         <div>
           <p className="section-label">CLI PROVIDERS</p>
-          <h2 id="provider-heading">Choose your workspace engine</h2>
+          <h1 id="provider-heading">AI Agent Console</h1>
           <p>
             Discover the AI command-line tools available on this Mac. Workspace
             preferences stay local to this browser.
           </p>
         </div>
-        <div className="read-only-badge">
-          <span className="status-dot" />
-          Read-only discovery
+        <div className="intro-actions">
+          <button
+            className="refresh-button"
+            type="button"
+            onClick={() => void refresh()}
+            disabled={loading}
+          >
+            <span aria-hidden="true">↻</span>
+            {loading ? "Discovering…" : "Refresh"}
+          </button>
+          <div className="read-only-badge">
+            <span className="status-dot" />
+            Read-only discovery
+          </div>
         </div>
       </section>
 

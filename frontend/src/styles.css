@@ -39,7 +39,6 @@ summary:focus-visible {
   padding: 34px 0 48px;
 }
 
-.topbar,
 .intro,
 .selection-bar {
   display: flex;
@@ -47,31 +46,6 @@ summary:focus-visible {
   justify-content: space-between;
 }
 
-.topbar {
-  padding-bottom: 30px;
-  border-bottom: 1px solid #222936;
-}
-
-.brand {
-  display: flex;
-  gap: 15px;
-  align-items: center;
-}
-
-.brand-mark {
-  display: grid;
-  width: 48px;
-  height: 48px;
-  place-items: center;
-  border: 1px solid #526bff;
-  border-radius: 14px;
-  color: #dce4ff;
-  background: #1a2349;
-  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
-  font-weight: 500;
-}
-
-.eyebrow,
 .section-label {
   margin: 0 0 4px;
   color: #7d8ba1;
@@ -84,12 +58,6 @@ h1,
 h2,
 p {
   margin-top: 0;
-}
-
-h1 {
-  margin-bottom: 0;
-  font-size: 1.15rem;
-  letter-spacing: -0.02em;
 }
 
 .refresh-button {
@@ -116,13 +84,43 @@ h1 {
 
 .intro {
   gap: 24px;
-  padding: 58px 0 30px;
+  padding: 18px 0 30px;
 }
 
-.intro h2 {
+.intro h1 {
+  position: relative;
+  isolation: isolate;
+  width: fit-content;
   margin-bottom: 12px;
   font-size: clamp(1.9rem, 4vw, 3.15rem);
   letter-spacing: -0.055em;
+  text-shadow:
+    0 0 18px rgb(116 139 255 / 52%),
+    0 0 42px rgb(75 104 255 / 34%);
+}
+
+.intro h1::before {
+  position: absolute;
+  z-index: -1;
+  inset: -18px -28px;
+  border-radius: 999px;
+  background: radial-gradient(
+    ellipse,
+    rgb(82 111 255 / 25%) 0%,
+    rgb(82 111 255 / 10%) 46%,
+    transparent 72%
+  );
+  filter: blur(12px);
+  content: "";
+  pointer-events: none;
+}
+
+.intro-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .intro p:not(.section-label) {
@@ -511,6 +509,10 @@ details code {
   .intro {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .intro-actions {
+    align-items: flex-start;
   }
 
   .provider-grid {

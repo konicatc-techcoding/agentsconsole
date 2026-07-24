@@ -147,6 +147,9 @@ describe("AgentOS Console", () => {
     render(<App />);
 
     await screen.findByRole("button", { name: "Hermes CLI — Available" });
+    expect(
+      screen.getByRole("heading", { name: "AI Agent Console" }),
+    ).toBeInTheDocument();
     const cards = providers.map((provider) =>
       screen.getByRole("button", {
         name: `${provider.display_name} — Available`,
