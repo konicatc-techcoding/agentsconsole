@@ -28,6 +28,7 @@ LOO-5 已完成、通過 review 並合併至 `main`。LOO-6 已依使用者最�
   - `ee1a9bc ui: clarify terminal start action`
   - `8efd566 feat: remember provider workspaces`
   - `27bfcfd feat: save default and recent workspaces`
+  - `0184216 ui: compact console header`
 - 上一項 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/1>
 - 上一項 PR 狀態：Merged
 - 上一項 merge commit：`1889625f1a08afda6e494827a2dc0256c8468215`
@@ -78,6 +79,9 @@ LOO-6 已加入從每張可用 provider 卡片啟動 macOS Terminal.app 的功�
 
 - 卡片保留 `Launch` 開啟 modal，modal 最後動作改為 `Start`／`Starting…`。
 - 移除與卡片高亮重複的首頁 `SESSION SELECTION` 欄。
+- 首頁主標題改為帶柔和光暈的 `AI Agent Console`，移除舊的
+  `LOCAL CONTROL PLANE` 品牌列，並將 Refresh 放在 Read-only discovery
+  上方，使主要內容與 provider grid 向上移；卡片尺寸與四欄結構不變。
 - 每個 provider 分別將 Default Workspace 與最近五個 Workspace
   保存於目前 browser origin 的 localStorage。
 - Default Workspace 必須明確按 `Save` 才會更新；Save 會先呼叫 backend
@@ -109,6 +113,7 @@ LOO-6 已加入從每張可用 provider 卡片啟動 macOS Terminal.app 的功�
   - 首頁不再顯示重複的 `SESSION SELECTION`
   - New/Continue 欄位切換、Save/Start 文案與 modal 版面正常
   - Save 路徑驗證成功，Continue 顯示 Recent workspace selector
+  - 精簡首頁標題列、Refresh 位置與光暈顯示正常，內容向上移且卡片不受影響
   - 自動測試確認 per-provider 隔離、reload 持久化、舊資料遷移、
     recent-five 去重排序、Save/Start 鎖定與 Continue fallback
   - Browser console 無 warning 或 error
