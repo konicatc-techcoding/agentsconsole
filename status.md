@@ -31,7 +31,7 @@ LOO-5 已完成、通過 review 並合併至 `main`。LOO-6 已依使用者最�
 - 上一項 PR 狀態：Merged
 - 上一項 merge commit：`1889625f1a08afda6e494827a2dc0256c8468215`
 - Required check：`smoke` — `SUCCESS`
-- 最新 CI run：<https://github.com/konicatc-techcoding/agentsconsole/actions/runs/30072507619/job/89416144419>
+- Implementation CI run：<https://github.com/konicatc-techcoding/agentsconsole/actions/runs/30072507619/job/89416144419>
 - 本機 `main` 已同步至 `origin/main`
 - 功能分支 `LOO-5-cli-provider-console` 目前保留
 
