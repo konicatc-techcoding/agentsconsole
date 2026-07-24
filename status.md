@@ -5,37 +5,35 @@
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md，接著執行 $finn-review，review AgentOS Console 的 PR #2。
+請先讀取 status.md，確認 LOO-7 規格與 agent-ready 狀態，接著從更新後的 main
+開始建立 macOS Tauri Foundation；若尚未安裝 Rust，使用官方 rustup stable。
 ```
 
-LOO-5 已完成、通過 review 並合併至 `main`。LOO-6 已依使用者最新確認
-擴充 workspace 規則、完成驗證並更新 PR #2，目前等待 `$finn-review`，
-不可由 builder 自行 merge。
+LOO-5 與 LOO-6 均已完成、通過 review 並合併至 `main`。下一項工作是
+LOO-7：建立 macOS Tauri Foundation 並保留 Web runtime。LOO-7 規格已建立，
+目前仍在 Backlog，尚未加上 `agent-ready`。
 
 ## Source of truth
 
 - Workspace：`/Users/zackchiu/CodexCLI/agentsconsole`
-- Git branch：`LOO-6-launch-cli-terminal`
-- 已合併基線：`1889625 Merge pull request #1 from konicatc-techcoding/LOO-5-cli-provider-console`
-- 目前 Linear issue：`LOO-6 從 Provider 卡片在 macOS Terminal 啟動 CLI session`
-- Linear URL：<https://linear.app/loopent/issue/LOO-6/從-provider-卡片在-macos-terminal-啟動-cli-session>
-- Linear 狀態：`In Review`
-- Linear label：`agent-ready`
-- 目前 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/2>
-- PR 狀態：Open，等待 review
-- Feature commits：
-  - `5c8a7a2 feat: launch CLI sessions in Terminal`
-  - `ee1a9bc ui: clarify terminal start action`
-  - `8efd566 feat: remember provider workspaces`
-  - `27bfcfd feat: save default and recent workspaces`
-  - `0184216 ui: compact console header`
+- Git branch：`main`
+- 已合併基線：`5c776d2 Launch CLI sessions in Terminal (#2)`
+- LOO-6 Linear 狀態：`Done`
+- LOO-6 Linear URL：<https://linear.app/loopent/issue/LOO-6/從-provider-卡片在-macos-terminal-啟動-cli-session>
+- LOO-6 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/2>
+- PR #2 狀態：Merged
+- PR #2 merge commit：`5c776d2c0203942f5aa168695c05bf2bad5ec3df`
+- 下一項 Linear issue：`LOO-7 建立 macOS Tauri Foundation 並保留 Web runtime`
+- LOO-7 URL：<https://linear.app/loopent/issue/LOO-7/建立-macos-tauri-foundation-並保留-web-runtime>
+- LOO-7 狀態：`Backlog`
+- LOO-7 label：尚無 `agent-ready`
+- LOO-7 relation：`blocked by LOO-6` 關聯仍保留；LOO-6 已 Done，前置條件已完成
 - 上一項 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/1>
 - 上一項 PR 狀態：Merged
 - 上一項 merge commit：`1889625f1a08afda6e494827a2dc0256c8468215`
 - Required check：`smoke` — `SUCCESS`
 - Implementation CI run：<https://github.com/konicatc-techcoding/agentsconsole/actions/runs/30077709874/job/89432038401>
 - 本機 `main` 已同步至 `origin/main`
-- 功能分支 `LOO-5-cli-provider-console` 目前保留
 
 ## LOO-5 基線內容
 
@@ -130,6 +128,25 @@ LOO-6 已加入從每張可用 provider 卡片啟動 macOS Terminal.app 的功�
 Backend 測試仍有一則 Starlette TestClient 的 upstream deprecation warning，
 不影響測試結果或 runtime。
 
+## 下一項：LOO-7 Tauri Foundation
+
+LOO-7 已完成規格確認，但尚未進入實作：
+
+- 使用 Tauri 2 建立 macOS App shell，沿用現有 React/Vite UI。
+- App 名稱為 `AgentOS Console`，bundle identifier 為
+  `com.konicatc.agentos-console`。
+- 主視窗預設 `1280 × 900`，最小 `960 × 700`，可自由縮放。
+- 建立 runtime adapter：Web 繼續呼叫 FastAPI；Tauri 改呼叫 typed Rust
+  commands，React component 不直接處理 transport。
+- Rust 承接 Provider discovery、workspace validation 與固定
+  Terminal.app launch；Tauri runtime 不依賴 FastAPI。
+- Web runtime、FastAPI 與現有 localStorage schema 均保留。
+- Rust 使用官方 `rustup` stable；目前本機尚未安裝 `rustc` 與 `cargo`。
+- 本階段不做 embedded PTY、2×2 terminal 版面、App-managed JSON/Markdown
+  storage、跨平台、簽署、公證或 updater。
+
+完整 acceptance criteria、non-goals 與驗證方式以 Linear `LOO-7` 為準。
+
 ## 本機預覽方式
 
 Terminal 1：
@@ -152,10 +169,14 @@ npm run dev
 
 ## 接續流程
 
-1. 執行 `$finn-review` review PR #2。
-2. 若 review 要求修改，依 Finn-loop label 交回 `$finn-build`。
-3. 若 review 通過，由使用者決定是否 merge。
-4. Merge 後更新本檔與 Linear 狀態，再執行 `$finn-spec` 定義下一項功能。
+1. 使用者再次確認 LOO-7 規格後，在 Linear 加上 `agent-ready`。
+2. 執行 `$finn-build` 領取 LOO-7，從已同步的 `main` 建立功能分支。
+3. 依已選方向使用官方 `rustup` 安裝 stable Rust，驗證 `rustc`、`cargo`
+   與 macOS target。
+4. 先建立最小 Tauri shell 與 runtime adapter，再移植 Rust discovery、
+   workspace validation 與 fixed launcher。
+5. 執行 Rust、backend、frontend 測試、Web/Tauri build 與實機 smoke test，
+   再開 PR 交給 `$finn-review`。
 
 ## 本檔注意事項
 
