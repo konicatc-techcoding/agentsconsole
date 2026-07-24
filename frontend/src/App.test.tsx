@@ -411,6 +411,43 @@ describe("AgentOS Console", () => {
     expect(localStorage.getItem("agentos-console.workspace-preferences.v1")).toBeNull();
   });
 
+  it("reports browser storage failure without falsely saving the default", async () => {
+    const { fetchMock } = mockApi();
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Launch Codex CLI" }),
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Default workspace path" }),
+      "/Users/zack/Projects",
+    );
+    const storageWrite = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new DOMException("Storage unavailable", "QuotaExceededError");
+      });
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(
+      await screen.findByText(
+        "Default workspace could not be saved in this browser",
+      ),
+    ).toHaveAttribute("role", "alert");
+    expect(
+      screen.queryByText("Default workspace saved"),
+    ).not.toBeInTheDocument();
+
+    storageWrite.mockRestore();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await user.click(screen.getByRole("button", { name: "Launch Codex CLI" }));
+    expect(
+      screen.getByRole("textbox", { name: "Default workspace path" }),
+    ).toHaveValue("");
+  });
+
   it("locks modal controls while saving a default", async () => {
     const { fetchMock, finishSave } = mockApi({ saveDelay: true });
     vi.stubGlobal("fetch", fetchMock);

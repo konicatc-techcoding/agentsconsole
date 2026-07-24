@@ -59,14 +59,16 @@ function readWorkspacePreferences(): WorkspacePreferences {
   }
 }
 
-function saveWorkspacePreferences(preferences: WorkspacePreferences): void {
+function saveWorkspacePreferences(preferences: WorkspacePreferences): boolean {
   try {
     localStorage.setItem(
       WORKSPACE_PREFERENCES_KEY,
       JSON.stringify(preferences),
     );
+    return true;
   } catch {
     // A successful Terminal launch remains successful if storage is unavailable.
+    return false;
   }
 }
 
@@ -156,19 +158,19 @@ export default function App() {
     setSaveNotice(null);
     try {
       const result = await validateWorkspace(workspacePath);
+      const previous = workspacePreferences[launchTarget.id];
+      const next = {
+        ...workspacePreferences,
+        [launchTarget.id]: {
+          defaultWorkspace: result.workspace_path,
+          recentWorkspaces: previous?.recentWorkspaces ?? [],
+        },
+      };
+      if (!saveWorkspacePreferences(next)) {
+        throw new Error("Default workspace could not be saved in this browser");
+      }
+      setWorkspacePreferences(next);
       setWorkspacePath(result.workspace_path);
-      setWorkspacePreferences((current) => {
-        const previous = current[launchTarget.id];
-        const next = {
-          ...current,
-          [launchTarget.id]: {
-            defaultWorkspace: result.workspace_path,
-            recentWorkspaces: previous?.recentWorkspaces ?? [],
-          },
-        };
-        saveWorkspacePreferences(next);
-        return next;
-      });
       setSaveNotice("Default workspace saved");
     } catch (error) {
       setLaunchError(

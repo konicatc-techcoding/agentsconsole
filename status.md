@@ -105,7 +105,7 @@ LOO-6 已加入從每張可用 provider 卡片啟動 macOS Terminal.app 的功�
 ## LOO-6 驗證結果
 
 - Backend tests：34 passed
-- Frontend tests：14 passed
+- Frontend tests：15 passed
 - Frontend production build：passed
 - `git diff --check`：passed
 - 實機瀏覽器驗證：
@@ -115,7 +115,8 @@ LOO-6 已加入從每張可用 provider 卡片啟動 macOS Terminal.app 的功�
   - Save 路徑驗證成功，Continue 顯示 Recent workspace selector
   - 精簡首頁標題列、Refresh 位置與光暈顯示正常，內容向上移且卡片不受影響
   - 自動測試確認 per-provider 隔離、reload 持久化、舊資料遷移、
-    recent-five 去重排序、Save/Start 鎖定與 Continue fallback
+    recent-five 去重排序、Save/Start 鎖定、Continue fallback，以及
+    browser storage 寫入失敗時不會假報 Default Workspace 保存成功
   - Browser console 無 warning 或 error
 - Runtime schema 驗證：
   - 已重新啟動 backend
