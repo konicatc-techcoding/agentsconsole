@@ -54,6 +54,49 @@ def test_launch_endpoint_returns_launch_result(monkeypatch):
     assert calls == [("codex", "/workspace", "new", "project")]
 
 
+def test_workspace_validation_endpoint_returns_resolved_path(monkeypatch):
+    calls = []
+
+    def fake_validate(workspace_path):
+        calls.append(workspace_path)
+        return {"workspace_path": "/resolved/workspace"}
+
+    monkeypatch.setattr("app.main.validate_workspace", fake_validate)
+
+    response = TestClient(app).post(
+        "/api/workspaces/validate",
+        json={"workspace_path": "/workspace"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"workspace_path": "/resolved/workspace"}
+    assert calls == ["/workspace"]
+
+
+def test_workspace_validation_endpoint_returns_safe_error(monkeypatch):
+    def fake_validate(*args):
+        raise LaunchError(
+            "Workspace does not exist",
+            code="invalid_workspace",
+            status_code=400,
+        )
+
+    monkeypatch.setattr("app.main.validate_workspace", fake_validate)
+
+    response = TestClient(app).post(
+        "/api/workspaces/validate",
+        json={"workspace_path": "/missing"},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "detail": {
+            "code": "invalid_workspace",
+            "message": "Workspace does not exist",
+        }
+    }
+
+
 def test_launch_endpoint_returns_safe_error(monkeypatch):
     def fake_launch(*args):
         raise LaunchError(

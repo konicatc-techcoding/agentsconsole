@@ -378,7 +378,8 @@ details code {
   font-size: 0.85rem;
 }
 
-.workspace-field input {
+.workspace-field input,
+.workspace-field select {
   width: 100%;
   padding: 11px 12px;
   border: 1px solid #3a4659;
@@ -387,9 +388,31 @@ details code {
   background: #090d13;
 }
 
-.workspace-field input:focus {
+.workspace-field input:focus,
+.workspace-field select:focus {
   border-color: #7188ff;
   outline: 2px solid rgb(113 136 255 / 20%);
+}
+
+.workspace-save-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.save-workspace-button {
+  min-width: 82px;
+  padding: 10px 14px;
+  border: 1px solid #49566a;
+  border-radius: 9px;
+  color: #dce3ee;
+  cursor: pointer;
+  background: #1a2230;
+}
+
+.save-workspace-button:disabled {
+  cursor: wait;
+  opacity: 0.6;
 }
 
 .workspace-hint,
@@ -437,6 +460,15 @@ details code {
   background: #28161b;
 }
 
+.modal-success {
+  margin-top: 20px;
+  padding: 11px 12px;
+  border: 1px solid #32614b;
+  border-radius: 9px;
+  color: #a8efcb;
+  background: #12271e;
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -476,8 +508,7 @@ details code {
     padding-top: 20px;
   }
 
-  .intro,
-  .selection-bar {
+  .intro {
     align-items: flex-start;
     flex-direction: column;
   }

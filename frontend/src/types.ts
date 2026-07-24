@@ -22,3 +22,7 @@ export interface LaunchResponse {
   provider_id: string;
   workspace_path: string;
 }
+
+export interface WorkspaceResponse {
+  workspace_path: string;
+}

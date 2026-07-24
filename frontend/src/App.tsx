@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { fetchProviders, launchProvider } from "./api";
+import { fetchProviders, launchProvider, validateWorkspace } from "./api";
 import type { Provider, SessionMode } from "./types";
 
 const WORKSPACE_PREFERENCES_KEY = "agentos-console.workspace-preferences.v1";
+const RECENT_WORKSPACE_LIMIT = 5;
 
 interface WorkspacePreference {
   defaultWorkspace: string;
-  lastStartedWorkspace: string;
+  recentWorkspaces: string[];
 }
 
 type WorkspacePreferences = Record<string, WorkspacePreference>;
@@ -24,17 +25,35 @@ function readWorkspacePreferences(): WorkspacePreferences {
     if (!stored || typeof stored !== "object" || Array.isArray(stored)) {
       return {};
     }
-    return Object.fromEntries(
-      Object.entries(stored).filter(
-        ([, value]) =>
-          value &&
-          typeof value === "object" &&
-          "defaultWorkspace" in value &&
-          typeof value.defaultWorkspace === "string" &&
-          "lastStartedWorkspace" in value &&
-          typeof value.lastStartedWorkspace === "string",
-      ),
-    ) as WorkspacePreferences;
+    const preferences: WorkspacePreferences = {};
+    for (const [providerId, value] of Object.entries(stored)) {
+      if (
+        !value ||
+        typeof value !== "object" ||
+        !("defaultWorkspace" in value) ||
+        typeof value.defaultWorkspace !== "string"
+      ) {
+        continue;
+      }
+      let recent: string[] = [];
+      if ("recentWorkspaces" in value && Array.isArray(value.recentWorkspaces)) {
+        recent = value.recentWorkspaces.filter(
+          (path: unknown): path is string =>
+            typeof path === "string" && Boolean(path),
+        );
+      } else if (
+        "lastStartedWorkspace" in value &&
+        typeof value.lastStartedWorkspace === "string" &&
+        value.lastStartedWorkspace
+      ) {
+        recent = [value.lastStartedWorkspace];
+      }
+      preferences[providerId] = {
+        defaultWorkspace: value.defaultWorkspace,
+        recentWorkspaces: [...new Set(recent)].slice(0, RECENT_WORKSPACE_LIMIT),
+      };
+    }
+    return preferences;
   } catch {
     return {};
   }
@@ -63,7 +82,9 @@ export default function App() {
     useState<WorkspacePreferences>(readWorkspacePreferences);
   const [sessionMode, setSessionMode] = useState<SessionMode>("new");
   const [launching, setLaunching] = useState(false);
+  const [savingDefault, setSavingDefault] = useState(false);
   const [launchError, setLaunchError] = useState<string | null>(null);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const [launchNotice, setLaunchNotice] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -97,6 +118,7 @@ export default function App() {
     setNewFolder("");
     setSessionMode("new");
     setLaunchError(null);
+    setSaveNotice(null);
   };
 
   const selectSessionMode = (mode: SessionMode) => {
@@ -106,25 +128,60 @@ export default function App() {
       return;
     }
     const preference = workspacePreferences[launchTarget.id];
+    const recentWorkspaces = preference?.recentWorkspaces ?? [];
     setWorkspacePath(
       mode === "continue"
-        ? preference?.lastStartedWorkspace ||
-            preference?.defaultWorkspace ||
-            ""
+        ? recentWorkspaces[0] || preference?.defaultWorkspace || ""
         : preference?.defaultWorkspace || "",
     );
+    setLaunchError(null);
+    setSaveNotice(null);
   };
 
   const closeLaunch = () => {
-    if (!launching) {
+    if (!launching && !savingDefault) {
       setLaunchTarget(null);
       setLaunchError(null);
+      setSaveNotice(null);
+    }
+  };
+
+  const saveDefaultWorkspace = async () => {
+    if (!launchTarget || launching || savingDefault) {
+      return;
+    }
+
+    setSavingDefault(true);
+    setLaunchError(null);
+    setSaveNotice(null);
+    try {
+      const result = await validateWorkspace(workspacePath);
+      setWorkspacePath(result.workspace_path);
+      setWorkspacePreferences((current) => {
+        const previous = current[launchTarget.id];
+        const next = {
+          ...current,
+          [launchTarget.id]: {
+            defaultWorkspace: result.workspace_path,
+            recentWorkspaces: previous?.recentWorkspaces ?? [],
+          },
+        };
+        saveWorkspacePreferences(next);
+        return next;
+      });
+      setSaveNotice("Default workspace saved");
+    } catch (error) {
+      setLaunchError(
+        error instanceof Error ? error.message : "Workspace validation failed",
+      );
+    } finally {
+      setSavingDefault(false);
     }
   };
 
   const submitLaunch = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!launchTarget || launching) {
+    if (!launchTarget || launching || savingDefault || !workspacePath) {
       return;
     }
 
@@ -142,14 +199,17 @@ export default function App() {
       });
       setWorkspacePreferences((current) => {
         const previous = current[launchTarget.id];
+        const recentWorkspaces = [
+          result.workspace_path,
+          ...(previous?.recentWorkspaces ?? []).filter(
+            (path) => path !== result.workspace_path,
+          ),
+        ].slice(0, RECENT_WORKSPACE_LIMIT);
         const next = {
           ...current,
           [launchTarget.id]: {
-            defaultWorkspace:
-              sessionMode === "new"
-                ? workspacePath
-                : (previous?.defaultWorkspace ?? ""),
-            lastStartedWorkspace: result.workspace_path,
+            defaultWorkspace: previous?.defaultWorkspace ?? "",
+            recentWorkspaces,
           },
         };
         saveWorkspacePreferences(next);
@@ -167,6 +227,16 @@ export default function App() {
       setLaunching(false);
     }
   };
+
+  const activePreference = launchTarget
+    ? workspacePreferences[launchTarget.id]
+    : undefined;
+  const continueWorkspaces = activePreference?.recentWorkspaces.length
+    ? activePreference.recentWorkspaces
+    : activePreference?.defaultWorkspace
+      ? [activePreference.defaultWorkspace]
+      : [];
+  const modalBusy = launching || savingDefault;
 
   return (
     <main className="shell">
@@ -297,7 +367,7 @@ export default function App() {
             </p>
 
             <form onSubmit={(event) => void submitLaunch(event)}>
-              <fieldset disabled={launching}>
+              <fieldset disabled={modalBusy}>
                 <legend>Session</legend>
                 <label>
                   <input
@@ -317,32 +387,42 @@ export default function App() {
                     checked={sessionMode === "continue"}
                     onChange={() => selectSessionMode("continue")}
                   />
-                  Continue last session
+                  Continue session
                 </label>
               </fieldset>
 
-              <label className="workspace-field">
-                <span>
-                  {sessionMode === "new"
-                    ? "Default workspace absolute path"
-                    : "Workspace absolute path"}
-                </span>
-                <input
-                  type="text"
-                  value={workspacePath}
-                  onChange={(event) => setWorkspacePath(event.target.value)}
-                  placeholder="/Users/name/project"
-                  autoFocus
-                  disabled={launching}
-                  required
-                />
-              </label>
-
               {sessionMode === "new" ? (
                 <>
+                  <div className="workspace-field">
+                    <label htmlFor="default-workspace">
+                      Default workspace path
+                    </label>
+                    <div className="workspace-save-row">
+                      <input
+                        id="default-workspace"
+                        type="text"
+                        value={workspacePath}
+                        onChange={(event) => {
+                          setWorkspacePath(event.target.value);
+                          setSaveNotice(null);
+                        }}
+                        placeholder="/Users/name/project"
+                        autoFocus
+                        disabled={modalBusy}
+                        required
+                      />
+                      <button
+                        className="save-workspace-button"
+                        type="button"
+                        onClick={() => void saveDefaultWorkspace()}
+                        disabled={modalBusy || !workspacePath}
+                      >
+                        {savingDefault ? "Saving…" : "Save"}
+                      </button>
+                    </div>
+                  </div>
                   <p className="workspace-hint">
-                    Saved as this provider&apos;s default after a successful
-                    start.
+                    Save validates this path without starting a CLI.
                   </p>
                   <label className="workspace-field">
                     <span>New folder (optional)</span>
@@ -351,7 +431,7 @@ export default function App() {
                       value={newFolder}
                       onChange={(event) => setNewFolder(event.target.value)}
                       placeholder="project-folder"
-                      disabled={launching}
+                      disabled={modalBusy}
                     />
                   </label>
                   {newFolder && (
@@ -364,10 +444,38 @@ export default function App() {
                   )}
                 </>
               ) : (
-                <p className="workspace-hint">
-                  Uses this provider&apos;s last started workspace when
-                  available.
-                </p>
+                <>
+                  <label className="workspace-field">
+                    <span>Recent workspace</span>
+                    <select
+                      value={workspacePath}
+                      onChange={(event) => setWorkspacePath(event.target.value)}
+                      autoFocus
+                      disabled={modalBusy || continueWorkspaces.length === 0}
+                      required
+                    >
+                      {continueWorkspaces.length === 0 ? (
+                        <option value="">No recent workspace available</option>
+                      ) : (
+                        continueWorkspaces.map((path) => (
+                          <option value={path} key={path}>
+                            {path}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </label>
+                  <p className="workspace-hint">
+                    Shows up to five workspaces previously started for this
+                    provider.
+                  </p>
+                </>
+              )}
+
+              {saveNotice && (
+                <div className="modal-success" role="status">
+                  {saveNotice}
+                </div>
               )}
 
               {launchError && (
@@ -381,14 +489,14 @@ export default function App() {
                   className="cancel-button"
                   type="button"
                   onClick={closeLaunch}
-                  disabled={launching}
+                  disabled={modalBusy}
                 >
                   Cancel
                 </button>
                 <button
                   className="modal-launch-button"
                   type="submit"
-                  disabled={launching}
+                  disabled={modalBusy || !workspacePath}
                 >
                   {launching ? "Starting…" : "Start"}
                 </button>

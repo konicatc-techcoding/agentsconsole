@@ -46,6 +46,15 @@ def test_rejects_missing_path_and_regular_file(tmp_path):
         assert error.value.code == "invalid_workspace"
 
 
+def test_validate_workspace_returns_resolved_path(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    assert launcher.validate_workspace(str(workspace)) == {
+        "workspace_path": str(workspace.resolve())
+    }
+
+
 def test_rejects_unknown_or_unavailable_provider(tmp_path, monkeypatch):
     with pytest.raises(launcher.LaunchError) as unknown:
         launcher.launch_provider("other", str(tmp_path), "new")

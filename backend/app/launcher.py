@@ -51,6 +51,10 @@ class LaunchResult(TypedDict):
     workspace_path: str
 
 
+class WorkspaceResult(TypedDict):
+    workspace_path: str
+
+
 class LaunchError(Exception):
     """A safe launch error that can be returned by the local API."""
 
@@ -124,6 +128,12 @@ def _validated_workspace(workspace_path: str) -> Path:
             status_code=400,
         )
     return resolved
+
+
+def validate_workspace(workspace_path: str) -> WorkspaceResult:
+    """Return the resolved form of an existing safe workspace."""
+
+    return {"workspace_path": str(_validated_workspace(workspace_path))}
 
 
 def _provider_command(
