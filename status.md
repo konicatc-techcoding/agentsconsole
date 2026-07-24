@@ -8,8 +8,9 @@
 請先讀取 status.md，接著執行 $finn-review，review AgentOS Console 的 PR #2。
 ```
 
-LOO-5 已完成、通過 review 並合併至 `main`。LOO-6 已完成實作、驗證與
-PR 建立，目前等待 `$finn-review`，不可由 builder 自行 merge。
+LOO-5 已完成、通過 review 並合併至 `main`。LOO-6 已依使用者最新確認
+擴充 workspace 規則、完成驗證並更新 PR #2，目前等待 `$finn-review`，
+不可由 builder 自行 merge。
 
 ## Source of truth
 
@@ -22,16 +23,19 @@ PR 建立，目前等待 `$finn-review`，不可由 builder 自行 merge。
 - Linear label：`agent-ready`
 - 目前 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/2>
 - PR 狀態：Open，等待 review
-- Feature commit：`5c8a7a2 feat: launch CLI sessions in Terminal`
+- Feature commits：
+  - `5c8a7a2 feat: launch CLI sessions in Terminal`
+  - `ee1a9bc ui: clarify terminal start action`
+  - `8efd566 feat: remember provider workspaces`
 - 上一項 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/1>
 - 上一項 PR 狀態：Merged
 - 上一項 merge commit：`1889625f1a08afda6e494827a2dc0256c8468215`
 - Required check：`smoke` — `SUCCESS`
-- 上一項 CI run：<https://github.com/konicatc-techcoding/agentsconsole/actions/runs/29996928250/job/89172702937>
+- 最新 CI run：<https://github.com/konicatc-techcoding/agentsconsole/actions/runs/30072507619/job/89416144419>
 - 本機 `main` 已同步至 `origin/main`
 - 功能分支 `LOO-5-cli-provider-console` 目前保留
 
-## 已完成內容
+## LOO-5 基線內容
 
 - FastAPI `GET /api/providers`，固定偵測：
   - Hermes CLI：`hermes`
@@ -71,7 +75,14 @@ Backend 測試有一則 Starlette TestClient 的 upstream deprecation warning，
 
 LOO-6 已加入從每張可用 provider 卡片啟動 macOS Terminal.app 的功能：
 
-- Launch modal 要求有效的本機 workspace 絕對路徑。
+- 卡片保留 `Launch` 開啟 modal，modal 最後動作改為 `Start`／`Starting…`。
+- 移除與卡片高亮重複的首頁 `SESSION SELECTION` 欄。
+- 每個 provider 分別將 Default Workspace 與 Last Started Workspace
+  保存於目前 browser origin 的 localStorage。
+- `New session` 使用有效的 Default Workspace，並可選擇安全建立一層
+  New Folder；不覆寫或重用既有名稱。
+- `Continue last session` 優先帶入同 provider 的 Last Started Workspace，
+  沒有紀錄時退回該 provider 的 Default Workspace。
 - 支援 `New session` 與 `Continue last session`。
 - 每次開啟獨立 Terminal 視窗，使用固定且不可自訂的 CLI 命令。
 - 保留各 CLI 原生互動與 approval 流程。
@@ -82,18 +93,23 @@ LOO-6 已加入從每張可用 provider 卡片啟動 macOS Terminal.app 的功�
 
 ## LOO-6 驗證結果
 
-- Backend tests：20 passed
-- Frontend tests：10 passed
+- Backend tests：31 passed
+- Frontend tests：11 passed
 - Frontend production build：passed
 - `git diff --check`：passed
 - 實機瀏覽器驗證：
   - 四個真實 CLI 都顯示 Available 與 Launch
-  - Modal、provider selection、invalid path error、workspace 預填正常
-  - 完整 reload 後選擇與 workspace 清除
+  - 首頁不再顯示重複的 `SESSION SELECTION`
+  - New/Continue 欄位切換、Start 文案與 modal 版面正常
+  - 自動測試確認 per-provider 隔離、reload 持久化與 Continue 預填
   - Browser console 無 warning 或 error
+- Runtime schema 驗證：
+  - 已重新啟動 backend
+  - OpenAPI `LaunchRequest` 已包含選填 `new_folder`
 - 實機 Terminal 驗證：
-  - Codex 在獨立 Terminal tty 啟動
-  - Codex process cwd 為 `/Users/zackchiu/CodexCLI/agentsconsole`
+  - 原始 LOO-6 驗證已確認 Codex 在獨立 Terminal tty 啟動
+  - 原始驗證的 Codex process cwd 為 `/Users/zackchiu/CodexCLI/agentsconsole`
+  - 本次沒有額外啟動真實 CLI；新增 folder 行為由 backend 測試覆蓋
 
 Backend 測試仍有一則 Starlette TestClient 的 upstream deprecation warning，
 不影響測試結果或 runtime。
