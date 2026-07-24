@@ -214,7 +214,7 @@ describe("AgentOS Console", () => {
       screen.getByRole("textbox", { name: "Workspace absolute path" }),
       "/Users/zack/My Project",
     );
-    await user.click(screen.getByRole("button", { name: "Launch" }));
+    await user.click(screen.getByRole("button", { name: "Start" }));
 
     expect(
       await screen.findByText(
@@ -251,7 +251,7 @@ describe("AgentOS Console", () => {
       screen.getByRole("textbox", { name: "Workspace absolute path" }),
       "/Users/zack/My Project",
     );
-    await user.click(screen.getByRole("button", { name: "Launch" }));
+    await user.click(screen.getByRole("button", { name: "Start" }));
     await screen.findByText("Codex CLI launched in /Users/zack/My Project");
 
     view.unmount();
@@ -280,7 +280,7 @@ describe("AgentOS Console", () => {
       screen.getByRole("textbox", { name: "Workspace absolute path" }),
       "/missing",
     );
-    await user.click(screen.getByRole("button", { name: "Launch" }));
+    await user.click(screen.getByRole("button", { name: "Start" }));
 
     expect(await screen.findByText("Workspace does not exist")).toHaveAttribute(
       "role",
@@ -305,9 +305,9 @@ describe("AgentOS Console", () => {
       screen.getByRole("textbox", { name: "Workspace absolute path" }),
       "/Users/zack/My Project",
     );
-    await user.click(screen.getByRole("button", { name: "Launch" }));
+    await user.click(screen.getByRole("button", { name: "Start" }));
 
-    expect(screen.getByRole("button", { name: "Launching…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Starting…" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
     expect(
       screen.getByRole("textbox", { name: "Workspace absolute path" }),
@@ -337,7 +337,7 @@ describe("AgentOS Console", () => {
     await user.click(
       screen.getByRole("radio", { name: "Continue last session" }),
     );
-    await user.click(screen.getByRole("button", { name: "Launch" }));
+    await user.click(screen.getByRole("button", { name: "Start" }));
 
     await screen.findByText("Codex CLI launched in /Users/zack/My Project");
     expect(fetchMock).toHaveBeenLastCalledWith(

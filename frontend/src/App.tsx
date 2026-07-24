@@ -287,7 +287,7 @@ export default function App() {
                   type="submit"
                   disabled={launching}
                 >
-                  {launching ? "Launching…" : "Launch"}
+                  {launching ? "Starting…" : "Start"}
                 </button>
               </div>
             </form>
