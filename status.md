@@ -27,6 +27,7 @@ LOO-5 已完成、通過 review 並合併至 `main`。LOO-6 已依使用者最�
   - `5c8a7a2 feat: launch CLI sessions in Terminal`
   - `ee1a9bc ui: clarify terminal start action`
   - `8efd566 feat: remember provider workspaces`
+  - `27bfcfd feat: save default and recent workspaces`
 - 上一項 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/1>
 - 上一項 PR 狀態：Merged
 - 上一項 merge commit：`1889625f1a08afda6e494827a2dc0256c8468215`
@@ -77,35 +78,44 @@ LOO-6 已加入從每張可用 provider 卡片啟動 macOS Terminal.app 的功�
 
 - 卡片保留 `Launch` 開啟 modal，modal 最後動作改為 `Start`／`Starting…`。
 - 移除與卡片高亮重複的首頁 `SESSION SELECTION` 欄。
-- 每個 provider 分別將 Default Workspace 與 Last Started Workspace
+- 每個 provider 分別將 Default Workspace 與最近五個 Workspace
   保存於目前 browser origin 的 localStorage。
+- Default Workspace 必須明確按 `Save` 才會更新；Save 會先呼叫 backend
+  驗證路徑，但不會啟動 Terminal 或 CLI。
+- `Start` 不會自動改寫 Default Workspace。
 - `New session` 使用有效的 Default Workspace，並可選擇安全建立一層
   New Folder；不覆寫或重用既有名稱。
-- `Continue last session` 優先帶入同 provider 的 Last Started Workspace，
-  沒有紀錄時退回該 provider 的 Default Workspace。
-- 支援 `New session` 與 `Continue last session`。
+- `Continue session` 可選同 provider 最近成功啟動的五個 Workspace；
+  去除重複、最新優先，沒有最近紀錄時退回 Default Workspace。
+- 舊版 `lastStartedWorkspace` localStorage 資料會遷移為 recent workspace。
 - 每次開啟獨立 Terminal 視窗，使用固定且不可自訂的 CLI 命令。
 - 保留各 CLI 原生互動與 approval 流程。
 - 本階段不重寫 UI、不內嵌 terminal、不追蹤 CLI process。
+- Recent workspace 只記錄路徑，不是 CLI 原生 session ID registry。
+- 未來 native app 可改用 app-managed JSON 作為資料來源，再產生 Markdown
+  摘要；本次 Web 階段不建立本機 JSON/Markdown。
 - Backend 保留最小跨平台 launcher 邊界，但只實作 macOS。
 
 完整 acceptance criteria、non-goals 與驗證方式以 Linear `LOO-6` 為準。
 
 ## LOO-6 驗證結果
 
-- Backend tests：31 passed
-- Frontend tests：11 passed
+- Backend tests：34 passed
+- Frontend tests：14 passed
 - Frontend production build：passed
 - `git diff --check`：passed
 - 實機瀏覽器驗證：
   - 四個真實 CLI 都顯示 Available 與 Launch
   - 首頁不再顯示重複的 `SESSION SELECTION`
-  - New/Continue 欄位切換、Start 文案與 modal 版面正常
-  - 自動測試確認 per-provider 隔離、reload 持久化與 Continue 預填
+  - New/Continue 欄位切換、Save/Start 文案與 modal 版面正常
+  - Save 路徑驗證成功，Continue 顯示 Recent workspace selector
+  - 自動測試確認 per-provider 隔離、reload 持久化、舊資料遷移、
+    recent-five 去重排序、Save/Start 鎖定與 Continue fallback
   - Browser console 無 warning 或 error
 - Runtime schema 驗證：
   - 已重新啟動 backend
   - OpenAPI `LaunchRequest` 已包含選填 `new_folder`
+  - `POST /api/workspaces/validate` 可獨立驗證並解析 workspace 路徑
 - 實機 Terminal 驗證：
   - 原始 LOO-6 驗證已確認 Codex 在獨立 Terminal tty 啟動
   - 原始驗證的 Codex process cwd 為 `/Users/zackchiu/CodexCLI/agentsconsole`
