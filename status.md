@@ -34,8 +34,8 @@ LOO-7 已完成 Tauri 2 macOS Foundation、runtime adapter、Rust commands、
 - 上一項 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/1>
 - 上一項 PR 狀態：Merged
 - 上一項 merge commit：`1889625f1a08afda6e494827a2dc0256c8468215`
-- Required check：`smoke` — `SUCCESS`
-- Implementation CI run：<https://github.com/konicatc-techcoding/agentsconsole/actions/runs/30077709874/job/89432038401>
+- PR #2 required check：`smoke` — `SUCCESS`
+- PR #2 implementation CI run：<https://github.com/konicatc-techcoding/agentsconsole/actions/runs/30077709874/job/89432038401>
 - 本機 `main` 已同步至 `origin/main`
 
 ## LOO-5 基線內容
