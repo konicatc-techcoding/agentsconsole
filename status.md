@@ -5,12 +5,12 @@
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md，接著執行 $finn-review，review LOO-7 的 Tauri
-Foundation PR；不得由 builder 自行 merge。
+請先讀取 status.md，接著執行 $finn-review，review AgentOS Console
+的 PR #3；不得由 builder 自行 merge。
 ```
 
 LOO-7 已完成 Tauri 2 macOS Foundation、runtime adapter、Rust commands、
-完整自動測試與真實 App smoke，目前準備建立 PR 交給 `$finn-review`。
+完整自動測試與真實 App smoke，PR #3 已建立並等待 `$finn-review`。
 
 ## Source of truth
 
@@ -28,6 +28,9 @@ LOO-7 已完成 Tauri 2 macOS Foundation、runtime adapter、Rust commands、
 - LOO-7 label：`agent-ready`
 - LOO-7 assignee：Zack Chiu
 - LOO-7 relation：`blocked by LOO-6` 關聯仍保留；LOO-6 已 Done，前置條件已完成
+- 目前 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/3>
+- PR #3 狀態：Open，等待 review
+- Implementation commit：`05d499c feat: add Tauri macOS foundation`
 - 上一項 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/1>
 - 上一項 PR 狀態：Merged
 - 上一項 merge commit：`1889625f1a08afda6e494827a2dc0256c8468215`
@@ -194,9 +197,9 @@ npm run dev
 
 ## 接續流程
 
-1. 完成最終 diff review。
-2. 開啟 LOO-7 PR，將 URL 回填 Linear，狀態移至 `In Review`。
-3. 執行 `$finn-review`；builder 不得自行 merge。
+1. 執行 `$finn-review` review PR #3。
+2. 若 review 要求修改，依 Finn-loop label 交回 `$finn-build`。
+3. 若 review 通過，由使用者決定是否 merge；builder 不得自行 merge。
 
 ## 本檔注意事項
 
