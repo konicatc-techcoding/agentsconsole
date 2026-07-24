@@ -58,7 +58,8 @@ function mockApi(options?: { launchError?: string; launchDelay?: boolean }) {
       })
     : Promise.resolve();
 
-  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+  const fetchMock = vi.fn(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
     if (input === "/api/providers") {
       return {
         ok: true,
@@ -79,21 +80,30 @@ function mockApi(options?: { launchError?: string; launchDelay?: boolean }) {
         }),
       } as Response;
     }
+    const request = JSON.parse(String(init?.body)) as {
+      provider_id: string;
+      workspace_path: string;
+      new_folder?: string;
+    };
     return {
       ok: true,
       json: async () => ({
         launched: true,
-        provider_id: "codex",
-        workspace_path: "/Users/zack/My Project",
+        provider_id: request.provider_id,
+        workspace_path: request.new_folder
+          ? `${request.workspace_path}/${request.new_folder}`
+          : request.workspace_path,
       }),
     } as Response;
-  });
+    },
+  );
 
   return { fetchMock, finishLaunch };
 }
 
 afterEach(() => {
   cleanup();
+  localStorage.clear();
   vi.unstubAllGlobals();
 });
 
@@ -119,21 +129,23 @@ describe("AgentOS Console", () => {
     expect(screen.getAllByText("Executable path")).toHaveLength(4);
   });
 
-  it("selects an available provider only for the mounted session", async () => {
+  it("uses card highlighting without a redundant selection footer", async () => {
     vi.stubGlobal("fetch", mockFetch());
     const user = userEvent.setup();
     const view = render(<App />);
 
-    await user.click(
-      await screen.findByRole("button", { name: /Codex CLI.*Available/s }),
-    );
-    expect(
-      screen.getByText("Current selection: Codex CLI"),
-    ).toBeInTheDocument();
+    const codexCard = await screen.findByRole("button", {
+      name: /Codex CLI.*Available/s,
+    });
+    await user.click(codexCard);
+    expect(codexCard).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByText("SESSION SELECTION")).not.toBeInTheDocument();
 
     view.unmount();
     render(<App />);
-    expect(await screen.findByText("No CLI selected")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: /Codex CLI.*Available/s }),
+    ).toHaveAttribute("aria-pressed", "false");
   });
 
   it("keeps an unavailable provider visible and disabled", async () => {
@@ -193,7 +205,7 @@ describe("AgentOS Console", () => {
     expect(screen.queryByText(/Prompt submission/i)).not.toBeInTheDocument();
   });
 
-  it("launches a selected provider and remembers the successful workspace", async () => {
+  it("creates a new folder and keeps preferences isolated by provider", async () => {
     const { fetchMock } = mockApi();
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
@@ -203,22 +215,28 @@ describe("AgentOS Console", () => {
       await screen.findByRole("button", { name: "Launch Codex CLI" }),
     );
     expect(
-      screen.getByText("Current selection: Codex CLI"),
-    ).toBeInTheDocument();
+      screen.getByRole("button", { name: /Codex CLI.*Available/s }),
+    ).toHaveAttribute("aria-pressed", "true");
     expect(
       screen.getByRole("heading", { name: "Codex CLI" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "New session" })).toBeChecked();
 
     await user.type(
-      screen.getByRole("textbox", { name: "Workspace absolute path" }),
-      "/Users/zack/My Project",
+      screen.getByRole("textbox", {
+        name: "Default workspace absolute path",
+      }),
+      "/Users/zack/Projects",
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "New folder (optional)" }),
+      "My Project",
     );
     await user.click(screen.getByRole("button", { name: "Start" }));
 
     expect(
       await screen.findByText(
-        "Codex CLI launched in /Users/zack/My Project",
+        "Codex CLI launched in /Users/zack/Projects/My Project",
       ),
     ).toBeInTheDocument();
     expect(fetchMock).toHaveBeenLastCalledWith("/api/launch", {
@@ -226,19 +244,30 @@ describe("AgentOS Console", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         provider_id: "codex",
-        workspace_path: "/Users/zack/My Project",
+        workspace_path: "/Users/zack/Projects",
         session_mode: "new",
+        new_folder: "My Project",
       }),
     });
 
     await user.click(screen.getByRole("button", { name: "Launch Claude CLI" }));
     expect(
-      screen.getByRole("textbox", { name: "Workspace absolute path" }),
-    ).toHaveValue("/Users/zack/My Project");
+      screen.getByRole("textbox", {
+        name: "Default workspace absolute path",
+      }),
+    ).toHaveValue("");
     expect(screen.getByRole("radio", { name: "New session" })).toBeChecked();
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await user.click(screen.getByRole("button", { name: "Launch Codex CLI" }));
+    expect(
+      screen.getByRole("textbox", {
+        name: "Default workspace absolute path",
+      }),
+    ).toHaveValue("/Users/zack/Projects");
   });
 
-  it("clears the successful workspace after a full remount", async () => {
+  it("persists a provider default workspace after a full remount", async () => {
     const { fetchMock } = mockApi();
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
@@ -248,7 +277,9 @@ describe("AgentOS Console", () => {
       await screen.findByRole("button", { name: "Launch Codex CLI" }),
     );
     await user.type(
-      screen.getByRole("textbox", { name: "Workspace absolute path" }),
+      screen.getByRole("textbox", {
+        name: "Default workspace absolute path",
+      }),
       "/Users/zack/My Project",
     );
     await user.click(screen.getByRole("button", { name: "Start" }));
@@ -256,13 +287,40 @@ describe("AgentOS Console", () => {
 
     view.unmount();
     render(<App />);
-    expect(await screen.findByText("No CLI selected")).toBeInTheDocument();
     await user.click(
       await screen.findByRole("button", { name: "Launch Codex CLI" }),
     );
     expect(
+      screen.getByRole("textbox", {
+        name: "Default workspace absolute path",
+      }),
+    ).toHaveValue("/Users/zack/My Project");
+  });
+
+  it("falls back to the provider default when continue has no last path", async () => {
+    localStorage.setItem(
+      "agentos-console.workspace-preferences.v1",
+      JSON.stringify({
+        codex: {
+          defaultWorkspace: "/Users/zack/Default",
+          lastStartedWorkspace: "",
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", mockFetch());
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Launch Codex CLI" }),
+    );
+    await user.click(
+      screen.getByRole("radio", { name: "Continue last session" }),
+    );
+
+    expect(
       screen.getByRole("textbox", { name: "Workspace absolute path" }),
-    ).toHaveValue("");
+    ).toHaveValue("/Users/zack/Default");
   });
 
   it("keeps the launch modal open when the API rejects a workspace", async () => {
@@ -277,7 +335,9 @@ describe("AgentOS Console", () => {
       await screen.findByRole("button", { name: "Launch Codex CLI" }),
     );
     await user.type(
-      screen.getByRole("textbox", { name: "Workspace absolute path" }),
+      screen.getByRole("textbox", {
+        name: "Default workspace absolute path",
+      }),
       "/missing",
     );
     await user.click(screen.getByRole("button", { name: "Start" }));
@@ -302,26 +362,40 @@ describe("AgentOS Console", () => {
       await screen.findByRole("button", { name: "Launch Codex CLI" }),
     );
     await user.type(
-      screen.getByRole("textbox", { name: "Workspace absolute path" }),
+      screen.getByRole("textbox", {
+        name: "Default workspace absolute path",
+      }),
       "/Users/zack/My Project",
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "New folder (optional)" }),
+      "project",
     );
     await user.click(screen.getByRole("button", { name: "Start" }));
 
     expect(screen.getByRole("button", { name: "Starting…" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
     expect(
-      screen.getByRole("textbox", { name: "Workspace absolute path" }),
+      screen.getByRole("textbox", {
+        name: "Default workspace absolute path",
+      }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("textbox", { name: "New folder (optional)" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("radio", { name: "Continue last session" }),
     ).toBeDisabled();
 
     finishLaunch?.();
     expect(
       await screen.findByText(
-        "Codex CLI launched in /Users/zack/My Project",
+        "Codex CLI launched in /Users/zack/My Project/project",
       ),
     ).toBeInTheDocument();
   });
 
-  it("sends continue mode but resets the next modal to new session", async () => {
+  it("prefills continue with the provider last-started workspace", async () => {
     const { fetchMock } = mockApi();
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
@@ -331,21 +405,41 @@ describe("AgentOS Console", () => {
       await screen.findByRole("button", { name: "Launch Codex CLI" }),
     );
     await user.type(
-      screen.getByRole("textbox", { name: "Workspace absolute path" }),
-      "/Users/zack/My Project",
+      screen.getByRole("textbox", {
+        name: "Default workspace absolute path",
+      }),
+      "/Users/zack/Projects",
     );
+    await user.type(
+      screen.getByRole("textbox", { name: "New folder (optional)" }),
+      "My Project",
+    );
+    await user.click(screen.getByRole("button", { name: "Start" }));
+    await screen.findByText(
+      "Codex CLI launched in /Users/zack/Projects/My Project",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Launch Codex CLI" }));
     await user.click(
       screen.getByRole("radio", { name: "Continue last session" }),
     );
+    expect(
+      screen.getByRole("textbox", { name: "Workspace absolute path" }),
+    ).toHaveValue("/Users/zack/Projects/My Project");
+    expect(
+      screen.queryByRole("textbox", { name: "New folder (optional)" }),
+    ).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Start" }));
 
-    await screen.findByText("Codex CLI launched in /Users/zack/My Project");
+    await screen.findByText(
+      "Codex CLI launched in /Users/zack/Projects/My Project",
+    );
     expect(fetchMock).toHaveBeenLastCalledWith(
       "/api/launch",
       expect.objectContaining({
         body: JSON.stringify({
           provider_id: "codex",
-          workspace_path: "/Users/zack/My Project",
+          workspace_path: "/Users/zack/Projects/My Project",
           session_mode: "continue",
         }),
       }),
@@ -353,5 +447,10 @@ describe("AgentOS Console", () => {
 
     await user.click(screen.getByRole("button", { name: "Launch Codex CLI" }));
     expect(screen.getByRole("radio", { name: "New session" })).toBeChecked();
+    expect(
+      screen.getByRole("textbox", {
+        name: "Default workspace absolute path",
+      }),
+    ).toHaveValue("/Users/zack/Projects");
   });
 });

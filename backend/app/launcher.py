@@ -139,6 +139,49 @@ def _provider_command(
     return modes[session_mode]
 
 
+def _new_workspace(
+    base_workspace: Path,
+    session_mode: SessionMode,
+    new_folder: str | None,
+) -> tuple[Path, bool]:
+    if not new_folder:
+        return base_workspace, False
+    if session_mode != "new":
+        raise LaunchError(
+            "New Folder is only available for a new session",
+            code="invalid_new_folder",
+            status_code=400,
+        )
+    if (
+        new_folder in {".", ".."}
+        or Path(new_folder).is_absolute()
+        or "/" in new_folder
+        or "\0" in new_folder
+    ):
+        raise LaunchError(
+            "New Folder must be a single folder name",
+            code="invalid_new_folder",
+            status_code=400,
+        )
+
+    workspace = base_workspace / new_folder
+    try:
+        workspace.mkdir()
+    except FileExistsError as exc:
+        raise LaunchError(
+            "New Folder already exists",
+            code="workspace_exists",
+            status_code=409,
+        ) from exc
+    except OSError as exc:
+        raise LaunchError(
+            "New Folder could not be created",
+            code="workspace_creation_failed",
+            status_code=400,
+        ) from exc
+    return workspace.resolve(strict=True), True
+
+
 def _shell_command(workspace: Path, command: tuple[str, ...]) -> str:
     change_directory = shlex.join(["cd", "--", str(workspace)])
     return f"{change_directory} && exec {shlex.join(command)}"
@@ -158,10 +201,11 @@ def launch_provider(
     provider_id: str,
     workspace_path: str,
     session_mode: SessionMode,
+    new_folder: str | None = None,
 ) -> LaunchResult:
     """Validate and launch a fixed provider command in Terminal.app."""
 
-    workspace = _validated_workspace(workspace_path)
+    base_workspace = _validated_workspace(workspace_path)
     command = _provider_command(provider_id, session_mode)
     provider_command = PROVIDER_COMMANDS[provider_id]
     if shutil.which(provider_command) is None:
@@ -171,7 +215,23 @@ def launch_provider(
             status_code=409,
         )
 
-    _terminal_launcher().launch(_shell_command(workspace, command))
+    terminal_launcher = _terminal_launcher()
+    workspace, workspace_created = _new_workspace(
+        base_workspace,
+        session_mode,
+        new_folder,
+    )
+    try:
+        terminal_launcher.launch(_shell_command(workspace, command))
+    except LaunchError as exc:
+        if workspace_created:
+            raise LaunchError(
+                f"{exc}. The new workspace folder remains at {workspace}",
+                code=exc.code,
+                status_code=exc.status_code,
+            ) from exc
+        raise
+
     return {
         "launched": True,
         "provider_id": provider_id,

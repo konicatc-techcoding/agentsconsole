@@ -14,6 +14,7 @@ export interface LaunchRequest {
   provider_id: string;
   workspace_path: string;
   session_mode: SessionMode;
+  new_folder?: string;
 }
 
 export interface LaunchResponse {

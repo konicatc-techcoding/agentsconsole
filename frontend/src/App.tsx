@@ -3,8 +3,52 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchProviders, launchProvider } from "./api";
 import type { Provider, SessionMode } from "./types";
 
+const WORKSPACE_PREFERENCES_KEY = "agentos-console.workspace-preferences.v1";
+
+interface WorkspacePreference {
+  defaultWorkspace: string;
+  lastStartedWorkspace: string;
+}
+
+type WorkspacePreferences = Record<string, WorkspacePreference>;
+
 function isAvailable(provider: Provider): boolean {
   return provider.installed && provider.error === null;
+}
+
+function readWorkspacePreferences(): WorkspacePreferences {
+  try {
+    const stored = JSON.parse(
+      localStorage.getItem(WORKSPACE_PREFERENCES_KEY) ?? "{}",
+    ) as unknown;
+    if (!stored || typeof stored !== "object" || Array.isArray(stored)) {
+      return {};
+    }
+    return Object.fromEntries(
+      Object.entries(stored).filter(
+        ([, value]) =>
+          value &&
+          typeof value === "object" &&
+          "defaultWorkspace" in value &&
+          typeof value.defaultWorkspace === "string" &&
+          "lastStartedWorkspace" in value &&
+          typeof value.lastStartedWorkspace === "string",
+      ),
+    ) as WorkspacePreferences;
+  } catch {
+    return {};
+  }
+}
+
+function saveWorkspacePreferences(preferences: WorkspacePreferences): void {
+  try {
+    localStorage.setItem(
+      WORKSPACE_PREFERENCES_KEY,
+      JSON.stringify(preferences),
+    );
+  } catch {
+    // A successful Terminal launch remains successful if storage is unavailable.
+  }
 }
 
 export default function App() {
@@ -14,7 +58,9 @@ export default function App() {
   const [pageError, setPageError] = useState<string | null>(null);
   const [launchTarget, setLaunchTarget] = useState<Provider | null>(null);
   const [workspacePath, setWorkspacePath] = useState("");
-  const [lastWorkspacePath, setLastWorkspacePath] = useState("");
+  const [newFolder, setNewFolder] = useState("");
+  const [workspacePreferences, setWorkspacePreferences] =
+    useState<WorkspacePreferences>(readWorkspacePreferences);
   const [sessionMode, setSessionMode] = useState<SessionMode>("new");
   const [launching, setLaunching] = useState(false);
   const [launchError, setLaunchError] = useState<string | null>(null);
@@ -43,14 +89,30 @@ export default function App() {
     void refresh();
   }, [refresh]);
 
-  const selected = providers.find((provider) => provider.id === selectedId);
-
   const openLaunch = (provider: Provider) => {
+    const preference = workspacePreferences[provider.id];
     setSelectedId(provider.id);
     setLaunchTarget(provider);
-    setWorkspacePath(lastWorkspacePath);
+    setWorkspacePath(preference?.defaultWorkspace ?? "");
+    setNewFolder("");
     setSessionMode("new");
     setLaunchError(null);
+  };
+
+  const selectSessionMode = (mode: SessionMode) => {
+    setSessionMode(mode);
+    setNewFolder("");
+    if (!launchTarget) {
+      return;
+    }
+    const preference = workspacePreferences[launchTarget.id];
+    setWorkspacePath(
+      mode === "continue"
+        ? preference?.lastStartedWorkspace ||
+            preference?.defaultWorkspace ||
+            ""
+        : preference?.defaultWorkspace || "",
+    );
   };
 
   const closeLaunch = () => {
@@ -74,8 +136,25 @@ export default function App() {
         provider_id: launchTarget.id,
         workspace_path: workspacePath,
         session_mode: sessionMode,
+        ...(sessionMode === "new" && newFolder
+          ? { new_folder: newFolder }
+          : {}),
       });
-      setLastWorkspacePath(result.workspace_path);
+      setWorkspacePreferences((current) => {
+        const previous = current[launchTarget.id];
+        const next = {
+          ...current,
+          [launchTarget.id]: {
+            defaultWorkspace:
+              sessionMode === "new"
+                ? workspacePath
+                : (previous?.defaultWorkspace ?? ""),
+            lastStartedWorkspace: result.workspace_path,
+          },
+        };
+        saveWorkspacePreferences(next);
+        return next;
+      });
       setLaunchTarget(null);
       setLaunchNotice(
         `${launchTarget.display_name} launched in ${result.workspace_path}`,
@@ -117,8 +196,8 @@ export default function App() {
           <p className="section-label">CLI PROVIDERS</p>
           <h2 id="provider-heading">Choose your workspace engine</h2>
           <p>
-            Discover the AI command-line tools available on this Mac. Selection
-            stays in this browser session.
+            Discover the AI command-line tools available on this Mac. Workspace
+            preferences stay local to this browser.
           </p>
         </div>
         <div className="read-only-badge">
@@ -203,18 +282,6 @@ export default function App() {
         )}
       </section>
 
-      <footer className="selection-bar">
-        <div>
-          <p className="section-label">SESSION SELECTION</p>
-          <p className="selection-copy">
-            {selected
-              ? `Current selection: ${selected.display_name}`
-              : "No CLI selected"}
-          </p>
-        </div>
-        <p className="selection-note">Resets when this page reloads</p>
-      </footer>
-
       {launchTarget && (
         <div className="modal-backdrop">
           <section
@@ -226,12 +293,40 @@ export default function App() {
             <p className="section-label">LAUNCH CLI</p>
             <h2 id="launch-heading">{launchTarget.display_name}</h2>
             <p className="modal-copy">
-              Choose a local workspace and how this CLI session should start.
+              Choose how this CLI session should start and where it should run.
             </p>
 
             <form onSubmit={(event) => void submitLaunch(event)}>
+              <fieldset disabled={launching}>
+                <legend>Session</legend>
+                <label>
+                  <input
+                    type="radio"
+                    name="session-mode"
+                    value="new"
+                    checked={sessionMode === "new"}
+                    onChange={() => selectSessionMode("new")}
+                  />
+                  New session
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="session-mode"
+                    value="continue"
+                    checked={sessionMode === "continue"}
+                    onChange={() => selectSessionMode("continue")}
+                  />
+                  Continue last session
+                </label>
+              </fieldset>
+
               <label className="workspace-field">
-                <span>Workspace absolute path</span>
+                <span>
+                  {sessionMode === "new"
+                    ? "Default workspace absolute path"
+                    : "Workspace absolute path"}
+                </span>
                 <input
                   type="text"
                   value={workspacePath}
@@ -243,29 +338,37 @@ export default function App() {
                 />
               </label>
 
-              <fieldset disabled={launching}>
-                <legend>Session</legend>
-                <label>
-                  <input
-                    type="radio"
-                    name="session-mode"
-                    value="new"
-                    checked={sessionMode === "new"}
-                    onChange={() => setSessionMode("new")}
-                  />
-                  New session
-                </label>
-                <label>
-                  <input
-                    type="radio"
-                    name="session-mode"
-                    value="continue"
-                    checked={sessionMode === "continue"}
-                    onChange={() => setSessionMode("continue")}
-                  />
-                  Continue last session
-                </label>
-              </fieldset>
+              {sessionMode === "new" ? (
+                <>
+                  <p className="workspace-hint">
+                    Saved as this provider&apos;s default after a successful
+                    start.
+                  </p>
+                  <label className="workspace-field">
+                    <span>New folder (optional)</span>
+                    <input
+                      type="text"
+                      value={newFolder}
+                      onChange={(event) => setNewFolder(event.target.value)}
+                      placeholder="project-folder"
+                      disabled={launching}
+                    />
+                  </label>
+                  {newFolder && (
+                    <p className="workspace-preview">
+                      Start in:{" "}
+                      <code>
+                        {workspacePath.replace(/\/+$/, "")}/{newFolder}
+                      </code>
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="workspace-hint">
+                  Uses this provider&apos;s last started workspace when
+                  available.
+                </p>
+              )}
 
               {launchError && (
                 <div className="modal-error" role="alert">

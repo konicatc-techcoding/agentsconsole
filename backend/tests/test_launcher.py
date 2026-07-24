@@ -77,6 +77,100 @@ def test_rejects_unsupported_platform_without_running_command(
     assert error.value.status_code == 501
 
 
+def test_unsupported_platform_does_not_create_new_folder(tmp_path, monkeypatch):
+    monkeypatch.setattr(launcher.shutil, "which", lambda command: f"/tools/{command}")
+    monkeypatch.setattr(launcher.platform, "system", lambda: "Linux")
+
+    with pytest.raises(launcher.LaunchError):
+        launcher.launch_provider("codex", str(tmp_path), "new", "project")
+
+    assert not (tmp_path / "project").exists()
+
+
+@pytest.mark.parametrize(
+    "new_folder",
+    [".", "..", "/absolute", "nested/project", "project/", "bad\0name"],
+)
+def test_rejects_unsafe_new_folder_names(tmp_path, monkeypatch, new_folder):
+    monkeypatch.setattr(launcher.shutil, "which", lambda command: f"/tools/{command}")
+    monkeypatch.setattr(launcher.platform, "system", lambda: "Darwin")
+
+    with pytest.raises(launcher.LaunchError) as error:
+        launcher.launch_provider("codex", str(tmp_path), "new", new_folder)
+
+    assert error.value.code == "invalid_new_folder"
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_rejects_new_folder_for_continue_mode(tmp_path, monkeypatch):
+    monkeypatch.setattr(launcher.shutil, "which", lambda command: f"/tools/{command}")
+    monkeypatch.setattr(launcher.platform, "system", lambda: "Darwin")
+
+    with pytest.raises(launcher.LaunchError) as error:
+        launcher.launch_provider("codex", str(tmp_path), "continue", "project")
+
+    assert error.value.code == "invalid_new_folder"
+    assert not (tmp_path / "project").exists()
+
+
+def test_rejects_existing_new_folder(tmp_path, monkeypatch):
+    existing = tmp_path / "project"
+    existing.mkdir()
+    monkeypatch.setattr(launcher.shutil, "which", lambda command: f"/tools/{command}")
+    monkeypatch.setattr(launcher.platform, "system", lambda: "Darwin")
+
+    with pytest.raises(launcher.LaunchError) as error:
+        launcher.launch_provider("codex", str(tmp_path), "new", "project")
+
+    assert error.value.code == "workspace_exists"
+    assert error.value.status_code == 409
+
+
+def test_creates_single_new_folder_and_launches_in_it(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(launcher.shutil, "which", lambda command: f"/tools/{command}")
+    monkeypatch.setattr(launcher.platform, "system", lambda: "Darwin")
+
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(launcher.subprocess, "run", fake_run)
+
+    result = launcher.launch_provider(
+        "codex",
+        str(tmp_path),
+        "new",
+        "新 project $(safe)",
+    )
+
+    workspace = tmp_path / "新 project $(safe)"
+    assert workspace.is_dir()
+    assert result["workspace_path"] == str(workspace.resolve())
+    assert calls[0][3] == (
+        f"cd -- {launcher.shlex.quote(str(workspace.resolve()))} && exec codex"
+    )
+
+
+def test_terminal_failure_keeps_new_folder_and_reports_path(tmp_path, monkeypatch):
+    monkeypatch.setattr(launcher.shutil, "which", lambda command: f"/tools/{command}")
+    monkeypatch.setattr(launcher.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(
+        launcher.subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess([], 1, "", ""),
+    )
+
+    with pytest.raises(launcher.LaunchError) as error:
+        launcher.launch_provider("codex", str(tmp_path), "new", "project")
+
+    workspace = tmp_path / "project"
+    assert workspace.is_dir()
+    assert error.value.code == "terminal_launch_failed"
+    assert str(workspace.resolve()) in str(error.value)
+    assert "remains" in str(error.value)
+
+
 def test_launches_safe_shell_command_with_argument_array(tmp_path, monkeypatch):
     workspace = tmp_path / "專案 '$(touch nope)'"
     workspace.mkdir()

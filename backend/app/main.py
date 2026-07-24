@@ -23,6 +23,7 @@ class LaunchRequest(BaseModel):
     provider_id: str
     workspace_path: str
     session_mode: Literal["new", "continue"]
+    new_folder: str | None = None
 
 
 @app.get("/api/providers")
@@ -41,6 +42,7 @@ def launch(request: LaunchRequest) -> LaunchResult:
             request.provider_id,
             request.workspace_path,
             request.session_mode,
+            request.new_folder,
         )
     except LaunchError as exc:
         raise HTTPException(

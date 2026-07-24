@@ -33,8 +33,8 @@ def test_launch_endpoint_returns_launch_result(monkeypatch):
     }
     calls = []
 
-    def fake_launch(provider_id, workspace_path, session_mode):
-        calls.append((provider_id, workspace_path, session_mode))
+    def fake_launch(provider_id, workspace_path, session_mode, new_folder):
+        calls.append((provider_id, workspace_path, session_mode, new_folder))
         return expected
 
     monkeypatch.setattr("app.main.launch_provider", fake_launch)
@@ -44,13 +44,14 @@ def test_launch_endpoint_returns_launch_result(monkeypatch):
         json={
             "provider_id": "codex",
             "workspace_path": "/workspace",
-            "session_mode": "continue",
+            "session_mode": "new",
+            "new_folder": "project",
         },
     )
 
     assert response.status_code == 200
     assert response.json() == expected
-    assert calls == [("codex", "/workspace", "continue")]
+    assert calls == [("codex", "/workspace", "new", "project")]
 
 
 def test_launch_endpoint_returns_safe_error(monkeypatch):

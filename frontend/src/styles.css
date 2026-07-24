@@ -338,27 +338,6 @@ details code {
   color: #92a0b5;
 }
 
-.selection-bar {
-  gap: 24px;
-  margin-top: 32px;
-  padding: 22px 24px;
-  border: 1px solid #252d3a;
-  border-radius: 16px;
-  background: #10151d;
-}
-
-.selection-copy {
-  margin-bottom: 0;
-  font-size: 1.05rem;
-  font-weight: 600;
-}
-
-.selection-note {
-  margin-bottom: 0;
-  color: #768499;
-  font-size: 0.8rem;
-}
-
 .modal-backdrop {
   position: fixed;
   z-index: 10;
@@ -394,6 +373,7 @@ details code {
 .workspace-field {
   display: grid;
   gap: 8px;
+  margin-top: 20px;
   color: #d9e0eb;
   font-size: 0.85rem;
 }
@@ -412,10 +392,23 @@ details code {
   outline: 2px solid rgb(113 136 255 / 20%);
 }
 
+.workspace-hint,
+.workspace-preview {
+  margin: 8px 0 0;
+  color: #8290a3;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.workspace-preview code {
+  overflow-wrap: anywhere;
+  color: #cbd4e2;
+}
+
 .launch-modal fieldset {
   display: grid;
   gap: 10px;
-  margin: 22px 0 0;
+  margin: 0;
   padding: 0;
   border: 0;
 }
