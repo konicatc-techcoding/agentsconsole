@@ -5,21 +5,24 @@
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md，接著執行 $finn-build，實作已標記 agent-ready 的 LOO-6。
+請先讀取 status.md，接著執行 $finn-review，review AgentOS Console 的 PR #2。
 ```
 
-LOO-5 已完成、通過 review 並合併至 `main`。LOO-6 已完成規格訪談並由
-使用者套用 `agent-ready`，目前可執行 `$finn-build`。
+LOO-5 已完成、通過 review 並合併至 `main`。LOO-6 已完成實作、驗證與
+PR 建立，目前等待 `$finn-review`，不可由 builder 自行 merge。
 
 ## Source of truth
 
 - Workspace：`/Users/zackchiu/CodexCLI/agentsconsole`
-- Git branch：`main`
+- Git branch：`LOO-6-launch-cli-terminal`
 - 已合併基線：`1889625 Merge pull request #1 from konicatc-techcoding/LOO-5-cli-provider-console`
 - 目前 Linear issue：`LOO-6 從 Provider 卡片在 macOS Terminal 啟動 CLI session`
 - Linear URL：<https://linear.app/loopent/issue/LOO-6/從-provider-卡片在-macos-terminal-啟動-cli-session>
-- Linear 狀態：`Backlog`
+- Linear 狀態：`In Review`
 - Linear label：`agent-ready`
+- 目前 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/2>
+- PR 狀態：Open，等待 review
+- Feature commit：`5c8a7a2 feat: launch CLI sessions in Terminal`
 - 上一項 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/1>
 - 上一項 PR 狀態：Merged
 - 上一項 merge commit：`1889625f1a08afda6e494827a2dc0256c8468215`
@@ -64,9 +67,9 @@ LOO-5 已完成、通過 review 並合併至 `main`。LOO-6 已完成規格訪�
 Backend 測試有一則 Starlette TestClient 的 upstream deprecation warning，
 不影響測試結果或 runtime。
 
-## 下一項功能
+## LOO-6 實作內容
 
-LOO-6 將從每張可用的 provider 卡片啟動 macOS Terminal.app：
+LOO-6 已加入從每張可用 provider 卡片啟動 macOS Terminal.app 的功能：
 
 - Launch modal 要求有效的本機 workspace 絕對路徑。
 - 支援 `New session` 與 `Continue last session`。
@@ -76,6 +79,24 @@ LOO-6 將從每張可用的 provider 卡片啟動 macOS Terminal.app：
 - Backend 保留最小跨平台 launcher 邊界，但只實作 macOS。
 
 完整 acceptance criteria、non-goals 與驗證方式以 Linear `LOO-6` 為準。
+
+## LOO-6 驗證結果
+
+- Backend tests：20 passed
+- Frontend tests：10 passed
+- Frontend production build：passed
+- `git diff --check`：passed
+- 實機瀏覽器驗證：
+  - 四個真實 CLI 都顯示 Available 與 Launch
+  - Modal、provider selection、invalid path error、workspace 預填正常
+  - 完整 reload 後選擇與 workspace 清除
+  - Browser console 無 warning 或 error
+- 實機 Terminal 驗證：
+  - Codex 在獨立 Terminal tty 啟動
+  - Codex process cwd 為 `/Users/zackchiu/CodexCLI/agentsconsole`
+
+Backend 測試仍有一則 Starlette TestClient 的 upstream deprecation warning，
+不影響測試結果或 runtime。
 
 ## 本機預覽方式
 
@@ -99,10 +120,10 @@ npm run dev
 
 ## 接續流程
 
-1. 執行 `$finn-build`，claim 並實作 `LOO-6`。
-2. 完成 issue 指定的 backend、frontend 與人工驗證。
-3. 開啟 PR 後執行 `$finn-review`。
-4. Merge 仍由使用者決定。
+1. 執行 `$finn-review` review PR #2。
+2. 若 review 要求修改，依 Finn-loop label 交回 `$finn-build`。
+3. 若 review 通過，由使用者決定是否 merge。
+4. Merge 後更新本檔與 Linear 狀態，再執行 `$finn-spec` 定義下一項功能。
 
 ## 本檔注意事項
 
