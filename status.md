@@ -1,35 +1,40 @@
 # AgentOS Console — 工作交接狀態
 
-最後更新：2026-07-24
+最後更新：2026-07-25
 
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md，接著執行 $finn-review，review AgentOS Console
-的 PR #3；不得由 builder 自行 merge。
+請先讀取 status.md。LOO-7 與 PR #3 已完成；下一步使用 $finn-spec
+確認下一階段 Tauri App 規格，不要直接開始實作。
 ```
 
 LOO-7 已完成 Tauri 2 macOS Foundation、runtime adapter、Rust commands、
-完整自動測試與真實 App smoke，PR #3 已建立並等待 `$finn-review`。
+完整自動測試與真實 App smoke，PR #3 已通過 `$finn-review` 並合併。
+目前沒有下一項 agent-ready issue。
 
 ## Source of truth
 
 - Workspace：`/Users/zackchiu/CodexCLI/agentsconsole`
-- Git branch：`LOO-7-tauri-foundation`
-- 已合併基線：`5c776d2 Launch CLI sessions in Terminal (#2)`
+- Git branch：`main`
+- 最新合併基線：`ea58a54 LOO-7 Add Tauri macOS foundation (#3)`
 - LOO-6 Linear 狀態：`Done`
 - LOO-6 Linear URL：<https://linear.app/loopent/issue/LOO-6/從-provider-卡片在-macos-terminal-啟動-cli-session>
 - LOO-6 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/2>
 - PR #2 狀態：Merged
 - PR #2 merge commit：`5c776d2c0203942f5aa168695c05bf2bad5ec3df`
-- 目前 Linear issue：`LOO-7 建立 macOS Tauri Foundation 並保留 Web runtime`
+- 最近完成的 Linear issue：`LOO-7 建立 macOS Tauri Foundation 並保留 Web runtime`
 - LOO-7 URL：<https://linear.app/loopent/issue/LOO-7/建立-macos-tauri-foundation-並保留-web-runtime>
-- LOO-7 狀態：`In Progress`
+- LOO-7 狀態：`Done`
 - LOO-7 label：`agent-ready`
 - LOO-7 assignee：Zack Chiu
 - LOO-7 relation：`blocked by LOO-6` 關聯仍保留；LOO-6 已 Done，前置條件已完成
-- 目前 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/3>
-- PR #3 狀態：Open，等待 review
+- LOO-7 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/3>
+- PR #3 狀態：Merged
+- PR #3 merge commit：`ea58a5401a33dda177d269408e8ab8849efd268f`
+- PR #3 review：`loop-approved`
+- PR #3 required check：`smoke` — `SUCCESS`
+- PR #3 CI run：<https://github.com/konicatc-techcoding/agentsconsole/actions/runs/30100603737/job/89505379949>
 - Implementation commit：`05d499c feat: add Tauri macOS foundation`
 - 上一項 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/1>
 - 上一項 PR 狀態：Merged
@@ -197,9 +202,11 @@ npm run dev
 
 ## 接續流程
 
-1. 執行 `$finn-review` review PR #3。
-2. 若 review 要求修改，依 Finn-loop label 交回 `$finn-build`。
-3. 若 review 通過，由使用者決定是否 merge；builder 不得自行 merge。
+1. 使用 `$finn-spec` 確認下一階段 Tauri App 的範圍與順序。
+2. 候選方向包括 App-managed workspace/session storage，以及後續 embedded
+   Terminal／Console layout；尚未建立 Linear issue，不應直接實作。
+3. 規格確認並建立 issue 後，由使用者明確加上 `agent-ready`，再交給
+   `$finn-build`。
 
 ## 本檔注意事項
 
