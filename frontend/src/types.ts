@@ -26,3 +26,16 @@ export interface LaunchResponse {
 export interface WorkspaceResponse {
   workspace_path: string;
 }
+
+export interface WorkspacePreference {
+  defaultWorkspace: string;
+  recentWorkspaces: string[];
+}
+
+export type WorkspacePreferences = Record<string, WorkspacePreference>;
+
+export type PreferenceSaveContext = "default" | "history";
+
+export interface PreferenceSaveResult {
+  warning?: string;
+}

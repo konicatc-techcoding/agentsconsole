@@ -3,7 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
-import type { Provider } from "./types";
+import type { RuntimeAdapter } from "./runtime/types";
+import type { Provider, WorkspacePreferences } from "./types";
 
 const providers: Provider[] = [
   {
@@ -133,6 +134,27 @@ function mockApi(options?: {
   );
 
   return { fetchMock, finishLaunch, finishSave };
+}
+
+function mockRuntime(options?: {
+  loadPreferences?: () => Promise<WorkspacePreferences>;
+  savePreferences?: RuntimeAdapter["saveWorkspacePreferences"];
+}): RuntimeAdapter {
+  return {
+    fetchProviders: vi.fn().mockResolvedValue(providers),
+    launchProvider: vi.fn(async (request) => ({
+      launched: true,
+      provider_id: request.provider_id,
+      workspace_path: request.workspace_path,
+    })),
+    validateWorkspace: vi.fn(async (workspacePath) => ({
+      workspace_path: workspacePath,
+    })),
+    loadWorkspacePreferences:
+      options?.loadPreferences ?? vi.fn().mockResolvedValue({}),
+    saveWorkspacePreferences:
+      options?.savePreferences ?? vi.fn().mockResolvedValue({}),
+  };
 }
 
 afterEach(() => {
@@ -581,5 +603,87 @@ describe("AgentOS Console", () => {
     ).toBeDisabled();
     expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
     expect(screen.getByText("No recent workspace available")).toBeInTheDocument();
+  });
+
+  it("keeps Launch disabled until App-managed preferences finish loading", async () => {
+    let finishLoading: ((preferences: WorkspacePreferences) => void) | undefined;
+    const loading = new Promise<WorkspacePreferences>((resolve) => {
+      finishLoading = resolve;
+    });
+    const runtime = mockRuntime({ loadPreferences: () => loading });
+    render(<App runtime={runtime} />);
+
+    const launch = await screen.findByRole("button", {
+      name: "Launch Codex CLI",
+    });
+    expect(launch).toBeDisabled();
+
+    finishLoading?.({});
+    await waitFor(() => expect(launch).toBeEnabled());
+  });
+
+  it("shows the storage path error and retries storage on Refresh", async () => {
+    const loadPreferences = vi
+      .fn<() => Promise<WorkspacePreferences>>()
+      .mockRejectedValueOnce(
+        new Error(
+          "Workspace preferences at /App Data/workspace-preferences.json are invalid",
+        ),
+      )
+      .mockResolvedValueOnce({});
+    const runtime = mockRuntime({ loadPreferences });
+    const user = userEvent.setup();
+    render(<App runtime={runtime} />);
+
+    expect(
+      await screen.findByText(/\/App Data\/workspace-preferences\.json/),
+    ).toHaveAttribute("role", "alert");
+    expect(
+      screen.getByRole("button", { name: "Launch Codex CLI" }),
+    ).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Launch Codex CLI" }),
+      ).toBeEnabled(),
+    );
+    expect(loadPreferences).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows a history warning after a successful launch persistence failure", async () => {
+    const runtime = mockRuntime({
+      savePreferences: vi.fn().mockResolvedValue({
+        warning: "CLI launched, but history was not saved",
+      }),
+    });
+    const user = userEvent.setup();
+    render(<App runtime={runtime} />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Launch Codex CLI" }),
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Default workspace path" }),
+      "/workspace",
+    );
+    await user.click(screen.getByRole("button", { name: "Start" }));
+
+    expect(
+      await screen.findByText("Codex CLI launched in /workspace"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("CLI launched, but history was not saved"),
+    ).toHaveAttribute("role", "alert");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(runtime.saveWorkspacePreferences).toHaveBeenCalledWith(
+      {
+        codex: {
+          defaultWorkspace: "",
+          recentWorkspaces: ["/workspace"],
+        },
+      },
+      "history",
+    );
   });
 });

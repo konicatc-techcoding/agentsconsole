@@ -89,19 +89,32 @@ CLI. The modal's `Start` button opens a separate Terminal.app window and
 leaves all interaction and approval handling to the native CLI. Starting a
 session does not change the saved default workspace.
 
-Workspace preferences are stored separately for each provider in the current
-browser or WebView origin's local storage:
-
 - `New session` starts in the default workspace. An optional single-level
   folder name creates a new child folder and starts there.
 - `Continue session` offers up to five unique workspaces previously started
   for that provider, newest first. If there is no recent workspace, it falls
   back to the saved default.
 
-These recent paths identify workspaces, not native CLI session IDs. Browser
-site data remains the current source of truth. Web and Tauri use separate
-origin storage and do not synchronize. App-managed files are outside this
-foundation's scope.
+These recent paths identify workspaces, not native CLI session IDs. Web and
+Tauri keep separate preferences and do not synchronize:
+
+- Web mode continues to use the current browser origin's local storage.
+- Tauri mode uses `workspace-preferences.json` as its source of truth and
+  generates `workspace-preferences.md` as a human-readable summary. On macOS,
+  both are under
+  `~/Library/Application Support/com.konicatc.agentos-console/`.
+
+On the first Tauri launch without a JSON file, the app migrates the existing
+WebView-origin `agentos-console.workspace-preferences.v1` value. The old key is
+removed only after both App-managed files are written successfully. Once JSON
+exists it always wins; residual local storage is not merged.
+
+Do not edit the generated Markdown to change app state. If the JSON file is
+invalid, the app preserves it, shows its full path, and disables Save and
+Start. Fix, rename, or delete that JSON outside the app, then use `Refresh` to
+retry. Missing workspace paths remain in history until a later Save or Start
+validates them. If Terminal launches but the history write fails, the launch
+remains successful and the app displays a separate history warning.
 
 Both runtimes accept only the fixed provider commands documented by the UI.
 They reject relative, missing, file, and filesystem-root base workspaces. New

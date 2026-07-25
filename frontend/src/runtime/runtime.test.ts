@@ -1,5 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { selectRuntime } from ".";
 import { tauriRuntime } from "./tauri";
@@ -13,6 +13,10 @@ vi.mock("@tauri-apps/api/core", () => ({
 beforeEach(() => {
   vi.mocked(invoke).mockReset();
   vi.mocked(isTauri).mockReturnValue(false);
+});
+
+afterEach(() => {
+  localStorage.clear();
 });
 
 describe("runtime adapters", () => {
@@ -62,5 +66,106 @@ describe("runtime adapters", () => {
     await expect(
       tauriRuntime.validateWorkspace("/missing"),
     ).rejects.toThrow("Workspace does not exist");
+  });
+
+  it("uses existing App-managed preferences without reading legacy storage", async () => {
+    const preferences = {
+      codex: {
+        defaultWorkspace: "/app-data",
+        recentWorkspaces: ["/recent"],
+      },
+    };
+    localStorage.setItem(
+      "agentos-console.workspace-preferences.v1",
+      JSON.stringify({
+        codex: { defaultWorkspace: "/legacy", recentWorkspaces: [] },
+      }),
+    );
+    const storageRead = vi.spyOn(Storage.prototype, "getItem");
+    vi.mocked(invoke).mockResolvedValue({
+      exists: true,
+      preferences,
+    });
+
+    await expect(tauriRuntime.loadWorkspacePreferences()).resolves.toEqual(
+      preferences,
+    );
+
+    expect(invoke).toHaveBeenCalledOnce();
+    expect(invoke).toHaveBeenCalledWith("read_workspace_preferences");
+    expect(storageRead).not.toHaveBeenCalled();
+    storageRead.mockRestore();
+  });
+
+  it("migrates legacy preferences only when the App-managed JSON is missing", async () => {
+    localStorage.setItem(
+      "agentos-console.workspace-preferences.v1",
+      JSON.stringify({
+        codex: {
+          defaultWorkspace: "/default",
+          lastStartedWorkspace: "/legacy-recent",
+        },
+      }),
+    );
+    const migrated = {
+      codex: {
+        defaultWorkspace: "/default",
+        recentWorkspaces: ["/legacy-recent"],
+      },
+    };
+    vi.mocked(invoke)
+      .mockResolvedValueOnce({ exists: false, preferences: null })
+      .mockResolvedValueOnce(migrated);
+
+    await expect(tauriRuntime.loadWorkspacePreferences()).resolves.toEqual(
+      migrated,
+    );
+
+    expect(invoke).toHaveBeenNthCalledWith(2, "initialize_workspace_preferences", {
+      preferences: migrated,
+    });
+    expect(
+      localStorage.getItem("agentos-console.workspace-preferences.v1"),
+    ).toBeNull();
+  });
+
+  it("keeps legacy storage when App-managed initialization fails", async () => {
+    localStorage.setItem(
+      "agentos-console.workspace-preferences.v1",
+      JSON.stringify({
+        codex: { defaultWorkspace: "/legacy", recentWorkspaces: [] },
+      }),
+    );
+    vi.mocked(invoke)
+      .mockResolvedValueOnce({ exists: false, preferences: null })
+      .mockRejectedValueOnce({
+        message: "Workspace preferences could not be saved",
+      });
+
+    await expect(tauriRuntime.loadWorkspacePreferences()).rejects.toThrow(
+      "Workspace preferences could not be saved",
+    );
+
+    expect(
+      localStorage.getItem("agentos-console.workspace-preferences.v1"),
+    ).not.toBeNull();
+  });
+
+  it("reports post-launch history failures without converting them to launch failures", async () => {
+    const preferences = {
+      codex: { defaultWorkspace: "/default", recentWorkspaces: ["/recent"] },
+    };
+    vi.mocked(invoke).mockRejectedValue({
+      message: "Workspace preferences could not be saved",
+    });
+
+    await expect(
+      tauriRuntime.saveWorkspacePreferences(preferences, "history"),
+    ).resolves.toEqual({
+      warning: "CLI launched, but history was not saved",
+    });
+    await expect(
+      tauriRuntime.saveWorkspacePreferences(preferences, "default"),
+    ).rejects.toThrow("Workspace preferences could not be saved");
   });
 });

@@ -1,76 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { defaultRuntime } from "./runtime";
+import { RECENT_WORKSPACE_LIMIT } from "./runtime/preferences";
 import type { RuntimeAdapter } from "./runtime/types";
-import type { Provider, SessionMode } from "./types";
-
-const WORKSPACE_PREFERENCES_KEY = "agentos-console.workspace-preferences.v1";
-const RECENT_WORKSPACE_LIMIT = 5;
-
-interface WorkspacePreference {
-  defaultWorkspace: string;
-  recentWorkspaces: string[];
-}
-
-type WorkspacePreferences = Record<string, WorkspacePreference>;
+import type {
+  Provider,
+  SessionMode,
+  WorkspacePreferences,
+} from "./types";
 
 function isAvailable(provider: Provider): boolean {
   return provider.installed && provider.error === null;
-}
-
-function readWorkspacePreferences(): WorkspacePreferences {
-  try {
-    const stored = JSON.parse(
-      localStorage.getItem(WORKSPACE_PREFERENCES_KEY) ?? "{}",
-    ) as unknown;
-    if (!stored || typeof stored !== "object" || Array.isArray(stored)) {
-      return {};
-    }
-    const preferences: WorkspacePreferences = {};
-    for (const [providerId, value] of Object.entries(stored)) {
-      if (
-        !value ||
-        typeof value !== "object" ||
-        !("defaultWorkspace" in value) ||
-        typeof value.defaultWorkspace !== "string"
-      ) {
-        continue;
-      }
-      let recent: string[] = [];
-      if ("recentWorkspaces" in value && Array.isArray(value.recentWorkspaces)) {
-        recent = value.recentWorkspaces.filter(
-          (path: unknown): path is string =>
-            typeof path === "string" && Boolean(path),
-        );
-      } else if (
-        "lastStartedWorkspace" in value &&
-        typeof value.lastStartedWorkspace === "string" &&
-        value.lastStartedWorkspace
-      ) {
-        recent = [value.lastStartedWorkspace];
-      }
-      preferences[providerId] = {
-        defaultWorkspace: value.defaultWorkspace,
-        recentWorkspaces: [...new Set(recent)].slice(0, RECENT_WORKSPACE_LIMIT),
-      };
-    }
-    return preferences;
-  } catch {
-    return {};
-  }
-}
-
-function saveWorkspacePreferences(preferences: WorkspacePreferences): boolean {
-  try {
-    localStorage.setItem(
-      WORKSPACE_PREFERENCES_KEY,
-      JSON.stringify(preferences),
-    );
-    return true;
-  } catch {
-    // A successful Terminal launch remains successful if storage is unavailable.
-    return false;
-  }
 }
 
 interface AppProps {
@@ -86,31 +26,53 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
   const [workspacePath, setWorkspacePath] = useState("");
   const [newFolder, setNewFolder] = useState("");
   const [workspacePreferences, setWorkspacePreferences] =
-    useState<WorkspacePreferences>(readWorkspacePreferences);
+    useState<WorkspacePreferences>({});
+  const [storageReady, setStorageReady] = useState(false);
+  const [storageError, setStorageError] = useState<string | null>(null);
   const [sessionMode, setSessionMode] = useState<SessionMode>("new");
   const [launching, setLaunching] = useState(false);
   const [savingDefault, setSavingDefault] = useState(false);
   const [launchError, setLaunchError] = useState<string | null>(null);
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const [launchNotice, setLaunchNotice] = useState<string | null>(null);
+  const [launchWarning, setLaunchWarning] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setPageError(null);
-    try {
-      const discovered = await runtime.fetchProviders();
-      setProviders(discovered);
-      setSelectedId((current) => {
-        const selected = discovered.find((provider) => provider.id === current);
-        return selected && isAvailable(selected) ? current : null;
+    setStorageReady(false);
+    setStorageError(null);
+    const providerTask = runtime
+      .fetchProviders()
+      .then((discovered) => {
+        setProviders(discovered);
+        setSelectedId((current) => {
+          const selected = discovered.find(
+            (provider) => provider.id === current,
+          );
+          return selected && isAvailable(selected) ? current : null;
+        });
+      })
+      .catch((error: unknown) => {
+        setPageError(
+          error instanceof Error ? error.message : "Provider discovery failed",
+        );
       });
-    } catch (error) {
-      setPageError(
-        error instanceof Error ? error.message : "Provider discovery failed",
-      );
-    } finally {
-      setLoading(false);
-    }
+    const preferenceTask = runtime
+      .loadWorkspacePreferences()
+      .then((preferences) => {
+        setWorkspacePreferences(preferences);
+        setStorageReady(true);
+      })
+      .catch((error: unknown) => {
+        setStorageError(
+          error instanceof Error
+            ? error.message
+            : "Workspace preferences could not be loaded",
+        );
+      });
+    await Promise.all([providerTask, preferenceTask]);
+    setLoading(false);
   }, [runtime]);
 
   useEffect(() => {
@@ -171,9 +133,7 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
           recentWorkspaces: previous?.recentWorkspaces ?? [],
         },
       };
-      if (!saveWorkspacePreferences(next)) {
-        throw new Error("Default workspace could not be saved in this browser");
-      }
+      await runtime.saveWorkspacePreferences(next, "default");
       setWorkspacePreferences(next);
       setWorkspacePath(result.workspace_path);
       setSaveNotice("Default workspace saved");
@@ -195,6 +155,7 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
     setLaunching(true);
     setLaunchError(null);
     setLaunchNotice(null);
+    setLaunchWarning(null);
     try {
       const result = await runtime.launchProvider({
         provider_id: launchTarget.id,
@@ -204,28 +165,31 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
           ? { new_folder: newFolder }
           : {}),
       });
-      setWorkspacePreferences((current) => {
-        const previous = current[launchTarget.id];
-        const recentWorkspaces = [
-          result.workspace_path,
-          ...(previous?.recentWorkspaces ?? []).filter(
-            (path) => path !== result.workspace_path,
-          ),
-        ].slice(0, RECENT_WORKSPACE_LIMIT);
-        const next = {
-          ...current,
-          [launchTarget.id]: {
-            defaultWorkspace: previous?.defaultWorkspace ?? "",
-            recentWorkspaces,
-          },
-        };
-        saveWorkspacePreferences(next);
-        return next;
-      });
+      const previous = workspacePreferences[launchTarget.id];
+      const next = {
+        ...workspacePreferences,
+        [launchTarget.id]: {
+          defaultWorkspace: previous?.defaultWorkspace ?? "",
+          recentWorkspaces: [
+            result.workspace_path,
+            ...(previous?.recentWorkspaces ?? []).filter(
+              (path) => path !== result.workspace_path,
+            ),
+          ].slice(0, RECENT_WORKSPACE_LIMIT),
+        },
+      };
+      let warning: string | undefined;
+      try {
+        ({ warning } = await runtime.saveWorkspacePreferences(next, "history"));
+      } catch {
+        warning = "CLI launched, but history was not saved";
+      }
+      setWorkspacePreferences(next);
       setLaunchTarget(null);
       setLaunchNotice(
         `${launchTarget.display_name} launched in ${result.workspace_path}`,
       );
+      setLaunchWarning(warning ?? null);
     } catch (error) {
       setLaunchError(
         error instanceof Error ? error.message : "CLI launch failed",
@@ -253,7 +217,7 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
           <h1 id="provider-heading">AI Agent Console</h1>
           <p>
             Discover the AI command-line tools available on this Mac. Workspace
-            preferences stay local to this browser.
+            preferences stay local to this device.
           </p>
         </div>
         <div className="intro-actions">
@@ -279,9 +243,21 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
         </div>
       )}
 
+      {storageError && (
+        <div className="page-error" role="alert">
+          <strong>Workspace storage unavailable.</strong> {storageError}
+        </div>
+      )}
+
       {launchNotice && (
         <div className="launch-notice" role="status">
           {launchNotice}
+        </div>
+      )}
+
+      {launchWarning && (
+        <div className="page-error" role="alert">
+          {launchWarning}
         </div>
       )}
 
@@ -335,7 +311,7 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                   className="launch-button"
                   type="button"
                   aria-label={`Launch ${provider.display_name}`}
-                  disabled={!available}
+                  disabled={!available || !storageReady}
                   onClick={() => openLaunch(provider)}
                 >
                   Launch
