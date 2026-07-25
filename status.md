@@ -5,28 +5,33 @@
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md。LOO-9 已由 $finn-build 完成並開啟 PR #5；
-下一步使用 $finn-review 審查 PR #5，不要直接 merge。
+請先讀取 status.md。LOO-9 與 PR #5 已完成並合併；
+下一步使用 $finn-spec 確認下一階段 Tauri App 規格，不要直接開始實作。
 ```
 
 LOO-9 已完成 Tauri-only Console shell、固定 200px sidebar、全高 2×2 Slot
-版面與獨立 `console-layout.json` 保存。PR #5 等待 `$finn-review`；在 review
-完成及使用者自行 merge 前，不開始下一項實作。
+版面與獨立 `console-layout.json` 保存。PR #5 已通過 `$finn-review` 並合併，
+目前沒有下一項 agent-ready issue。
 
 ## Source of truth
 
 - Workspace：`/Users/zackchiu/CodexCLI/agentsconsole`
-- Git branch：`LOO-9-tauri-console-layout`
-- 最新合併基線：`400f2af LOO-8 Add app-managed workspace storage (#4)`
-- Active Linear issue：`LOO-9 建立 Tauri Console 佈局與可保存的四 Slot Provider 配置`
+- Git branch：`main`
+- 最新合併基線：`95d61ff LOO-9 Add Tauri console slot layout (#5)`
+- 最近完成的 Linear issue：`LOO-9 建立 Tauri Console 佈局與可保存的四 Slot Provider 配置`
 - LOO-9 URL：<https://linear.app/loopent/issue/LOO-9/建立-tauri-console-佈局與可保存的四-slot-provider-配置>
-- LOO-9 狀態：`In Review`
+- LOO-9 狀態：`Done`
 - LOO-9 label：`agent-ready`
 - LOO-9 assignee：Zack Chiu
 - LOO-9 relation：`blocked by LOO-8`；LOO-8 已 Done
 - LOO-9 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/5>
-- PR #5 狀態：Open，等待 `$finn-review`
+- PR #5 狀態：Merged
+- PR #5 merge commit：`95d61ff9de33deefae01cf95c6213926e0138433`
+- PR #5 review：`loop-approved`
+- PR #5 required check：`smoke` — `SUCCESS`
+- PR #5 CI run：<https://github.com/konicatc-techcoding/agentsconsole/actions/runs/30152494047/job/89665112674>
 - LOO-9 implementation commit：`3b9f0f6 feat: add Tauri console slot layout`
+- LOO-9 handoff commit：`822d15d docs: record LOO-9 review handoff`
 - 最近完成的 Linear issue：`LOO-8 將 Tauri workspace preferences 遷移至 App-managed JSON 與 Markdown`
 - LOO-8 URL：<https://linear.app/loopent/issue/LOO-8/將-tauri-workspace-preferences-遷移至-app-managed-json-與-markdown>
 - LOO-8 狀態：`Done`
@@ -241,7 +246,7 @@ LOO-8 已完成實作：
 
 ## LOO-9 Tauri Console 佈局
 
-LOO-9 已完成實作並開啟 PR #5：
+LOO-9 已完成實作，PR #5 已通過 `$finn-review` 並合併：
 
 - Tauri 使用緊貼標題字高、帶既有光暈的 `AI Agent Console` header。
 - Header 下方為固定 200px sidebar 與佔滿剩餘區域的 2×2 Console grid；
@@ -300,11 +305,10 @@ npm run dev
 
 ## 接續流程
 
-1. 使用 `$finn-review` 審查 PR #5，確認 Linear LOO-9、required checks 與
-   PR scope ledger。
-2. 若 review 為 `loop-approved` 且 required checks 通過，由使用者自行 merge；
-   Finn skills 不代為 merge。
-3. Merge 後同步 `main` 與 `status.md`，再使用 `$finn-spec` 規劃下一階段。
+1. 使用 `$finn-spec` 確認下一階段 Tauri App 的範圍與順序。
+2. 規格確認並建立 issue 後，由使用者明確加上 `agent-ready`，再交給
+   `$finn-build`。
+3. 在新 issue 建立前，不直接實作下一階段功能。
 
 ## 本檔注意事項
 
