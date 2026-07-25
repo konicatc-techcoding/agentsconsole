@@ -5,28 +5,32 @@
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md，接著執行 $finn-review review AgentOS Console
-的 PR #4；不得由 builder 自行 merge。
+請先讀取 status.md。LOO-8 與 PR #4 已完成；下一步使用 $finn-spec
+確認下一階段 Tauri App 規格，不要直接開始實作。
 ```
 
 LOO-8 已完成 Tauri App-managed workspace JSON、generated Markdown、
-localStorage migration 與 recovery 行為，PR #4 已建立並等待
-`$finn-review`。
+localStorage migration 與 recovery 行為，PR #4 已通過 `$finn-review`
+並合併。目前沒有下一項 agent-ready issue。
 
 ## Source of truth
 
 - Workspace：`/Users/zackchiu/CodexCLI/agentsconsole`
-- Git branch：`LOO-8-app-managed-workspace-storage`
-- 最新合併基線：`ea58a54 LOO-7 Add Tauri macOS foundation (#3)`
-- 目前 Linear issue：`LOO-8 將 Tauri workspace preferences 遷移至 App-managed JSON 與 Markdown`
+- Git branch：`main`
+- 最新合併基線：`400f2af LOO-8 Add app-managed workspace storage (#4)`
+- 最近完成的 Linear issue：`LOO-8 將 Tauri workspace preferences 遷移至 App-managed JSON 與 Markdown`
 - LOO-8 URL：<https://linear.app/loopent/issue/LOO-8/將-tauri-workspace-preferences-遷移至-app-managed-json-與-markdown>
-- LOO-8 狀態：`In Review`
+- LOO-8 狀態：`Done`
 - LOO-8 label：`agent-ready`
 - LOO-8 assignee：Zack Chiu
 - LOO-8 relation：`blocked by LOO-7`；LOO-7 已 Done
 - LOO-8 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/4>
-- PR #4 狀態：Open，等待 review
-- Implementation commit：`cd22466 feat: add app-managed workspace storage`
+- PR #4 狀態：Merged
+- PR #4 merge commit：`400f2afb0aee85e89b97ab1c6ead26d04a5e335d`
+- PR #4 review：`loop-approved`
+- PR #4 required check：`smoke` — `SUCCESS`
+- PR #4 CI run：<https://github.com/konicatc-techcoding/agentsconsole/actions/runs/30148237277/job/89654018425>
+- LOO-8 implementation commit：`cd22466 feat: add app-managed workspace storage`
 - LOO-6 Linear 狀態：`Done`
 - LOO-6 Linear URL：<https://linear.app/loopent/issue/LOO-6/從-provider-卡片在-macos-terminal-啟動-cli-session>
 - LOO-6 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/2>
@@ -248,9 +252,10 @@ npm run dev
 
 ## 接續流程
 
-1. 執行 `$finn-review` review PR #4。
-2. 若 review 要求修改，依 Finn-loop label 交回 `$finn-build`。
-3. 若 review 通過，由使用者決定是否 merge；builder 不得自行 merge。
+1. 使用 `$finn-spec` 確認下一階段 Tauri App 的範圍與順序。
+2. 規格確認並建立 issue 後，由使用者明確加上 `agent-ready`，再交給
+   `$finn-build`。
+3. 在新 issue 建立前，不直接實作下一階段功能。
 
 ## 本檔注意事項
 
