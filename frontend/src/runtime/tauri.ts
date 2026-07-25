@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import type {
+  ConsoleLayout,
   LaunchRequest,
   LaunchResponse,
   PreferenceSaveContext,
@@ -42,6 +43,7 @@ function commandError(error: unknown, fallback: string): Error {
 }
 
 export const tauriRuntime: RuntimeAdapter = {
+  kind: "tauri",
   async fetchProviders(): Promise<Provider[]> {
     try {
       return await invoke<Provider[]>("discover_providers");
@@ -106,6 +108,22 @@ export const tauriRuntime: RuntimeAdapter = {
         return { warning: "CLI launched, but history was not saved" };
       }
       throw commandError(error, "Workspace preferences could not be saved");
+    }
+  },
+
+  async loadConsoleLayout(): Promise<ConsoleLayout> {
+    try {
+      return await invoke<ConsoleLayout>("read_console_layout");
+    } catch (error) {
+      throw commandError(error, "Console layout could not be loaded");
+    }
+  },
+
+  async saveConsoleLayout(layout: ConsoleLayout): Promise<ConsoleLayout> {
+    try {
+      return await invoke<ConsoleLayout>("write_console_layout", { layout });
+    } catch (error) {
+      throw commandError(error, "Console layout could not be saved");
     }
   },
 };

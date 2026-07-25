@@ -39,3 +39,23 @@ export type PreferenceSaveContext = "default" | "history";
 export interface PreferenceSaveResult {
   warning?: string;
 }
+
+export type RuntimeKind = "web" | "tauri";
+
+export type ConsoleProviderId =
+  | "hermes"
+  | "codex"
+  | "claude"
+  | "antigravity";
+
+export type ConsoleSlotId = "slot-1" | "slot-2" | "slot-3" | "slot-4";
+
+export interface ConsoleSlot {
+  slotId: ConsoleSlotId;
+  providerId: ConsoleProviderId;
+}
+
+export interface ConsoleLayout {
+  version: 1;
+  slots: ConsoleSlot[];
+}

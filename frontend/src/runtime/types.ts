@@ -1,14 +1,17 @@
 import type {
+  ConsoleLayout,
   LaunchRequest,
   LaunchResponse,
   PreferenceSaveContext,
   PreferenceSaveResult,
   Provider,
+  RuntimeKind,
   WorkspacePreferences,
   WorkspaceResponse,
 } from "../types";
 
 export interface RuntimeAdapter {
+  kind: RuntimeKind;
   fetchProviders(): Promise<Provider[]>;
   launchProvider(request: LaunchRequest): Promise<LaunchResponse>;
   validateWorkspace(workspacePath: string): Promise<WorkspaceResponse>;
@@ -17,4 +20,6 @@ export interface RuntimeAdapter {
     preferences: WorkspacePreferences,
     context: PreferenceSaveContext,
   ): Promise<PreferenceSaveResult>;
+  loadConsoleLayout?(): Promise<ConsoleLayout>;
+  saveConsoleLayout?(layout: ConsoleLayout): Promise<ConsoleLayout>;
 }

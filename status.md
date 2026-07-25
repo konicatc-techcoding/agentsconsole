@@ -5,19 +5,28 @@
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md。LOO-8 與 PR #4 已完成；下一步使用 $finn-spec
-確認下一階段 Tauri App 規格，不要直接開始實作。
+請先讀取 status.md。LOO-9 已由 $finn-build 完成並開啟 PR #5；
+下一步使用 $finn-review 審查 PR #5，不要直接 merge。
 ```
 
-LOO-8 已完成 Tauri App-managed workspace JSON、generated Markdown、
-localStorage migration 與 recovery 行為，PR #4 已通過 `$finn-review`
-並合併。目前沒有下一項 agent-ready issue。
+LOO-9 已完成 Tauri-only Console shell、固定 200px sidebar、全高 2×2 Slot
+版面與獨立 `console-layout.json` 保存。PR #5 等待 `$finn-review`；在 review
+完成及使用者自行 merge 前，不開始下一項實作。
 
 ## Source of truth
 
 - Workspace：`/Users/zackchiu/CodexCLI/agentsconsole`
-- Git branch：`main`
+- Git branch：`LOO-9-tauri-console-layout`
 - 最新合併基線：`400f2af LOO-8 Add app-managed workspace storage (#4)`
+- Active Linear issue：`LOO-9 建立 Tauri Console 佈局與可保存的四 Slot Provider 配置`
+- LOO-9 URL：<https://linear.app/loopent/issue/LOO-9/建立-tauri-console-佈局與可保存的四-slot-provider-配置>
+- LOO-9 狀態：`In Review`
+- LOO-9 label：`agent-ready`
+- LOO-9 assignee：Zack Chiu
+- LOO-9 relation：`blocked by LOO-8`；LOO-8 已 Done
+- LOO-9 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/5>
+- PR #5 狀態：Open，等待 `$finn-review`
+- LOO-9 implementation commit：`3b9f0f6 feat: add Tauri console slot layout`
 - 最近完成的 Linear issue：`LOO-8 將 Tauri workspace preferences 遷移至 App-managed JSON 與 Markdown`
 - LOO-8 URL：<https://linear.app/loopent/issue/LOO-8/將-tauri-workspace-preferences-遷移至-app-managed-json-與-markdown>
 - LOO-8 狀態：`Done`
@@ -230,6 +239,45 @@ LOO-8 已完成實作：
   migration normalization、JSON precedence、損壞檔保留、Markdown
   regeneration 與寫入 rollback。
 
+## LOO-9 Tauri Console 佈局
+
+LOO-9 已完成實作並開啟 PR #5：
+
+- Tauri 使用緊貼標題字高、帶既有光暈的 `AI Agent Console` header。
+- Header 下方為固定 200px sidebar 與佔滿剩餘區域的 2×2 Console grid；
+  既有最小視窗 960×700 維持四格，不改成單欄。
+- Sidebar 頂部固定 Refresh 與 Read-only discovery，中段四個 Provider 可獨立
+  捲動，底部固定保存狀態與 `Save Layout`。
+- 四個固定 Slot 各自保存 Provider mapping，允許多個 Slot 指派相同
+  Provider；目前只顯示 `Embedded terminal coming next`，不建立 process 或
+  Running 狀態。
+- Tauri App Data 新增獨立 version 1 `console-layout.json`，只保存 exactly
+  four `slotId`／`providerId`，不修改 workspace schema 或 Markdown。
+- Slot 修改先形成 draft；未保存時顯示 `Unsaved changes` 並停用 Refresh。
+  `Save Layout` 明確保存，失敗時保留 draft 與上一份有效 JSON。
+- 無效 JSON 保留原檔與完整路徑，顯示 locked default fallback；外部修復後
+  可用 Refresh 重試。
+- Sidebar Launch 完整沿用既有 modal、Default Workspace、New／Continue 與
+  外部 Terminal.app；Web runtime 繼續使用原有 Provider 卡片首頁。
+- Tauri capability 未加入 generic filesystem 或 shell permission。
+
+## LOO-9 驗證結果
+
+- Backend tests：34 passed（另有一則 upstream Starlette TestClient
+  deprecation warning）
+- Frontend tests：34 passed
+- Rust tests：27 passed
+- Frontend production build：passed
+- Unsigned Tauri macOS `.app` build：passed
+- `cargo fmt --all --check`：passed
+- `git diff --check`：passed
+- 真實 Tauri App smoke（未啟動 FastAPI）：
+  - 最新 bundle 的 compact header、200px sidebar 與全高 2×2 Console 正常
+  - Hermes、Codex、Claude、Antigravity 均獨立偵測為 Available
+  - Slot 1 與 Slot 2 可同時設為 Codex，Unsaved／Save／Refresh gating 正常
+  - 保存後回復預設 mapping，重新啟動仍為 `Saved`
+  - Slot 未顯示虛假的 Running／Launched 狀態
+
 ## 本機預覽方式
 
 Terminal 1：
@@ -252,10 +300,11 @@ npm run dev
 
 ## 接續流程
 
-1. 使用 `$finn-spec` 確認下一階段 Tauri App 的範圍與順序。
-2. 規格確認並建立 issue 後，由使用者明確加上 `agent-ready`，再交給
-   `$finn-build`。
-3. 在新 issue 建立前，不直接實作下一階段功能。
+1. 使用 `$finn-review` 審查 PR #5，確認 Linear LOO-9、required checks 與
+   PR scope ledger。
+2. 若 review 為 `loop-approved` 且 required checks 通過，由使用者自行 merge；
+   Finn skills 不代為 merge。
+3. Merge 後同步 `main` 與 `status.md`，再使用 `$finn-spec` 規劃下一階段。
 
 ## 本檔注意事項
 
