@@ -20,10 +20,11 @@ session engine，並加入 typed frontend runtime boundary；目前 Console Slot
 - 最新合併基線：`95d61ff LOO-9 Add Tauri console slot layout (#5)`
 - 目前 Linear issue：`LOO-10 建立 Slot 1 embedded terminal 的 Rust PTY session engine`
 - LOO-10 URL：<https://linear.app/loopent/issue/LOO-10/建立-slot-1-embedded-terminal-的-rust-pty-session-engine>
-- LOO-10 狀態：`In Progress`
+- LOO-10 狀態：`In Review`
 - LOO-10 label：`agent-ready`
 - LOO-10 assignee：Zack Chiu
 - LOO-10 relation：`blocked by LOO-9`；LOO-9 已 Done；LOO-10 blocks LOO-11
+- LOO-10 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/6>
 - 最近完成的 Linear issue：`LOO-9 建立 Tauri Console 佈局與可保存的四 Slot Provider 配置`
 - LOO-9 URL：<https://linear.app/loopent/issue/LOO-9/建立-tauri-console-佈局與可保存的四-slot-provider-配置>
 - LOO-9 狀態：`Done`
