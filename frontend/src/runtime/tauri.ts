@@ -3,14 +3,27 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   LaunchRequest,
   LaunchResponse,
+  PreferenceSaveContext,
+  PreferenceSaveResult,
   Provider,
+  WorkspacePreferences,
   WorkspaceResponse,
 } from "../types";
 
+import {
+  clearLocalWorkspacePreferences,
+  hasLocalWorkspacePreferences,
+  readLocalWorkspacePreferences,
+} from "./preferences";
 import type { RuntimeAdapter } from "./types";
 
 interface TauriCommandError {
   message?: string;
+}
+
+interface WorkspacePreferencesState {
+  exists: boolean;
+  preferences: WorkspacePreferences | null;
 }
 
 function commandError(error: unknown, fallback: string): Error {
@@ -52,6 +65,47 @@ export const tauriRuntime: RuntimeAdapter = {
       });
     } catch (error) {
       throw commandError(error, "Workspace validation failed");
+    }
+  },
+
+  async loadWorkspacePreferences(): Promise<WorkspacePreferences> {
+    try {
+      const state = await invoke<WorkspacePreferencesState>(
+        "read_workspace_preferences",
+      );
+      if (state.exists && state.preferences) {
+        return state.preferences;
+      }
+
+      const hadLegacyPreferences = hasLocalWorkspacePreferences();
+      const preferences = readLocalWorkspacePreferences();
+      const initialized = await invoke<WorkspacePreferences>(
+        "initialize_workspace_preferences",
+        { preferences },
+      );
+      if (hadLegacyPreferences) {
+        clearLocalWorkspacePreferences();
+      }
+      return initialized;
+    } catch (error) {
+      throw commandError(error, "Workspace preferences could not be loaded");
+    }
+  },
+
+  async saveWorkspacePreferences(
+    preferences: WorkspacePreferences,
+    context: PreferenceSaveContext,
+  ): Promise<PreferenceSaveResult> {
+    try {
+      await invoke<WorkspacePreferences>("write_workspace_preferences", {
+        preferences,
+      });
+      return {};
+    } catch (error) {
+      if (context === "history") {
+        return { warning: "CLI launched, but history was not saved" };
+      }
+      throw commandError(error, "Workspace preferences could not be saved");
     }
   },
 };
