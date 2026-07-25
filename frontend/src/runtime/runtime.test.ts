@@ -2,6 +2,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { selectRuntime } from ".";
+import { defaultConsoleLayout } from "./consoleLayout";
 import { tauriRuntime } from "./tauri";
 import { webRuntime } from "./web";
 
@@ -23,6 +24,10 @@ describe("runtime adapters", () => {
   it("selects Web transport by default and Tauri transport in the app", () => {
     expect(selectRuntime()).toBe(webRuntime);
     expect(selectRuntime(true)).toBe(tauriRuntime);
+    expect(webRuntime.kind).toBe("web");
+    expect(tauriRuntime.kind).toBe("tauri");
+    expect(webRuntime.loadConsoleLayout).toBeUndefined();
+    expect(webRuntime.saveConsoleLayout).toBeUndefined();
   });
 
   it("routes typed operations through fixed Tauri commands", async () => {
@@ -167,5 +172,22 @@ describe("runtime adapters", () => {
     await expect(
       tauriRuntime.saveWorkspacePreferences(preferences, "default"),
     ).rejects.toThrow("Workspace preferences could not be saved");
+  });
+
+  it("routes console layout storage through fixed Tauri commands", async () => {
+    const layout = defaultConsoleLayout();
+    vi.mocked(invoke)
+      .mockResolvedValueOnce(layout)
+      .mockResolvedValueOnce(layout);
+
+    await expect(tauriRuntime.loadConsoleLayout?.()).resolves.toEqual(layout);
+    await expect(tauriRuntime.saveConsoleLayout?.(layout)).resolves.toEqual(
+      layout,
+    );
+
+    expect(invoke).toHaveBeenNthCalledWith(1, "read_console_layout");
+    expect(invoke).toHaveBeenNthCalledWith(2, "write_console_layout", {
+      layout,
+    });
   });
 });

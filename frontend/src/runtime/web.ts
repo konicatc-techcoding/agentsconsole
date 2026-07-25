@@ -11,6 +11,7 @@ import {
 import type { RuntimeAdapter } from "./types";
 
 export const webRuntime: RuntimeAdapter = {
+  kind: "web",
   fetchProviders,
   launchProvider,
   validateWorkspace,

@@ -116,6 +116,24 @@ retry. Missing workspace paths remain in history until a later Save or Start
 validates them. If Terminal launches but the history write fails, the launch
 remains successful and the app displays a separate history warning.
 
+Tauri mode also uses a Console-oriented shell with a compact title, a fixed
+Provider sidebar, and four layout slots. The slots are placeholders for a
+future embedded terminal; CLI sessions still open in Terminal.app and are not
+tracked by a slot. Slot assignments are stored separately in
+`console-layout.json` under the same App Data directory:
+
+- A missing file is initialized with Hermes, Codex, Claude, and Antigravity in
+  Slot 1 through Slot 4.
+- Multiple slots may use the same Provider because each slot keeps its own
+  fixed identity.
+- Changing a slot creates an in-app draft. Use `Save Layout` to persist it;
+  `Refresh` remains disabled until the draft is saved or manually reverted.
+- An invalid layout file is preserved and reported with its full path. Fix,
+  rename, or delete it outside the app, then use `Refresh`.
+
+Web mode keeps the existing Provider card page and never reads, writes, or
+synchronizes `console-layout.json`.
+
 Both runtimes accept only the fixed provider commands documented by the UI.
 They reject relative, missing, file, and filesystem-root base workspaces. New
 folder names cannot be absolute, nested, `.` or `..`, and an existing name is

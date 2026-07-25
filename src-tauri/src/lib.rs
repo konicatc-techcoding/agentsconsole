@@ -1,7 +1,9 @@
+mod console_layout;
 mod launcher;
 mod providers;
 mod storage;
 
+use console_layout::{ConsoleLayout, LayoutError};
 use launcher::{CommandError, LaunchRequest, LaunchResult, WorkspaceResult};
 use providers::ProviderResult;
 use storage::{StorageError, WorkspacePreferences, WorkspacePreferencesState};
@@ -30,6 +32,15 @@ fn app_data_directory(app: &tauri::AppHandle) -> Result<std::path::PathBuf, Stor
     })
 }
 
+fn layout_data_directory(app: &tauri::AppHandle) -> Result<std::path::PathBuf, LayoutError> {
+    app.path().app_data_dir().map_err(|_| {
+        LayoutError::new(
+            "layout_storage_unavailable",
+            "The macOS App Data directory is unavailable",
+        )
+    })
+}
+
 #[tauri::command]
 async fn read_workspace_preferences(
     app: tauri::AppHandle,
@@ -53,6 +64,19 @@ async fn write_workspace_preferences(
     storage::write_preferences(&app_data_directory(&app)?, preferences)
 }
 
+#[tauri::command]
+async fn read_console_layout(app: tauri::AppHandle) -> Result<ConsoleLayout, LayoutError> {
+    console_layout::read_or_initialize_layout(&layout_data_directory(&app)?)
+}
+
+#[tauri::command]
+async fn write_console_layout(
+    app: tauri::AppHandle,
+    layout: ConsoleLayout,
+) -> Result<ConsoleLayout, LayoutError> {
+    console_layout::write_layout(&layout_data_directory(&app)?, layout)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -62,7 +86,9 @@ pub fn run() {
             launch_provider,
             read_workspace_preferences,
             initialize_workspace_preferences,
-            write_workspace_preferences
+            write_workspace_preferences,
+            read_console_layout,
+            write_console_layout
         ])
         .run(tauri::generate_context!())
         .expect("error while running AgentOS Console");

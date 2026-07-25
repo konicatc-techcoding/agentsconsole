@@ -3,8 +3,13 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
+import { defaultConsoleLayout } from "./runtime/consoleLayout";
 import type { RuntimeAdapter } from "./runtime/types";
-import type { Provider, WorkspacePreferences } from "./types";
+import type {
+  ConsoleLayout,
+  Provider,
+  WorkspacePreferences,
+} from "./types";
 
 const providers: Provider[] = [
   {
@@ -137,10 +142,14 @@ function mockApi(options?: {
 }
 
 function mockRuntime(options?: {
+  kind?: RuntimeAdapter["kind"];
   loadPreferences?: () => Promise<WorkspacePreferences>;
   savePreferences?: RuntimeAdapter["saveWorkspacePreferences"];
+  loadLayout?: () => Promise<ConsoleLayout>;
+  saveLayout?: RuntimeAdapter["saveConsoleLayout"];
 }): RuntimeAdapter {
-  return {
+  const runtime: RuntimeAdapter = {
+    kind: options?.kind ?? "web",
     fetchProviders: vi.fn().mockResolvedValue(providers),
     launchProvider: vi.fn(async (request) => ({
       launched: true,
@@ -155,6 +164,14 @@ function mockRuntime(options?: {
     saveWorkspacePreferences:
       options?.savePreferences ?? vi.fn().mockResolvedValue({}),
   };
+  if (runtime.kind === "tauri") {
+    runtime.loadConsoleLayout =
+      options?.loadLayout ?? vi.fn().mockResolvedValue(defaultConsoleLayout());
+    runtime.saveConsoleLayout =
+      options?.saveLayout ??
+      vi.fn(async (layout: ConsoleLayout) => layout);
+  }
+  return runtime;
 }
 
 afterEach(() => {
@@ -685,5 +702,258 @@ describe("AgentOS Console", () => {
       },
       "history",
     );
+  });
+
+  it("renders the Tauri-only sidebar and fixed two-by-two console layout", async () => {
+    const runtime = mockRuntime({ kind: "tauri" });
+    render(<App runtime={runtime} />);
+
+    expect(
+      screen.getByRole("heading", { name: "AI Agent Console" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("CLI PROVIDERS")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("CLI providers")).toBeInTheDocument();
+    expect(await screen.findAllByText("Embedded terminal coming next")).toHaveLength(
+      4,
+    );
+    expect(screen.getByLabelText("Slot 1 provider")).toHaveValue("hermes");
+    expect(screen.getByLabelText("Slot 2 provider")).toHaveValue("codex");
+    expect(screen.getByLabelText("Slot 3 provider")).toHaveValue("claude");
+    expect(screen.getByLabelText("Slot 4 provider")).toHaveValue(
+      "antigravity",
+    );
+    expect(screen.getByText("Saved")).toHaveAttribute("role", "status");
+    expect(screen.getByRole("button", { name: "Save Layout" })).toBeDisabled();
+  });
+
+  it("allows duplicate slot providers and saves only an explicit dirty layout", async () => {
+    const saveLayout = vi.fn(async (layout: ConsoleLayout) => layout);
+    const runtime = mockRuntime({
+      kind: "tauri",
+      saveLayout,
+    });
+    const user = userEvent.setup();
+    render(<App runtime={runtime} />);
+
+    const slotOne = await screen.findByLabelText("Slot 1 provider");
+    const slotTwo = screen.getByLabelText("Slot 2 provider");
+    await user.selectOptions(slotOne, "codex");
+
+    expect(slotOne).toHaveValue("codex");
+    expect(slotTwo).toHaveValue("codex");
+    expect(screen.getByText("Unsaved changes")).toHaveAttribute(
+      "role",
+      "status",
+    );
+    expect(screen.getByRole("button", { name: "Refresh" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save Layout" })).toBeEnabled();
+
+    await user.selectOptions(slotOne, "hermes");
+    expect(screen.getByText("Saved")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Save Layout" })).toBeDisabled();
+
+    await user.selectOptions(slotOne, "codex");
+    await user.click(screen.getByRole("button", { name: "Save Layout" }));
+    await waitFor(() => expect(saveLayout).toHaveBeenCalledOnce());
+    expect(saveLayout.mock.calls[0][0].slots[0]).toEqual({
+      slotId: "slot-1",
+      providerId: "codex",
+    });
+    expect(screen.getByText("Saved")).toBeInTheDocument();
+  });
+
+  it("keeps a dirty layout available for retry when saving fails", async () => {
+    const saveLayout = vi
+      .fn<(layout: ConsoleLayout) => Promise<ConsoleLayout>>()
+      .mockRejectedValueOnce(
+        new Error(
+          "Console layout could not be saved at /App Data/console-layout.json",
+        ),
+      )
+      .mockImplementationOnce(async (layout) => layout);
+    const runtime = mockRuntime({
+      kind: "tauri",
+      saveLayout,
+    });
+    const user = userEvent.setup();
+    render(<App runtime={runtime} />);
+
+    const slotOne = await screen.findByLabelText("Slot 1 provider");
+    await user.selectOptions(slotOne, "codex");
+    await user.click(screen.getByRole("button", { name: "Save Layout" }));
+
+    expect(
+      await screen.findByText(/\/App Data\/console-layout\.json/),
+    ).toHaveAttribute("role", "alert");
+    expect(slotOne).toHaveValue("codex");
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save Layout" })).toBeEnabled();
+
+    await user.click(screen.getByRole("button", { name: "Save Layout" }));
+    await waitFor(() => expect(saveLayout).toHaveBeenCalledTimes(2));
+    expect(screen.getByText("Saved")).toBeInTheDocument();
+  });
+
+  it("locks all slot controls while an explicit layout save is pending", async () => {
+    let finishSave: ((layout: ConsoleLayout) => void) | undefined;
+    const savePending = new Promise<ConsoleLayout>((resolve) => {
+      finishSave = resolve;
+    });
+    const runtime = mockRuntime({
+      kind: "tauri",
+      saveLayout: vi.fn(() => savePending),
+    });
+    const user = userEvent.setup();
+    render(<App runtime={runtime} />);
+
+    const slotOne = await screen.findByLabelText("Slot 1 provider");
+    await user.selectOptions(slotOne, "codex");
+    await user.click(screen.getByRole("button", { name: "Save Layout" }));
+
+    expect(screen.getAllByText("Saving…")[0]).toHaveAttribute("role", "status");
+    expect(screen.getByRole("button", { name: "Saving…" })).toBeDisabled();
+    for (let index = 1; index <= 4; index += 1) {
+      expect(screen.getByLabelText(`Slot ${index} provider`)).toBeDisabled();
+    }
+
+    finishSave?.({
+      ...defaultConsoleLayout(),
+      slots: [
+        {
+          slotId: "slot-1",
+          providerId: "codex",
+        },
+        ...defaultConsoleLayout().slots.slice(1),
+      ],
+    });
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
+  });
+
+  it("locks default slots for invalid layout storage and recovers on Refresh", async () => {
+    const loadLayout = vi
+      .fn<() => Promise<ConsoleLayout>>()
+      .mockRejectedValueOnce(
+        new Error(
+          "Console layout at /App Data/console-layout.json is invalid",
+        ),
+      )
+      .mockResolvedValueOnce(defaultConsoleLayout());
+    const runtime = mockRuntime({
+      kind: "tauri",
+      loadLayout,
+    });
+    const user = userEvent.setup();
+    render(<App runtime={runtime} />);
+
+    expect(
+      await screen.findByText(/\/App Data\/console-layout\.json/),
+    ).toHaveAttribute("role", "alert");
+    expect(screen.getByLabelText("Slot 1 provider")).toHaveValue("hermes");
+    expect(screen.getByLabelText("Slot 1 provider")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save Layout" })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Slot 1 provider")).toBeEnabled(),
+    );
+    expect(loadLayout).toHaveBeenCalledTimes(2);
+  });
+
+  it("retains unavailable slot assignments while disabling sidebar launch", async () => {
+    const runtime = mockRuntime({ kind: "tauri" });
+    runtime.fetchProviders = vi.fn().mockResolvedValue(
+      providers.map((provider) =>
+        provider.id === "antigravity"
+          ? {
+              ...provider,
+              installed: false,
+              path: null,
+              version: null,
+              error: "Executable not found in PATH",
+            }
+          : provider,
+      ),
+    );
+    render(<App runtime={runtime} />);
+
+    expect(await screen.findByLabelText("Slot 4 provider")).toHaveValue(
+      "antigravity",
+    );
+    expect(screen.getByLabelText("Slot 4 provider")).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Launch Antigravity CLI" }),
+    ).toBeDisabled();
+    expect(screen.getAllByText("Unavailable").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("loads providers, workspace preferences, and console layout concurrently", async () => {
+    let finishProviders: ((value: Provider[]) => void) | undefined;
+    let finishPreferences:
+      | ((value: WorkspacePreferences) => void)
+      | undefined;
+    let finishLayout: ((value: ConsoleLayout) => void) | undefined;
+    const providerPending = new Promise<Provider[]>((resolve) => {
+      finishProviders = resolve;
+    });
+    const preferencePending = new Promise<WorkspacePreferences>((resolve) => {
+      finishPreferences = resolve;
+    });
+    const layoutPending = new Promise<ConsoleLayout>((resolve) => {
+      finishLayout = resolve;
+    });
+    const runtime = mockRuntime({
+      kind: "tauri",
+      loadPreferences: vi.fn(() => preferencePending),
+      loadLayout: vi.fn(() => layoutPending),
+    });
+    runtime.fetchProviders = vi.fn(() => providerPending);
+    render(<App runtime={runtime} />);
+
+    await waitFor(() => {
+      expect(runtime.fetchProviders).toHaveBeenCalledOnce();
+      expect(runtime.loadWorkspacePreferences).toHaveBeenCalledOnce();
+      expect(runtime.loadConsoleLayout).toHaveBeenCalledOnce();
+    });
+    expect(screen.getByLabelText("Slot 1 provider")).toBeDisabled();
+
+    finishLayout?.(defaultConsoleLayout());
+    await waitFor(() =>
+      expect(screen.getByLabelText("Slot 1 provider")).toBeEnabled(),
+    );
+    expect(
+      screen.getByRole("button", { name: "Launch Codex CLI" }),
+    ).toBeDisabled();
+
+    finishProviders?.(providers);
+    finishPreferences?.({});
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Launch Codex CLI" }),
+      ).toBeEnabled(),
+    );
+  });
+
+  it("keeps external launches separate from console slot state", async () => {
+    const runtime = mockRuntime({ kind: "tauri" });
+    const user = userEvent.setup();
+    render(<App runtime={runtime} />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Launch Codex CLI" }),
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Default workspace path" }),
+      "/workspace",
+    );
+    await user.click(screen.getByRole("button", { name: "Start" }));
+
+    expect(
+      await screen.findByText("Codex CLI launched in /workspace"),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("Embedded terminal coming next")).toHaveLength(4);
+    expect(screen.queryByText("Running")).not.toBeInTheDocument();
+    expect(screen.queryByText("Launched")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Slot 2 provider")).toHaveValue("codex");
   });
 });
