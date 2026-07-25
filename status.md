@@ -5,19 +5,25 @@
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md。LOO-9 與 PR #5 已完成並合併；
-下一步使用 $finn-spec 確認下一階段 Tauri App 規格，不要直接開始實作。
+請先讀取 status.md。LOO-10 的 Slot 1 PTY foundation 已實作完成並進入 review；
+下一步先處理 LOO-10 review，不要提前實作被它阻擋的 LOO-11 terminal UI。
 ```
 
-LOO-9 已完成 Tauri-only Console shell、固定 200px sidebar、全高 2×2 Slot
-版面與獨立 `console-layout.json` 保存。PR #5 已通過 `$finn-review` 並合併，
-目前沒有下一項 agent-ready issue。
+LOO-10 已在 Tauri Rust backend 建立只服務 Slot 1 的單一 embedded PTY
+session engine，並加入 typed frontend runtime boundary；目前 Console Slot
+仍維持 placeholder，外部 Terminal.app Launch 與 Web runtime 不變。
 
 ## Source of truth
 
 - Workspace：`/Users/zackchiu/CodexCLI/agentsconsole`
-- Git branch：`main`
+- Git branch：`LOO-10-slot-1-pty-session-engine`
 - 最新合併基線：`95d61ff LOO-9 Add Tauri console slot layout (#5)`
+- 目前 Linear issue：`LOO-10 建立 Slot 1 embedded terminal 的 Rust PTY session engine`
+- LOO-10 URL：<https://linear.app/loopent/issue/LOO-10/建立-slot-1-embedded-terminal-的-rust-pty-session-engine>
+- LOO-10 狀態：`In Progress`
+- LOO-10 label：`agent-ready`
+- LOO-10 assignee：Zack Chiu
+- LOO-10 relation：`blocked by LOO-9`；LOO-9 已 Done；LOO-10 blocks LOO-11
 - 最近完成的 Linear issue：`LOO-9 建立 Tauri Console 佈局與可保存的四 Slot Provider 配置`
 - LOO-9 URL：<https://linear.app/loopent/issue/LOO-9/建立-tauri-console-佈局與可保存的四-slot-provider-配置>
 - LOO-9 狀態：`Done`
@@ -283,6 +289,45 @@ LOO-9 已完成實作，PR #5 已通過 `$finn-review` 並合併：
   - 保存後回復預設 mapping，重新啟動仍為 `Saved`
   - Slot 未顯示虛假的 Running／Launched 狀態
 
+## LOO-10 Slot 1 PTY foundation
+
+LOO-10 已完成實作並等待 review：
+
+- Tauri Rust backend 新增只接受固定 `slot-1` 的 PTY session engine；同時間
+  最多一個 active session，session ID 為 opaque 且 stale ID 無法操作新
+  session。
+- Hermes、Codex、Claude、Antigravity 的 New／Continue 完全沿用既有固定
+  launcher mapping，frontend 無法傳入 executable、shell command、自訂
+  arguments、environment 或 permission-bypass flags。
+- Start 沿用 workspace validation、Provider PATH recheck 與安全的一層 New
+  Folder 規則；spawn 失敗時保留已建立資料夾並在 structured error 回報路徑。
+- PTY 使用 resolved workspace 作為 cwd，支援 binary-safe ordered output、
+  raw input、Ctrl/control sequences、resize、自然 exit 與完整 process-tree
+  Stop。
+- frontend event 無法送達或 App backend 結束時執行 cleanup，避免 CLI 成為
+  orphan；明確 Stop 的 cleanup failure 會回傳 structured error。
+- frontend 只新增 typed Tauri runtime boundary 與 output/exit subscription；
+  Web runtime 不提供 PTY，Console Slot 尚未加入 xterm、Start/Stop UI、
+  clipboard 或 close confirmation。
+- Start 不寫入 workspace preferences、recent workspaces、console layout、
+  Markdown、terminal output、process ID 或 native CLI session ID。
+- capability 仍只有 `core:default`；沒有新增 generic shell 或 filesystem
+  permission。Sidebar 外部 Terminal.app Launch 保持原行為。
+
+## LOO-10 驗證結果
+
+- Rust tests：36 passed（其中 9 個 PTY fake-adapter tests）
+- Frontend tests：36 passed
+- Backend tests：34 passed（另有一則 upstream Starlette TestClient
+  deprecation warning）
+- Frontend production build：passed
+- Unsigned Tauri macOS `.app` build：passed
+- `cargo fmt --all --check`：passed
+- `git diff --check`：passed
+- 真實 Tauri UI smoke：未執行；本機在驗證時處於鎖定狀態，Computer Use
+  無法自動解鎖。未啟動任何真實 Provider CLI；runtime regression 與 PTY
+  lifecycle 由 frontend/Rust fake tests 覆蓋。
+
 ## 本機預覽方式
 
 Terminal 1：
@@ -305,10 +350,10 @@ npm run dev
 
 ## 接續流程
 
-1. 使用 `$finn-spec` 確認下一階段 Tauri App 的範圍與順序。
-2. 規格確認並建立 issue 後，由使用者明確加上 `agent-ready`，再交給
-   `$finn-build`。
-3. 在新 issue 建立前，不直接實作下一階段功能。
+1. 使用 `$finn-review` 檢查 LOO-10 PR 與 required checks；不要直接 merge。
+2. 使用者確認並合併 LOO-10 後，同步 `main`、Linear 與本檔完成狀態。
+3. LOO-10 Done 後再檢查已建立且被其阻擋的 LOO-11；由使用者明確加入
+   `agent-ready` 後，才使用 `$finn-build` 實作 terminal UI。
 
 ## 本檔注意事項
 

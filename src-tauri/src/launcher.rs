@@ -14,7 +14,7 @@ const TERMINAL_APPLESCRIPT: &str = r#"on run argv
     end tell
 end run"#;
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SessionMode {
     New,
@@ -43,13 +43,13 @@ pub struct WorkspaceResult {
 
 #[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct CommandError {
-    code: String,
-    message: String,
-    status_code: u16,
+    pub(crate) code: String,
+    pub(crate) message: String,
+    pub(crate) status_code: u16,
 }
 
 impl CommandError {
-    fn new(code: &str, message: impl Into<String>, status_code: u16) -> Self {
+    pub(crate) fn new(code: &str, message: impl Into<String>, status_code: u16) -> Self {
         Self {
             code: code.to_string(),
             message: message.into(),
@@ -114,7 +114,7 @@ impl TerminalLauncher for SystemTerminalLauncher {
     }
 }
 
-fn validated_workspace(workspace_path: &str) -> Result<PathBuf, CommandError> {
+pub(crate) fn validated_workspace(workspace_path: &str) -> Result<PathBuf, CommandError> {
     let workspace = Path::new(workspace_path);
     if !workspace.is_absolute() {
         return Err(CommandError::new(
@@ -152,7 +152,7 @@ pub fn validate_workspace(workspace_path: &str) -> Result<WorkspaceResult, Comma
     })
 }
 
-fn provider_command(
+pub(crate) fn provider_command(
     provider_id: &str,
     session_mode: SessionMode,
 ) -> Result<(&'static str, &'static [&'static str]), CommandError> {
@@ -178,7 +178,7 @@ fn provider_command(
     Ok(command)
 }
 
-fn new_workspace(
+pub(crate) fn new_workspace(
     base_workspace: &Path,
     session_mode: SessionMode,
     new_folder: Option<&str>,

@@ -1,11 +1,16 @@
 mod console_layout;
 mod launcher;
 mod providers;
+mod pty_session;
 mod storage;
 
 use console_layout::{ConsoleLayout, LayoutError};
 use launcher::{CommandError, LaunchRequest, LaunchResult, WorkspaceResult};
 use providers::ProviderResult;
+use pty_session::{
+    PtyInputRequest, PtyResizeRequest, PtySession, PtySessionEngine, PtySessionRequest,
+    PtyStartRequest,
+};
 use storage::{StorageError, WorkspacePreferences, WorkspacePreferencesState};
 use tauri::Manager;
 
@@ -22,6 +27,47 @@ async fn validate_workspace(workspace_path: String) -> Result<WorkspaceResult, C
 #[tauri::command]
 async fn launch_provider(request: LaunchRequest) -> Result<LaunchResult, CommandError> {
     launcher::launch_provider(request)
+}
+
+#[tauri::command]
+async fn start_pty_session(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, PtySessionEngine>,
+    request: PtyStartRequest,
+) -> Result<PtySession, CommandError> {
+    state.start(app, request)
+}
+
+#[tauri::command]
+async fn query_pty_session(
+    state: tauri::State<'_, PtySessionEngine>,
+    request: PtySessionRequest,
+) -> Result<PtySession, CommandError> {
+    state.query(request)
+}
+
+#[tauri::command]
+async fn write_pty_input(
+    state: tauri::State<'_, PtySessionEngine>,
+    request: PtyInputRequest,
+) -> Result<(), CommandError> {
+    state.write(request)
+}
+
+#[tauri::command]
+async fn resize_pty(
+    state: tauri::State<'_, PtySessionEngine>,
+    request: PtyResizeRequest,
+) -> Result<(), CommandError> {
+    state.resize(request)
+}
+
+#[tauri::command]
+async fn stop_pty_session(
+    state: tauri::State<'_, PtySessionEngine>,
+    request: PtySessionRequest,
+) -> Result<(), CommandError> {
+    state.stop(request)
 }
 
 fn app_data_directory(app: &tauri::AppHandle) -> Result<std::path::PathBuf, StorageError> {
@@ -79,17 +125,38 @@ async fn write_console_layout(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
+        .manage(PtySessionEngine::default())
         .invoke_handler(tauri::generate_handler![
             discover_providers,
             validate_workspace,
             launch_provider,
+            start_pty_session,
+            query_pty_session,
+            write_pty_input,
+            resize_pty,
+            stop_pty_session,
             read_workspace_preferences,
             initialize_workspace_preferences,
             write_workspace_preferences,
             read_console_layout,
             write_console_layout
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running AgentOS Console");
+        .build(tauri::generate_context!())
+        .expect("error while building AgentOS Console");
+
+    app.run(|app_handle, event| {
+        let should_cleanup = matches!(
+            event,
+            tauri::RunEvent::Exit
+                | tauri::RunEvent::ExitRequested { .. }
+                | tauri::RunEvent::WindowEvent {
+                    event: tauri::WindowEvent::Destroyed,
+                    ..
+                }
+        );
+        if should_cleanup {
+            let _ = app_handle.state::<PtySessionEngine>().cleanup();
+        }
+    });
 }

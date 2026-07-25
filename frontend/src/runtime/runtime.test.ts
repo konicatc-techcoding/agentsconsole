@@ -1,4 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { selectRuntime } from ".";
@@ -11,9 +12,14 @@ vi.mock("@tauri-apps/api/core", () => ({
   isTauri: vi.fn(() => false),
 }));
 
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(),
+}));
+
 beforeEach(() => {
   vi.mocked(invoke).mockReset();
   vi.mocked(isTauri).mockReturnValue(false);
+  vi.mocked(listen).mockReset();
 });
 
 afterEach(() => {
@@ -28,6 +34,8 @@ describe("runtime adapters", () => {
     expect(tauriRuntime.kind).toBe("tauri");
     expect(webRuntime.loadConsoleLayout).toBeUndefined();
     expect(webRuntime.saveConsoleLayout).toBeUndefined();
+    expect(webRuntime.startPtySession).toBeUndefined();
+    expect(webRuntime.onPtyOutput).toBeUndefined();
   });
 
   it("routes typed operations through fixed Tauri commands", async () => {
@@ -188,6 +196,97 @@ describe("runtime adapters", () => {
     expect(invoke).toHaveBeenNthCalledWith(1, "read_console_layout");
     expect(invoke).toHaveBeenNthCalledWith(2, "write_console_layout", {
       layout,
+    });
+  });
+
+  it("routes Slot 1 PTY lifecycle through fixed Tauri commands", async () => {
+    const session = {
+      slotId: "slot-1" as const,
+      sessionId: "opaque-session",
+      providerId: "codex" as const,
+      workspacePath: "/workspace",
+      sessionMode: "new" as const,
+    };
+    const sessionRequest = {
+      slotId: "slot-1" as const,
+      sessionId: session.sessionId,
+    };
+    vi.mocked(invoke)
+      .mockResolvedValueOnce(session)
+      .mockResolvedValueOnce(session)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined);
+
+    await expect(
+      tauriRuntime.startPtySession?.({
+        slotId: "slot-1",
+        providerId: "codex",
+        workspacePath: "/workspace",
+        sessionMode: "new",
+        rows: 24,
+        columns: 80,
+      }),
+    ).resolves.toEqual(session);
+    await tauriRuntime.queryPtySession?.(sessionRequest);
+    await tauriRuntime.writePtyInput?.({ ...sessionRequest, data: [3, 13] });
+    await tauriRuntime.resizePty?.({
+      ...sessionRequest,
+      rows: 40,
+      columns: 120,
+    });
+    await tauriRuntime.stopPtySession?.(sessionRequest);
+
+    expect(invoke).toHaveBeenNthCalledWith(1, "start_pty_session", {
+      request: {
+        slotId: "slot-1",
+        providerId: "codex",
+        workspacePath: "/workspace",
+        sessionMode: "new",
+        rows: 24,
+        columns: 80,
+      },
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, "query_pty_session", {
+      request: sessionRequest,
+    });
+    expect(invoke).toHaveBeenNthCalledWith(3, "write_pty_input", {
+      request: { ...sessionRequest, data: [3, 13] },
+    });
+    expect(invoke).toHaveBeenNthCalledWith(4, "resize_pty", {
+      request: { ...sessionRequest, rows: 40, columns: 120 },
+    });
+    expect(invoke).toHaveBeenNthCalledWith(5, "stop_pty_session", {
+      request: sessionRequest,
+    });
+  });
+
+  it("subscribes to binary-safe PTY output and exit events", async () => {
+    const unlisten = vi.fn();
+    vi.mocked(listen).mockResolvedValue(unlisten);
+    const outputHandler = vi.fn();
+    const exitHandler = vi.fn();
+
+    await tauriRuntime.onPtyOutput?.(outputHandler);
+    await tauriRuntime.onPtyExit?.(exitHandler);
+
+    expect(listen).toHaveBeenNthCalledWith(1, "pty-output", expect.any(Function));
+    expect(listen).toHaveBeenNthCalledWith(2, "pty-exit", expect.any(Function));
+
+    const outputListener = vi.mocked(listen).mock.calls[0][1];
+    outputListener({
+      event: "pty-output",
+      id: 1,
+      payload: {
+        slotId: "slot-1",
+        sessionId: "opaque-session",
+        data: [0xf0, 0x9f],
+      },
+    });
+    expect(outputHandler).toHaveBeenCalledWith({
+      slotId: "slot-1",
+      sessionId: "opaque-session",
+      data: [0xf0, 0x9f],
     });
   });
 });

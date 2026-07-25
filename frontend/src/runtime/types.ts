@@ -5,10 +5,19 @@ import type {
   PreferenceSaveContext,
   PreferenceSaveResult,
   Provider,
+  PtyExitEvent,
+  PtyInputRequest,
+  PtyOutputEvent,
+  PtyResizeRequest,
+  PtySession,
+  PtySessionRequest,
+  PtyStartRequest,
   RuntimeKind,
   WorkspacePreferences,
   WorkspaceResponse,
 } from "../types";
+
+export type RuntimeUnlisten = () => void;
 
 export interface RuntimeAdapter {
   kind: RuntimeKind;
@@ -22,4 +31,13 @@ export interface RuntimeAdapter {
   ): Promise<PreferenceSaveResult>;
   loadConsoleLayout?(): Promise<ConsoleLayout>;
   saveConsoleLayout?(layout: ConsoleLayout): Promise<ConsoleLayout>;
+  startPtySession?(request: PtyStartRequest): Promise<PtySession>;
+  queryPtySession?(request: PtySessionRequest): Promise<PtySession>;
+  writePtyInput?(request: PtyInputRequest): Promise<void>;
+  resizePty?(request: PtyResizeRequest): Promise<void>;
+  stopPtySession?(request: PtySessionRequest): Promise<void>;
+  onPtyOutput?(
+    handler: (event: PtyOutputEvent) => void,
+  ): Promise<RuntimeUnlisten>;
+  onPtyExit?(handler: (event: PtyExitEvent) => void): Promise<RuntimeUnlisten>;
 }
