@@ -305,6 +305,10 @@ LOO-10 已完成實作並等待 review：
 - PTY 使用 resolved workspace 作為 cwd，支援 binary-safe ordered output、
   raw input、Ctrl/control sequences、resize、自然 exit 與完整 process-tree
   Stop。
+- Review 修正後，Stop 以整個 Unix process group 消失作為成功條件；即使
+  leader 已退出，仍會在 grace period 後 SIGKILL 殘留 descendants。PTY
+  reader／writer 也會在 spawn child 前完成準備，避免 setup failure 留下
+  untracked child。
 - frontend event 無法送達或 App backend 結束時執行 cleanup，避免 CLI 成為
   orphan；明確 Stop 的 cleanup failure 會回傳 structured error。
 - frontend 只新增 typed Tauri runtime boundary 與 output/exit subscription；
@@ -317,7 +321,7 @@ LOO-10 已完成實作並等待 review：
 
 ## LOO-10 驗證結果
 
-- Rust tests：36 passed（其中 9 個 PTY fake-adapter tests）
+- Rust tests：38 passed（其中 11 個 PTY fake-adapter／lifecycle tests）
 - Frontend tests：36 passed
 - Backend tests：34 passed（另有一則 upstream Starlette TestClient
   deprecation warning）

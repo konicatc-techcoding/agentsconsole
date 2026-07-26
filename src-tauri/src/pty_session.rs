@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
 
 pub const PTY_OUTPUT_EVENT: &str = "pty-output";
@@ -143,11 +143,112 @@ impl ExecutableResolver for SystemExecutableResolver {
 
 struct SystemPtyAdapter;
 
+fn prepare_then_spawn<R, W, C>(
+    prepare_reader: impl FnOnce() -> Result<R, String>,
+    prepare_writer: impl FnOnce() -> Result<W, String>,
+    spawn_child: impl FnOnce() -> Result<C, String>,
+) -> Result<(R, W, C), String> {
+    let reader = prepare_reader()?;
+    let writer = prepare_writer()?;
+    let child = spawn_child()?;
+    Ok((reader, writer, child))
+}
+
 struct SystemRunningPty {
     master: Mutex<Box<dyn MasterPty + Send>>,
     child: Mutex<Box<dyn Child + Send + Sync>>,
     process_id: Option<u32>,
     exit: Mutex<Option<ProcessExit>>,
+}
+
+#[cfg(unix)]
+trait UnixProcessGroupControl {
+    fn signal_group(&self, signal: i32) -> Result<(), String>;
+    fn group_exists(&self) -> Result<bool, String>;
+    fn poll_child_exit(&self) -> Result<(), String>;
+}
+
+#[cfg(unix)]
+fn terminate_unix_process_group(
+    control: &dyn UnixProcessGroupControl,
+    grace_period: Duration,
+) -> Result<(), String> {
+    control.signal_group(libc::SIGTERM)?;
+    let started = Instant::now();
+    loop {
+        control.poll_child_exit()?;
+        if !control.group_exists()? {
+            return Ok(());
+        }
+        if started.elapsed() >= grace_period {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+
+    control.signal_group(libc::SIGKILL)?;
+    let kill_started = Instant::now();
+    loop {
+        control.poll_child_exit()?;
+        if !control.group_exists()? {
+            return Ok(());
+        }
+        if kill_started.elapsed() >= grace_period {
+            return Err("PTY process group did not terminate".to_string());
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[cfg(unix)]
+impl UnixProcessGroupControl for SystemRunningPty {
+    fn signal_group(&self, signal: i32) -> Result<(), String> {
+        let process_id = self
+            .process_id
+            .ok_or_else(|| "PTY process group is unavailable".to_string())?;
+        let result = unsafe { libc::kill(-(process_id as i32), signal) };
+        if result == 0 {
+            return Ok(());
+        }
+        let error = std::io::Error::last_os_error();
+        if error.raw_os_error() == Some(libc::ESRCH) {
+            return Ok(());
+        }
+        Err(error.to_string())
+    }
+
+    fn group_exists(&self) -> Result<bool, String> {
+        let process_id = self
+            .process_id
+            .ok_or_else(|| "PTY process group is unavailable".to_string())?;
+        let result = unsafe { libc::kill(-(process_id as i32), 0) };
+        if result == 0 {
+            return Ok(true);
+        }
+        let error = std::io::Error::last_os_error();
+        match error.raw_os_error() {
+            Some(libc::ESRCH) => Ok(false),
+            Some(libc::EPERM) => Ok(true),
+            _ => Err(error.to_string()),
+        }
+    }
+
+    fn poll_child_exit(&self) -> Result<(), String> {
+        let mut exit_guard = lock(&self.exit)?;
+        if exit_guard.is_some() {
+            return Ok(());
+        }
+        if let Some(status) = lock(&self.child)?
+            .try_wait()
+            .map_err(|error| error.to_string())?
+        {
+            *exit_guard = Some(ProcessExit {
+                exit_code: Some(status.exit_code() as i32),
+                reason: "exited".to_string(),
+            });
+        }
+        Ok(())
+    }
 }
 
 impl RunningPty for SystemRunningPty {
@@ -165,42 +266,7 @@ impl RunningPty for SystemRunningPty {
     fn terminate_tree(&self) -> Result<(), String> {
         #[cfg(unix)]
         {
-            if let Some(process_id) = self.process_id {
-                let group = -(process_id as i32);
-                let term_result = unsafe { libc::kill(group, libc::SIGTERM) };
-                if term_result != 0 {
-                    let error = std::io::Error::last_os_error();
-                    if error.raw_os_error() != Some(libc::ESRCH) {
-                        return Err(error.to_string());
-                    }
-                }
-
-                let started = std::time::Instant::now();
-                loop {
-                    let exited = lock(&self.child)?
-                        .try_wait()
-                        .map_err(|error| error.to_string())?
-                        .is_some();
-                    if exited {
-                        return Ok(());
-                    }
-                    if started.elapsed() >= STOP_GRACE_PERIOD {
-                        let kill_result = unsafe { libc::kill(group, libc::SIGKILL) };
-                        if kill_result != 0 {
-                            let error = std::io::Error::last_os_error();
-                            if error.raw_os_error() != Some(libc::ESRCH) {
-                                return Err(error.to_string());
-                            }
-                        }
-                        break;
-                    }
-                    thread::sleep(Duration::from_millis(10));
-                }
-            } else {
-                lock(&self.child)?
-                    .kill()
-                    .map_err(|error| error.to_string())?;
-            }
+            terminate_unix_process_group(self, STOP_GRACE_PERIOD)?;
         }
 
         #[cfg(not(unix))]
@@ -248,21 +314,22 @@ impl PtyAdapter for SystemPtyAdapter {
         let mut command = CommandBuilder::new(executable);
         command.args(arguments);
         command.cwd(workspace);
-        let child = pair
-            .slave
-            .spawn_command(command)
-            .map_err(|error| error.to_string())?;
+        let (reader, writer, child) = prepare_then_spawn(
+            || {
+                pair.master
+                    .try_clone_reader()
+                    .map_err(|error| error.to_string())
+            },
+            || pair.master.take_writer().map_err(|error| error.to_string()),
+            || {
+                pair.slave
+                    .spawn_command(command)
+                    .map_err(|error| error.to_string())
+            },
+        )?;
         drop(pair.slave);
 
         let process_id = child.process_id();
-        let reader = pair
-            .master
-            .try_clone_reader()
-            .map_err(|error| error.to_string())?;
-        let writer = pair
-            .master
-            .take_writer()
-            .map_err(|error| error.to_string())?;
         let process = Arc::new(SystemRunningPty {
             master: Mutex::new(pair.master),
             child: Mutex::new(child),
@@ -607,10 +674,36 @@ fn internal_error(_: String) -> CommandError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
+    use std::collections::{HashMap, VecDeque};
     use std::io;
     use std::sync::mpsc::{self, Receiver, Sender};
     use std::sync::Condvar;
+
+    #[cfg(unix)]
+    struct FakeUnixProcessGroup {
+        signals: Mutex<Vec<i32>>,
+        group_states: Mutex<VecDeque<bool>>,
+        child_exited: AtomicBool,
+        poll_count: AtomicU64,
+    }
+
+    #[cfg(unix)]
+    impl UnixProcessGroupControl for FakeUnixProcessGroup {
+        fn signal_group(&self, signal: i32) -> Result<(), String> {
+            lock(&self.signals)?.push(signal);
+            Ok(())
+        }
+
+        fn group_exists(&self) -> Result<bool, String> {
+            Ok(lock(&self.group_states)?.pop_front().unwrap_or(false))
+        }
+
+        fn poll_child_exit(&self) -> Result<(), String> {
+            assert!(self.child_exited.load(Ordering::SeqCst));
+            self.poll_count.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+    }
 
     #[derive(Clone, Debug, PartialEq, Eq)]
     struct SpawnCall {
@@ -879,6 +972,51 @@ mod tests {
             slot_id: session.slot_id.clone(),
             session_id: session.session_id.clone(),
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn process_group_cleanup_kills_a_descendant_after_the_leader_exits() {
+        let group = FakeUnixProcessGroup {
+            signals: Mutex::new(vec![]),
+            group_states: Mutex::new(VecDeque::from([true, false])),
+            child_exited: AtomicBool::new(true),
+            poll_count: AtomicU64::new(0),
+        };
+
+        terminate_unix_process_group(&group, Duration::ZERO).unwrap();
+
+        assert_eq!(
+            *lock(&group.signals).unwrap(),
+            vec![libc::SIGTERM, libc::SIGKILL]
+        );
+        assert_eq!(group.poll_count.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn failed_pty_handle_preparation_never_spawns_a_child() {
+        let calls = Arc::new(Mutex::new(vec![]));
+        let reader_calls = calls.clone();
+        let writer_calls = calls.clone();
+        let spawn_calls = calls.clone();
+
+        let result = prepare_then_spawn(
+            move || {
+                lock(&reader_calls)?.push("reader");
+                Ok(())
+            },
+            move || {
+                lock(&writer_calls)?.push("writer");
+                Err::<(), _>("writer setup failed".to_string())
+            },
+            move || {
+                lock(&spawn_calls)?.push("spawn");
+                Ok(())
+            },
+        );
+
+        assert_eq!(result.unwrap_err(), "writer setup failed");
+        assert_eq!(*lock(&calls).unwrap(), vec!["reader", "writer"]);
     }
 
     #[test]
