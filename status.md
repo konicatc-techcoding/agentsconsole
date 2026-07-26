@@ -20,10 +20,11 @@ Start／Stop／retry、clipboard、resize 與關閉清理；Slot 2–4 placehold
 - 最新合併基線：`7b9565d LOO-10 Add Slot 1 PTY session engine (#6)`
 - 目前 Linear issue：`LOO-11 建立 Slot 1 embedded terminal UI 與完整互動生命週期`
 - LOO-11 URL：<https://linear.app/loopent/issue/LOO-11/建立-slot-1-embedded-terminal-ui-與完整互動生命週期>
-- LOO-11 狀態：`In Progress`
+- LOO-11 狀態：`In Review`
 - LOO-11 label：`agent-ready`
 - LOO-11 assignee：Zack Chiu
 - LOO-11 relation：`blocked by LOO-10`；LOO-10 已 Done
+- LOO-11 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/7>
 - 最近完成的 Linear issue：`LOO-10 建立 Slot 1 embedded terminal 的 Rust PTY session engine`
 - LOO-10 URL：<https://linear.app/loopent/issue/LOO-10/建立-slot-1-embedded-terminal-的-rust-pty-session-engine>
 - LOO-10 狀態：`Done`
