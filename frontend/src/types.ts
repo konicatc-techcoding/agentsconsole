@@ -59,3 +59,48 @@ export interface ConsoleLayout {
   version: 1;
   slots: ConsoleSlot[];
 }
+
+export interface PtyStartRequest {
+  slotId: "slot-1";
+  providerId: ConsoleProviderId;
+  workspacePath: string;
+  sessionMode: SessionMode;
+  newFolder?: string;
+  rows: number;
+  columns: number;
+}
+
+export interface PtySessionRequest {
+  slotId: "slot-1";
+  sessionId: string;
+}
+
+export interface PtyInputRequest extends PtySessionRequest {
+  data: number[];
+}
+
+export interface PtyResizeRequest extends PtySessionRequest {
+  rows: number;
+  columns: number;
+}
+
+export interface PtySession {
+  slotId: "slot-1";
+  sessionId: string;
+  providerId: ConsoleProviderId;
+  workspacePath: string;
+  sessionMode: SessionMode;
+}
+
+export interface PtyOutputEvent {
+  slotId: "slot-1";
+  sessionId: string;
+  data: number[];
+}
+
+export interface PtyExitEvent {
+  slotId: "slot-1";
+  sessionId: string;
+  exitCode: number | null;
+  reason: string;
+}

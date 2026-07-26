@@ -117,9 +117,11 @@ validates them. If Terminal launches but the history write fails, the launch
 remains successful and the app displays a separate history warning.
 
 Tauri mode also uses a Console-oriented shell with a compact title, a fixed
-Provider sidebar, and four layout slots. The slots are placeholders for a
-future embedded terminal; CLI sessions still open in Terminal.app and are not
-tracked by a slot. Slot assignments are stored separately in
+Provider sidebar, and four layout slots. The visible slots remain placeholders
+and sidebar launches still open in Terminal.app. The native backend now
+contains a Slot 1-only embedded PTY foundation for the next UI stage, but the
+current interface does not start or render that PTY. Slot assignments are
+stored separately in
 `console-layout.json` under the same App Data directory:
 
 - A missing file is initialized with Hermes, Codex, Claude, and Antigravity in
@@ -133,6 +135,16 @@ tracked by a slot. Slot assignments are stored separately in
 
 Web mode keeps the existing Provider card page and never reads, writes, or
 synchronizes `console-layout.json`.
+
+The embedded PTY foundation is exposed only through fixed typed Tauri
+commands. It accepts Slot 1, one of the four registered Providers, the existing
+New/Continue mode, a validated workspace, and terminal rows/columns. It does
+not accept an executable, shell command, custom arguments, environment
+settings, or permission-bypass flags. At most one embedded session can run;
+input and output remain binary-safe, resize is supported, stale session IDs
+are rejected, and Stop or app shutdown terminates the PTY process tree. Output
+and process identifiers are not persisted. Web mode has no PTY commands, and
+the existing Terminal.app launcher remains independent.
 
 Both runtimes accept only the fixed provider commands documented by the UI.
 They reject relative, missing, file, and filesystem-root base workspaces. New

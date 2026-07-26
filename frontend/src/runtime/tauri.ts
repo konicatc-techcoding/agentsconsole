@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 import type {
   ConsoleLayout,
@@ -7,6 +8,13 @@ import type {
   PreferenceSaveContext,
   PreferenceSaveResult,
   Provider,
+  PtyExitEvent,
+  PtyInputRequest,
+  PtyOutputEvent,
+  PtyResizeRequest,
+  PtySession,
+  PtySessionRequest,
+  PtyStartRequest,
   WorkspacePreferences,
   WorkspaceResponse,
 } from "../types";
@@ -125,5 +133,59 @@ export const tauriRuntime: RuntimeAdapter = {
     } catch (error) {
       throw commandError(error, "Console layout could not be saved");
     }
+  },
+
+  async startPtySession(request: PtyStartRequest): Promise<PtySession> {
+    try {
+      return await invoke<PtySession>("start_pty_session", { request });
+    } catch (error) {
+      throw commandError(error, "PTY session could not be started");
+    }
+  },
+
+  async queryPtySession(request: PtySessionRequest): Promise<PtySession> {
+    try {
+      return await invoke<PtySession>("query_pty_session", { request });
+    } catch (error) {
+      throw commandError(error, "PTY session could not be queried");
+    }
+  },
+
+  async writePtyInput(request: PtyInputRequest): Promise<void> {
+    try {
+      await invoke("write_pty_input", { request });
+    } catch (error) {
+      throw commandError(error, "PTY input could not be sent");
+    }
+  },
+
+  async resizePty(request: PtyResizeRequest): Promise<void> {
+    try {
+      await invoke("resize_pty", { request });
+    } catch (error) {
+      throw commandError(error, "PTY could not be resized");
+    }
+  },
+
+  async stopPtySession(request: PtySessionRequest): Promise<void> {
+    try {
+      await invoke("stop_pty_session", { request });
+    } catch (error) {
+      throw commandError(error, "PTY session could not be stopped");
+    }
+  },
+
+  async onPtyOutput(
+    handler: (event: PtyOutputEvent) => void,
+  ): Promise<() => void> {
+    return listen<PtyOutputEvent>("pty-output", ({ payload }) => {
+      handler(payload);
+    });
+  },
+
+  async onPtyExit(handler: (event: PtyExitEvent) => void): Promise<() => void> {
+    return listen<PtyExitEvent>("pty-exit", ({ payload }) => {
+      handler(payload);
+    });
   },
 };
