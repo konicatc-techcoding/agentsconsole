@@ -5,8 +5,9 @@
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md。LOO-11 的 Slot 1 embedded terminal UI 已實作完成；
-下一步使用 `$finn-review` 檢查 LOO-11 PR，不要直接 merge。
+請先讀取 status.md。LOO-11 的 Slot 1 embedded terminal UI 已合併並完成；
+下一步使用 `$finn-spec` 規格化 Slot 2–4 的 embedded terminal rollout，
+建議先評估是否逐 Slot 交付。
 ```
 
 LOO-11 已把 LOO-10 的 PTY engine 接到 Tauri Slot 1 xterm UI，支援完整
@@ -16,16 +17,22 @@ Start／Stop／retry、clipboard、resize 與關閉清理；Slot 2–4 placehold
 ## Source of truth
 
 - Workspace：`/Users/zackchiu/CodexCLI/agentsconsole`
-- Git branch：`LOO-11-slot-1-terminal-ui`
-- 最新合併基線：`7b9565d LOO-10 Add Slot 1 PTY session engine (#6)`
-- 目前 Linear issue：`LOO-11 建立 Slot 1 embedded terminal UI 與完整互動生命週期`
+- Git branch：`main`
+- 最新合併基線：`fb5645a LOO-11 Add Slot 1 embedded terminal UI (#7)`
+- 目前 Linear issue：無；下一步待 `$finn-spec`
+- 最近完成的 Linear issue：`LOO-11 建立 Slot 1 embedded terminal UI 與完整互動生命週期`
 - LOO-11 URL：<https://linear.app/loopent/issue/LOO-11/建立-slot-1-embedded-terminal-ui-與完整互動生命週期>
-- LOO-11 狀態：`In Review`
+- LOO-11 狀態：`Done`
 - LOO-11 label：`agent-ready`
 - LOO-11 assignee：Zack Chiu
 - LOO-11 relation：`blocked by LOO-10`；LOO-10 已 Done
 - LOO-11 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/7>
-- 最近完成的 Linear issue：`LOO-10 建立 Slot 1 embedded terminal 的 Rust PTY session engine`
+- PR #7 狀態：Merged
+- PR #7 merge commit：`fb5645a70bc3a64e6a7ecc417e8180b4cf4d3a19`
+- PR #7 review：`loop-approved`
+- PR #7 required check：`smoke` — `SUCCESS`
+- PR #7 CI run：<https://github.com/konicatc-techcoding/agentsconsole/actions/runs/30206655290/job/89805809526>
+- 前一個完成的 Linear issue：`LOO-10 建立 Slot 1 embedded terminal 的 Rust PTY session engine`
 - LOO-10 URL：<https://linear.app/loopent/issue/LOO-10/建立-slot-1-embedded-terminal-的-rust-pty-session-engine>
 - LOO-10 狀態：`Done`
 - LOO-10 label：`agent-ready`
@@ -344,7 +351,7 @@ LOO-10 已完成並透過 PR #6 合併：
 
 ## LOO-11 Slot 1 embedded terminal UI
 
-LOO-11 已完成實作並等待 review：
+LOO-11 已完成、通過 `$finn-review`，並透過 PR #7 合併：
 
 - Tauri Slot 1 使用 `@xterm/xterm` 與 FitAddon 呈現真實 embedded terminal；
   Slot 2–4 仍為 placeholder，Web provider card 頁不變。
@@ -362,6 +369,8 @@ LOO-11 已完成實作並等待 review：
   App 不恢復 terminal output、process ID 或 native session。
 - capability 維持 `core:default`；關閉 App 透過固定 Rust command 完成，沒有
   新增 generic window、shell 或 filesystem permission。
+- Review 修正後，Idle Start、Start again、modal submit 與 submit handler
+  共用 Provider／workspace preferences／layout availability gate。
 
 ## LOO-11 驗證結果
 
@@ -403,10 +412,9 @@ npm run dev
 
 ## 接續流程
 
-1. 使用 `$finn-review` 檢查 LOO-11 PR 與 required checks；不要直接 merge。
-2. 若 review 回傳 changes-requested，使用 `$finn-build` 修正同一 PR。
-3. 使用者確認並合併 LOO-11 後，同步 `main`、Linear 與本檔完成狀態，再
-   規格化後續 Slot 2–4 terminal UI。
+1. 使用 `$finn-spec` 訪談並規格化 Slot 2–4 embedded terminal rollout。
+2. 優先決定逐 Slot 交付或一次開放多 Slot，以及多個同時執行 PTY 的上限。
+3. 新 issue 確認 `agent-ready` 後，再使用 `$finn-build` 開始下一個單位。
 
 ## 本檔注意事項
 
