@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { defaultRuntime } from "./runtime";
 import {
@@ -8,10 +8,13 @@ import {
 } from "./runtime/consoleLayout";
 import { RECENT_WORKSPACE_LIMIT } from "./runtime/preferences";
 import type { RuntimeAdapter } from "./runtime/types";
+import TerminalSlot, { type TerminalPhase } from "./TerminalSlot";
 import type {
   ConsoleLayout,
   ConsoleProviderId,
   Provider,
+  PtyExitEvent,
+  PtySession,
   SessionMode,
   WorkspacePreferences,
 } from "./types";
@@ -24,6 +27,29 @@ interface AppProps {
   runtime?: RuntimeAdapter;
 }
 
+type LaunchDestination = "external" | "slot-1";
+type WindowAction = "close" | "reload";
+
+interface TerminalState {
+  phase: TerminalPhase;
+  session: PtySession | null;
+  exitEvent: PtyExitEvent | null;
+  error: string | null;
+}
+
+const IDLE_TERMINAL: TerminalState = {
+  phase: "idle",
+  session: null,
+  exitEvent: null,
+  error: null,
+};
+
+function readPendingExit(
+  ref: React.MutableRefObject<PtyExitEvent | null>,
+): PtyExitEvent | null {
+  return ref.current;
+}
+
 export default function App({ runtime = defaultRuntime }: AppProps) {
   const isTauri = runtime.kind === "tauri";
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -31,6 +57,8 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
   const [launchTarget, setLaunchTarget] = useState<Provider | null>(null);
+  const [launchDestination, setLaunchDestination] =
+    useState<LaunchDestination>("external");
   const [workspacePath, setWorkspacePath] = useState("");
   const [newFolder, setNewFolder] = useState("");
   const [workspacePreferences, setWorkspacePreferences] =
@@ -51,11 +79,41 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
   const [layoutReady, setLayoutReady] = useState(!isTauri);
   const [layoutError, setLayoutError] = useState<string | null>(null);
   const [savingLayout, setSavingLayout] = useState(false);
+  const [terminalState, setTerminalState] =
+    useState<TerminalState>(IDLE_TERMINAL);
+  const [terminalResetToken, setTerminalResetToken] = useState(0);
+  const [terminalSize, setTerminalSize] = useState({
+    rows: 24,
+    columns: 80,
+  });
+  const [windowAction, setWindowAction] = useState<WindowAction | null>(null);
+  const [windowActionError, setWindowActionError] = useState<string | null>(
+    null,
+  );
+  const terminalStateRef = useRef(terminalState);
+  const pendingExitRef = useRef<PtyExitEvent | null>(null);
+  const pendingStartRef = useRef<Promise<PtySession> | null>(null);
+
+  const updateTerminalState = useCallback((next: TerminalState) => {
+    terminalStateRef.current = next;
+    setTerminalState(next);
+  }, []);
 
   const layoutDirty =
     isTauri && layoutReady
       ? !consoleLayoutsEqual(savedConsoleLayout, consoleLayout)
       : false;
+
+  const slotStartDisabled = useCallback(
+    (provider: Provider | null | undefined) =>
+      !layoutReady ||
+      Boolean(layoutError) ||
+      !storageReady ||
+      !provider ||
+      !isAvailable(provider) ||
+      !runtime.startPtySession,
+    [layoutError, layoutReady, runtime.startPtySession, storageReady],
+  );
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -122,10 +180,14 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
     void refresh();
   }, [refresh]);
 
-  const openLaunch = (provider: Provider) => {
+  const openLaunch = (
+    provider: Provider,
+    destination: LaunchDestination = "external",
+  ) => {
     const preference = workspacePreferences[provider.id];
     setSelectedId(provider.id);
     setLaunchTarget(provider);
+    setLaunchDestination(destination);
     setWorkspacePath(preference?.defaultWorkspace ?? "");
     setNewFolder("");
     setSessionMode("new");
@@ -162,6 +224,16 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
     slotId: ConsoleLayout["slots"][number]["slotId"],
     providerId: ConsoleProviderId,
   ) => {
+    if (
+      slotId === "slot-1" &&
+      terminalState.phase !== "starting" &&
+      terminalState.phase !== "running" &&
+      terminalState.phase !== "stopping" &&
+      consoleLayout.slots[0]?.providerId !== providerId
+    ) {
+      updateTerminalState(IDLE_TERMINAL);
+      setTerminalResetToken((value) => value + 1);
+    }
     setConsoleLayout((current) => ({
       ...current,
       slots: current.slots.map((slot) =>
@@ -230,9 +302,44 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
     }
   };
 
+  const persistRecentWorkspace = async (
+    provider: Provider,
+    resolvedWorkspace: string,
+  ) => {
+    const previous = workspacePreferences[provider.id];
+    const next = {
+      ...workspacePreferences,
+      [provider.id]: {
+        defaultWorkspace: previous?.defaultWorkspace ?? "",
+        recentWorkspaces: [
+          resolvedWorkspace,
+          ...(previous?.recentWorkspaces ?? []).filter(
+            (path) => path !== resolvedWorkspace,
+          ),
+        ].slice(0, RECENT_WORKSPACE_LIMIT),
+      },
+    };
+    let warning: string | undefined;
+    try {
+      ({ warning } = await runtime.saveWorkspacePreferences(next, "history"));
+    } catch {
+      warning = "CLI launched, but history was not saved";
+    }
+    setWorkspacePreferences(next);
+    setLaunchWarning(warning ?? null);
+  };
+
   const submitLaunch = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!launchTarget || launching || savingDefault || !workspacePath) {
+      return;
+    }
+    if (
+      launchDestination === "slot-1" &&
+      slotStartDisabled(
+        providers.find((provider) => provider.id === launchTarget.id),
+      )
+    ) {
       return;
     }
 
@@ -241,45 +348,231 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
     setLaunchNotice(null);
     setLaunchWarning(null);
     try {
-      const result = await runtime.launchProvider({
-        provider_id: launchTarget.id,
-        workspace_path: workspacePath,
-        session_mode: sessionMode,
-        ...(sessionMode === "new" && newFolder
-          ? { new_folder: newFolder }
-          : {}),
-      });
-      const previous = workspacePreferences[launchTarget.id];
-      const next = {
-        ...workspacePreferences,
-        [launchTarget.id]: {
-          defaultWorkspace: previous?.defaultWorkspace ?? "",
-          recentWorkspaces: [
-            result.workspace_path,
-            ...(previous?.recentWorkspaces ?? []).filter(
-              (path) => path !== result.workspace_path,
-            ),
-          ].slice(0, RECENT_WORKSPACE_LIMIT),
-        },
-      };
-      let warning: string | undefined;
-      try {
-        ({ warning } = await runtime.saveWorkspacePreferences(next, "history"));
-      } catch {
-        warning = "CLI launched, but history was not saved";
+      if (launchDestination === "slot-1" && runtime.startPtySession) {
+        pendingExitRef.current = null;
+        updateTerminalState({
+          phase: "starting",
+          session: null,
+          exitEvent: null,
+          error: null,
+        });
+        const startPromise = runtime.startPtySession({
+          slotId: "slot-1",
+          providerId: launchTarget.id as ConsoleProviderId,
+          workspacePath,
+          sessionMode,
+          ...(sessionMode === "new" && newFolder ? { newFolder } : {}),
+          rows: terminalSize.rows,
+          columns: terminalSize.columns,
+        });
+        pendingStartRef.current = startPromise;
+        const session = await startPromise;
+        pendingStartRef.current = null;
+        const observedExit = readPendingExit(pendingExitRef);
+        const earlyExit =
+          observedExit?.sessionId === session.sessionId ? observedExit : null;
+        updateTerminalState({
+          phase: earlyExit ? "exited" : "running",
+          session,
+          exitEvent: earlyExit,
+          error: null,
+        });
+        await persistRecentWorkspace(launchTarget, session.workspacePath);
+        setLaunchTarget(null);
+      } else {
+        const result = await runtime.launchProvider({
+          provider_id: launchTarget.id,
+          workspace_path: workspacePath,
+          session_mode: sessionMode,
+          ...(sessionMode === "new" && newFolder
+            ? { new_folder: newFolder }
+            : {}),
+        });
+        await persistRecentWorkspace(launchTarget, result.workspace_path);
+        setLaunchTarget(null);
+        setLaunchNotice(
+          `${launchTarget.display_name} launched in ${result.workspace_path}`,
+        );
       }
-      setWorkspacePreferences(next);
-      setLaunchTarget(null);
-      setLaunchNotice(
-        `${launchTarget.display_name} launched in ${result.workspace_path}`,
-      );
-      setLaunchWarning(warning ?? null);
     } catch (error) {
+      pendingStartRef.current = null;
+      if (launchDestination === "slot-1") {
+        updateTerminalState({
+          phase: "error",
+          session: null,
+          exitEvent: null,
+          error: error instanceof Error ? error.message : "PTY start failed",
+        });
+      }
       setLaunchError(
-        error instanceof Error ? error.message : "CLI launch failed",
+        error instanceof Error
+          ? error.message
+          : launchDestination === "slot-1"
+            ? "PTY start failed"
+            : "CLI launch failed",
       );
     } finally {
       setLaunching(false);
+    }
+  };
+
+  const handleTerminalExit = useCallback(
+    (event: PtyExitEvent) => {
+      const current = terminalStateRef.current;
+      if (current.phase === "starting") {
+        pendingExitRef.current = event;
+        return;
+      }
+      if (current.session?.sessionId !== event.sessionId) {
+        return;
+      }
+      updateTerminalState({
+        phase:
+          current.phase === "stopping" || event.reason === "stopped"
+            ? "stopped"
+            : "exited",
+        session: current.session,
+        exitEvent: event,
+        error: null,
+      });
+    },
+    [updateTerminalState],
+  );
+
+  const stopTerminal = useCallback(async () => {
+    const current = terminalStateRef.current;
+    if (!current.session || !runtime.stopPtySession) {
+      return;
+    }
+    updateTerminalState({ ...current, phase: "stopping", error: null });
+    try {
+      await runtime.stopPtySession({
+        slotId: "slot-1",
+        sessionId: current.session.sessionId,
+      });
+      const latest = terminalStateRef.current;
+      updateTerminalState({
+        phase: "stopped",
+        session: current.session,
+        exitEvent: latest.exitEvent,
+        error: null,
+      });
+    } catch (error) {
+      updateTerminalState({
+        ...current,
+        phase: "running",
+        error:
+          error instanceof Error
+            ? error.message
+            : "PTY process tree could not be terminated",
+      });
+      throw error;
+    }
+  }, [runtime, updateTerminalState]);
+
+  const terminalIsActive = useCallback(() => {
+    const phase = terminalStateRef.current.phase;
+    return phase === "starting" || phase === "running" || phase === "stopping";
+  }, []);
+
+  const requestWindowAction = useCallback(
+    (action: WindowAction): boolean => {
+      if (!terminalIsActive()) {
+        return false;
+      }
+      setWindowActionError(null);
+      setWindowAction(action);
+      return true;
+    },
+    [terminalIsActive],
+  );
+
+  useEffect(() => {
+    if (!isTauri || !runtime.onCloseRequested) {
+      return;
+    }
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void runtime
+      .onCloseRequested(() => requestWindowAction("close"))
+      .then((cleanup) => {
+        if (disposed) {
+          cleanup();
+        } else {
+          unlisten = cleanup;
+        }
+      });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [isTauri, requestWindowAction, runtime]);
+
+  useEffect(() => {
+    if (!isTauri) {
+      return;
+    }
+    const interceptReload = (event: KeyboardEvent) => {
+      if (
+        event.metaKey &&
+        event.key.toLowerCase() === "r" &&
+        requestWindowAction("reload")
+      ) {
+        event.preventDefault();
+      }
+    };
+    window.addEventListener("keydown", interceptReload);
+    return () => window.removeEventListener("keydown", interceptReload);
+  }, [isTauri, requestWindowAction]);
+
+  useEffect(
+    () => () => {
+      const current = terminalStateRef.current;
+      if (
+        current.session &&
+        (current.phase === "running" || current.phase === "stopping") &&
+        runtime.stopPtySession
+      ) {
+        void runtime.stopPtySession({
+          slotId: "slot-1",
+          sessionId: current.session.sessionId,
+        });
+      }
+    },
+    [runtime],
+  );
+
+  const confirmWindowAction = async () => {
+    const action = windowAction;
+    if (!action) {
+      return;
+    }
+    setWindowActionError(null);
+    try {
+      if (
+        terminalStateRef.current.phase === "starting" &&
+        pendingStartRef.current
+      ) {
+        await pendingStartRef.current;
+      }
+      if (
+        terminalStateRef.current.phase === "running" ||
+        terminalStateRef.current.phase === "stopping"
+      ) {
+        await stopTerminal();
+      }
+      if (action === "close") {
+        await runtime.closeWindow?.();
+      } else {
+        await runtime.reloadWindow?.();
+      }
+      setWindowAction(null);
+    } catch (error) {
+      setWindowActionError(
+        error instanceof Error
+          ? error.message
+          : "Slot 1 could not be stopped",
+      );
     }
   };
 
@@ -292,6 +585,11 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
       ? [activePreference.defaultWorkspace]
       : [];
   const modalBusy = launching || savingDefault;
+  const embeddedLaunchDisabled =
+    launchDestination === "slot-1" &&
+    slotStartDisabled(
+      providers.find((provider) => provider.id === launchTarget?.id),
+    );
   const providersById = new Map(
     providers.map((provider) => [provider.id, provider]),
   );
@@ -461,7 +759,14 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                           <select
                             aria-label={`Slot ${index + 1} provider`}
                             value={slot.providerId}
-                            disabled={!layoutReady || savingLayout}
+                            disabled={
+                              !layoutReady ||
+                              savingLayout ||
+                              (slot.slotId === "slot-1" &&
+                                (terminalState.phase === "starting" ||
+                                  terminalState.phase === "running" ||
+                                  terminalState.phase === "stopping"))
+                            }
                             onChange={(event) =>
                               updateConsoleSlot(
                                 slot.slotId,
@@ -477,20 +782,43 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                           </select>
                         </label>
                       </header>
-                      <div className="console-placeholder">
-                        <span className="console-provider-name">
-                          {provider.display_name}
-                        </span>
-                        <span
-                          className={`availability ${
-                            available ? "available" : ""
-                          }`}
-                        >
-                          <span className="status-dot" />
-                          {available ? "Available" : "Unavailable"}
-                        </span>
-                        <p>Embedded terminal coming next</p>
-                      </div>
+                      {slot.slotId === "slot-1" ? (
+                        <TerminalSlot
+                          provider={provider}
+                          phase={terminalState.phase}
+                          session={terminalState.session}
+                          exitEvent={terminalState.exitEvent}
+                          error={terminalState.error}
+                          resetToken={terminalResetToken}
+                          startDisabled={
+                            slotStartDisabled(provider)
+                          }
+                          runtime={runtime}
+                          onStart={() => openLaunch(provider, "slot-1")}
+                          onStop={() => {
+                            void stopTerminal().catch(() => {});
+                          }}
+                          onExit={handleTerminalExit}
+                          onSize={(rows, columns) =>
+                            setTerminalSize({ rows, columns })
+                          }
+                        />
+                      ) : (
+                        <div className="console-placeholder">
+                          <span className="console-provider-name">
+                            {provider.display_name}
+                          </span>
+                          <span
+                            className={`availability ${
+                              available ? "available" : ""
+                            }`}
+                          >
+                            <span className="status-dot" />
+                            {available ? "Available" : "Unavailable"}
+                          </span>
+                          <p>Embedded terminal coming next</p>
+                        </div>
+                      )}
                     </article>
                   );
                 })}
@@ -630,7 +958,11 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
             aria-modal="true"
             aria-labelledby="launch-heading"
           >
-            <p className="section-label">LAUNCH CLI</p>
+            <p className="section-label">
+              {launchDestination === "slot-1"
+                ? "EMBEDDED TERMINAL"
+                : "LAUNCH CLI"}
+            </p>
             <h2 id="launch-heading">{launchTarget.display_name}</h2>
             <p className="modal-copy">
               Choose how this CLI session should start and where it should run.
@@ -766,12 +1098,60 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                 <button
                   className="modal-launch-button"
                   type="submit"
-                  disabled={modalBusy || !workspacePath}
+                  disabled={
+                    modalBusy || !workspacePath || embeddedLaunchDisabled
+                  }
                 >
-                  {launching ? "Starting…" : "Start"}
+                  {launching
+                    ? "Starting…"
+                    : launchDestination === "slot-1"
+                      ? "Start in Slot 1"
+                      : "Start"}
                 </button>
               </div>
             </form>
+          </section>
+        </div>
+      )}
+
+      {windowAction && (
+        <div className="modal-backdrop">
+          <section
+            className="launch-modal close-confirmation"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="close-confirmation-heading"
+          >
+            <p className="section-label">ACTIVE TERMINAL</p>
+            <h2 id="close-confirmation-heading">Slot 1 is running</h2>
+            <p className="modal-copy">
+              Stop the active process tree before{" "}
+              {windowAction === "close" ? "closing" : "reloading"} the App.
+            </p>
+            {windowActionError && (
+              <div className="modal-error" role="alert">
+                {windowActionError}
+              </div>
+            )}
+            <div className="modal-actions">
+              <button
+                className="cancel-button"
+                type="button"
+                onClick={() => {
+                  setWindowAction(null);
+                  setWindowActionError(null);
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                className="modal-launch-button"
+                type="button"
+                onClick={() => void confirmWindowAction()}
+              >
+                Stop and {windowAction === "close" ? "Close" : "Reload"}
+              </button>
+            </div>
           </section>
         </div>
       )}

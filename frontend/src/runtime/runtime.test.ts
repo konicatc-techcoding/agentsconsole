@@ -1,5 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { selectRuntime } from ".";
@@ -16,10 +17,15 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn(),
 }));
 
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: vi.fn(),
+}));
+
 beforeEach(() => {
   vi.mocked(invoke).mockReset();
   vi.mocked(isTauri).mockReturnValue(false);
   vi.mocked(listen).mockReset();
+  vi.mocked(getCurrentWindow).mockReset();
 });
 
 afterEach(() => {
@@ -288,5 +294,32 @@ describe("runtime adapters", () => {
       sessionId: "opaque-session",
       data: [0xf0, 0x9f],
     });
+  });
+
+  it("intercepts active-session close requests and can force close afterward", async () => {
+    const unlisten = vi.fn();
+    let closeListener:
+      | ((event: { preventDefault(): void }) => void)
+      | undefined;
+    const onCloseRequested = vi.fn(
+      async (listener: (event: { preventDefault(): void }) => void) => {
+        closeListener = listener;
+        return unlisten;
+      },
+    );
+    vi.mocked(getCurrentWindow).mockReturnValue({
+      onCloseRequested,
+    } as unknown as ReturnType<typeof getCurrentWindow>);
+    vi.mocked(invoke).mockResolvedValue(undefined);
+    const handler = vi.fn(() => true);
+    const preventDefault = vi.fn();
+
+    await tauriRuntime.onCloseRequested?.(handler);
+    closeListener?.({ preventDefault });
+    await tauriRuntime.closeWindow?.();
+
+    expect(handler).toHaveBeenCalledOnce();
+    expect(preventDefault).toHaveBeenCalledOnce();
+    expect(invoke).toHaveBeenCalledWith("close_app_window");
   });
 });

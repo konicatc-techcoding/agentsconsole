@@ -70,6 +70,16 @@ async fn stop_pty_session(
     state.stop(request)
 }
 
+#[tauri::command]
+async fn close_app_window(app: tauri::AppHandle) -> Result<(), CommandError> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| CommandError::new("window_unavailable", "App window is unavailable", 500))?;
+    window.destroy().map_err(|_| {
+        CommandError::new("window_close_failed", "App window could not be closed", 500)
+    })
+}
+
 fn app_data_directory(app: &tauri::AppHandle) -> Result<std::path::PathBuf, StorageError> {
     app.path().app_data_dir().map_err(|_| StorageError {
         code: "storage_unavailable".to_string(),
@@ -127,6 +137,9 @@ async fn write_console_layout(
 pub fn run() {
     let app = tauri::Builder::default()
         .manage(PtySessionEngine::default())
+        .on_page_load(|webview, _payload| {
+            let _ = webview.app_handle().state::<PtySessionEngine>().cleanup();
+        })
         .invoke_handler(tauri::generate_handler![
             discover_providers,
             validate_workspace,
@@ -136,6 +149,7 @@ pub fn run() {
             write_pty_input,
             resize_pty,
             stop_pty_session,
+            close_app_window,
             read_workspace_preferences,
             initialize_workspace_preferences,
             write_workspace_preferences,
