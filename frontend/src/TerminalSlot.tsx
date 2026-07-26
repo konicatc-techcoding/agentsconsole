@@ -310,6 +310,7 @@ export default function TerminalSlot({
           <button
             className="terminal-start-again-button"
             type="button"
+            disabled={startDisabled}
             onClick={onStart}
           >
             Start again

@@ -365,7 +365,7 @@ LOO-11 已完成實作並等待 review：
 
 ## LOO-11 驗證結果
 
-- Frontend tests：47 passed（App 32、runtime 11、TerminalSlot 4）
+- Frontend tests：48 passed（App 33、runtime 11、TerminalSlot 4）
 - Rust tests：38 passed
 - Backend tests：34 passed（另有一則 upstream Starlette TestClient
   deprecation warning）

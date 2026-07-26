@@ -104,6 +104,17 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
       ? !consoleLayoutsEqual(savedConsoleLayout, consoleLayout)
       : false;
 
+  const slotStartDisabled = useCallback(
+    (provider: Provider | null | undefined) =>
+      !layoutReady ||
+      Boolean(layoutError) ||
+      !storageReady ||
+      !provider ||
+      !isAvailable(provider) ||
+      !runtime.startPtySession,
+    [layoutError, layoutReady, runtime.startPtySession, storageReady],
+  );
+
   const refresh = useCallback(async () => {
     setLoading(true);
     setPageError(null);
@@ -321,6 +332,14 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
   const submitLaunch = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!launchTarget || launching || savingDefault || !workspacePath) {
+      return;
+    }
+    if (
+      launchDestination === "slot-1" &&
+      slotStartDisabled(
+        providers.find((provider) => provider.id === launchTarget.id),
+      )
+    ) {
       return;
     }
 
@@ -566,6 +585,11 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
       ? [activePreference.defaultWorkspace]
       : [];
   const modalBusy = launching || savingDefault;
+  const embeddedLaunchDisabled =
+    launchDestination === "slot-1" &&
+    slotStartDisabled(
+      providers.find((provider) => provider.id === launchTarget?.id),
+    );
   const providersById = new Map(
     providers.map((provider) => [provider.id, provider]),
   );
@@ -767,11 +791,7 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                           error={terminalState.error}
                           resetToken={terminalResetToken}
                           startDisabled={
-                            !layoutReady ||
-                            Boolean(layoutError) ||
-                            !storageReady ||
-                            !available ||
-                            !runtime.startPtySession
+                            slotStartDisabled(provider)
                           }
                           runtime={runtime}
                           onStart={() => openLaunch(provider, "slot-1")}
@@ -1078,7 +1098,9 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                 <button
                   className="modal-launch-button"
                   type="submit"
-                  disabled={modalBusy || !workspacePath}
+                  disabled={
+                    modalBusy || !workspacePath || embeddedLaunchDisabled
+                  }
                 >
                   {launching
                     ? "Starting…"

@@ -863,6 +863,7 @@ details code {
 }
 
 .terminal-start-button:disabled,
+.terminal-start-again-button:disabled,
 .terminal-stop-button:disabled {
   border-color: #303847;
   color: #687487;

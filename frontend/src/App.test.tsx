@@ -1190,6 +1190,62 @@ describe("AgentOS Console", () => {
     expect(screen.getByRole("button", { name: "Start again" })).toBeEnabled();
   });
 
+  it("disables retry when Refresh makes the ended Provider unavailable", async () => {
+    let exitHandler: ((event: PtyExitEvent) => void) | undefined;
+    const runtime = mockRuntime({
+      kind: "tauri",
+      onPtyExit: async (handler) => {
+        exitHandler = handler;
+        return () => {};
+      },
+    });
+    runtime.fetchProviders = vi
+      .fn()
+      .mockResolvedValueOnce(providers)
+      .mockResolvedValueOnce(
+        providers.map((provider) =>
+          provider.id === "hermes"
+            ? {
+                ...provider,
+                installed: false,
+                path: null,
+                version: null,
+                error: "Executable not found in PATH",
+              }
+            : provider,
+        ),
+      );
+    const user = userEvent.setup();
+    render(<App runtime={runtime} />);
+
+    await user.click(await screen.findByRole("button", { name: "Start" }));
+    await user.type(
+      screen.getByRole("textbox", { name: "Default workspace path" }),
+      "/workspace",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Start in Slot 1" }),
+    );
+    await screen.findByText("Running");
+    act(() =>
+      exitHandler?.({
+        slotId: "slot-1",
+        sessionId: "session-1",
+        exitCode: 0,
+        reason: "exited",
+      }),
+    );
+    expect(await screen.findByText("Exited (0)")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start again" })).toBeEnabled();
+
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Start again" })).toBeDisabled(),
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   it("requires Stop and Close and keeps the App open when cleanup fails", async () => {
     let closeHandler: (() => boolean) | undefined;
     const stopPty = vi
