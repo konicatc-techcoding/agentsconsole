@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -8,6 +8,9 @@ import type { RuntimeAdapter } from "./runtime/types";
 import type {
   ConsoleLayout,
   Provider,
+  PtyExitEvent,
+  PtyOutputEvent,
+  PtySession,
   WorkspacePreferences,
 } from "./types";
 
@@ -147,6 +150,13 @@ function mockRuntime(options?: {
   savePreferences?: RuntimeAdapter["saveWorkspacePreferences"];
   loadLayout?: () => Promise<ConsoleLayout>;
   saveLayout?: RuntimeAdapter["saveConsoleLayout"];
+  startPty?: RuntimeAdapter["startPtySession"];
+  stopPty?: RuntimeAdapter["stopPtySession"];
+  onPtyOutput?: (handler: (event: PtyOutputEvent) => void) => Promise<() => void>;
+  onPtyExit?: (handler: (event: PtyExitEvent) => void) => Promise<() => void>;
+  onCloseRequested?: RuntimeAdapter["onCloseRequested"];
+  closeWindow?: RuntimeAdapter["closeWindow"];
+  reloadWindow?: RuntimeAdapter["reloadWindow"];
 }): RuntimeAdapter {
   const runtime: RuntimeAdapter = {
     kind: options?.kind ?? "web",
@@ -170,6 +180,32 @@ function mockRuntime(options?: {
     runtime.saveConsoleLayout =
       options?.saveLayout ??
       vi.fn(async (layout: ConsoleLayout) => layout);
+    runtime.startPtySession =
+      options?.startPty ??
+      vi.fn<NonNullable<RuntimeAdapter["startPtySession"]>>(
+        async (request) => ({
+          slotId: "slot-1",
+          sessionId: "session-1",
+          providerId: request.providerId,
+          workspacePath: request.workspacePath,
+          sessionMode: request.sessionMode,
+        }),
+      );
+    runtime.queryPtySession = vi.fn();
+    runtime.writePtyInput = vi.fn().mockResolvedValue(undefined);
+    runtime.resizePty = vi.fn().mockResolvedValue(undefined);
+    runtime.stopPtySession =
+      options?.stopPty ?? vi.fn().mockResolvedValue(undefined);
+    runtime.onPtyOutput =
+      options?.onPtyOutput ?? vi.fn().mockResolvedValue(() => {});
+    runtime.onPtyExit =
+      options?.onPtyExit ?? vi.fn().mockResolvedValue(() => {});
+    runtime.onCloseRequested =
+      options?.onCloseRequested ?? vi.fn().mockResolvedValue(() => {});
+    runtime.closeWindow =
+      options?.closeWindow ?? vi.fn().mockResolvedValue(undefined);
+    runtime.reloadWindow =
+      options?.reloadWindow ?? vi.fn().mockResolvedValue(undefined);
   }
   return runtime;
 }
@@ -714,8 +750,9 @@ describe("AgentOS Console", () => {
     expect(screen.queryByText("CLI PROVIDERS")).not.toBeInTheDocument();
     expect(screen.getByLabelText("CLI providers")).toBeInTheDocument();
     expect(await screen.findAllByText("Embedded terminal coming next")).toHaveLength(
-      4,
+      3,
     );
+    expect(screen.getByLabelText("Slot 1 terminal")).toBeInTheDocument();
     expect(screen.getByLabelText("Slot 1 provider")).toHaveValue("hermes");
     expect(screen.getByLabelText("Slot 2 provider")).toHaveValue("codex");
     expect(screen.getByLabelText("Slot 3 provider")).toHaveValue("claude");
@@ -946,14 +983,258 @@ describe("AgentOS Console", () => {
       screen.getByRole("textbox", { name: "Default workspace path" }),
       "/workspace",
     );
-    await user.click(screen.getByRole("button", { name: "Start" }));
+    await user.click(
+      screen
+        .getByRole("dialog")
+        .querySelector<HTMLButtonElement>('button[type="submit"]')!,
+    );
 
     expect(
       await screen.findByText("Codex CLI launched in /workspace"),
     ).toBeInTheDocument();
-    expect(screen.getAllByText("Embedded terminal coming next")).toHaveLength(4);
+    expect(screen.getAllByText("Embedded terminal coming next")).toHaveLength(3);
     expect(screen.queryByText("Running")).not.toBeInTheDocument();
     expect(screen.queryByText("Launched")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Slot 2 provider")).toHaveValue("codex");
+  });
+
+  it("starts the unsaved Slot 1 provider without saving layout and persists history", async () => {
+    const startPty = vi.fn<
+      NonNullable<RuntimeAdapter["startPtySession"]>
+    >(async (request) => ({
+      slotId: "slot-1",
+      sessionId: "session-codex",
+      providerId: request.providerId,
+      workspacePath: `${request.workspacePath}/new-project`,
+      sessionMode: request.sessionMode,
+    }));
+    const runtime = mockRuntime({ kind: "tauri", startPty });
+    const user = userEvent.setup();
+    render(<App runtime={runtime} />);
+
+    const slotOne = await screen.findByLabelText("Slot 1 provider");
+    await user.selectOptions(slotOne, "codex");
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Start" }));
+
+    expect(
+      screen.getByRole("button", { name: "Start in Slot 1" }),
+    ).toBeInTheDocument();
+    await user.type(
+      screen.getByRole("textbox", { name: "Default workspace path" }),
+      "/workspace",
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "New folder (optional)" }),
+      "new-project",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Start in Slot 1" }),
+    );
+
+    expect(await screen.findByText("Running")).toBeInTheDocument();
+    expect(startPty).toHaveBeenCalledWith({
+      slotId: "slot-1",
+      providerId: "codex",
+      workspacePath: "/workspace",
+      sessionMode: "new",
+      newFolder: "new-project",
+      rows: 24,
+      columns: 80,
+    });
+    expect(runtime.saveConsoleLayout).not.toHaveBeenCalled();
+    expect(runtime.saveWorkspacePreferences).toHaveBeenCalledWith(
+      {
+        codex: {
+          defaultWorkspace: "",
+          recentWorkspaces: ["/workspace/new-project"],
+        },
+      },
+      "history",
+    );
+    expect(slotOne).toBeDisabled();
+    expect(screen.getByLabelText("Slot 2 provider")).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Save Layout" })).toBeEnabled();
+  });
+
+  it("shows Starting and a retryable Error without creating fake Running state", async () => {
+    let rejectStart: ((error: Error) => void) | undefined;
+    const startPending = new Promise<PtySession>((_resolve, reject) => {
+      rejectStart = reject;
+    });
+    const runtime = mockRuntime({
+      kind: "tauri",
+      startPty: vi.fn(() => startPending),
+    });
+    const user = userEvent.setup();
+    render(<App runtime={runtime} />);
+
+    await user.click(await screen.findByRole("button", { name: "Start" }));
+    await user.type(
+      screen.getByRole("textbox", { name: "Default workspace path" }),
+      "/workspace",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Start in Slot 1" }),
+    );
+
+    expect(screen.getByText("Starting")).toBeInTheDocument();
+    expect(screen.getByLabelText("Slot 1 provider")).toBeDisabled();
+    rejectStart?.(new Error("Provider could not start"));
+    await waitFor(() => expect(screen.getByText("Error")).toBeInTheDocument());
+    expect(screen.queryByText("Running")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Provider could not start").length).toBeGreaterThan(
+      0,
+    );
+    expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
+    expect(screen.getByLabelText("Slot 1 provider")).toBeEnabled();
+  });
+
+  it("keeps Refresh, other-slot Save, and external Launch independent while running", async () => {
+    const runtime = mockRuntime({ kind: "tauri" });
+    const user = userEvent.setup();
+    render(<App runtime={runtime} />);
+
+    await user.click(await screen.findByRole("button", { name: "Start" }));
+    await user.type(
+      screen.getByRole("textbox", { name: "Default workspace path" }),
+      "/workspace",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Start in Slot 1" }),
+    );
+    expect(await screen.findByText("Running")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    expect(await screen.findByText("Running")).toBeInTheDocument();
+    expect(runtime.startPtySession).toHaveBeenCalledTimes(1);
+
+    await user.selectOptions(screen.getByLabelText("Slot 2 provider"), "hermes");
+    await user.click(screen.getByRole("button", { name: "Save Layout" }));
+    await waitFor(() =>
+      expect(runtime.saveConsoleLayout).toHaveBeenCalledOnce(),
+    );
+    expect(screen.getByText("Running")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Launch Hermes CLI" }));
+    expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
+    expect(screen.getByText("Running")).toBeInTheDocument();
+  });
+
+  it("stops cleanly, preserves the ended state, and resets on provider change", async () => {
+    const runtime = mockRuntime({ kind: "tauri" });
+    const user = userEvent.setup();
+    render(<App runtime={runtime} />);
+
+    await user.click(await screen.findByRole("button", { name: "Start" }));
+    await user.type(
+      screen.getByRole("textbox", { name: "Default workspace path" }),
+      "/workspace",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Start in Slot 1" }),
+    );
+    await user.click(await screen.findByRole("button", { name: "Stop" }));
+
+    expect(await screen.findByText("Stopped")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start again" })).toBeEnabled();
+    expect(runtime.stopPtySession).toHaveBeenCalledWith({
+      slotId: "slot-1",
+      sessionId: "session-1",
+    });
+    await user.selectOptions(screen.getByLabelText("Slot 1 provider"), "codex");
+    expect(screen.getByText("Idle")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start" })).toBeEnabled();
+  });
+
+  it("shows natural exit state and ignores stale exit events", async () => {
+    let exitHandler: ((event: PtyExitEvent) => void) | undefined;
+    const runtime = mockRuntime({
+      kind: "tauri",
+      onPtyExit: async (handler) => {
+        exitHandler = handler;
+        return () => {};
+      },
+    });
+    const user = userEvent.setup();
+    render(<App runtime={runtime} />);
+
+    await user.click(await screen.findByRole("button", { name: "Start" }));
+    await user.type(
+      screen.getByRole("textbox", { name: "Default workspace path" }),
+      "/workspace",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Start in Slot 1" }),
+    );
+    await screen.findByText("Running");
+
+    act(() =>
+      exitHandler?.({
+        slotId: "slot-1",
+        sessionId: "stale-session",
+        exitCode: 1,
+        reason: "exited",
+      }),
+    );
+    expect(screen.getByText("Running")).toBeInTheDocument();
+    act(() =>
+      exitHandler?.({
+        slotId: "slot-1",
+        sessionId: "session-1",
+        exitCode: 0,
+        reason: "exited",
+      }),
+    );
+    expect(await screen.findByText("Exited (0)")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start again" })).toBeEnabled();
+  });
+
+  it("requires Stop and Close and keeps the App open when cleanup fails", async () => {
+    let closeHandler: (() => boolean) | undefined;
+    const stopPty = vi
+      .fn<NonNullable<RuntimeAdapter["stopPtySession"]>>()
+      .mockRejectedValueOnce(new Error("PTY process tree could not be terminated"))
+      .mockResolvedValueOnce(undefined);
+    const closeWindow = vi.fn().mockResolvedValue(undefined);
+    const runtime = mockRuntime({
+      kind: "tauri",
+      stopPty,
+      closeWindow,
+      onCloseRequested: async (handler) => {
+        closeHandler = handler;
+        return () => {};
+      },
+    });
+    const user = userEvent.setup();
+    render(<App runtime={runtime} />);
+
+    await user.click(await screen.findByRole("button", { name: "Start" }));
+    await user.type(
+      screen.getByRole("textbox", { name: "Default workspace path" }),
+      "/workspace",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Start in Slot 1" }),
+    );
+    await screen.findByText("Running");
+    await waitFor(() => expect(closeHandler).toBeDefined());
+
+    act(() => expect(closeHandler?.()).toBe(true));
+    expect(
+      screen.getByRole("heading", { name: "Slot 1 is running" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Stop and Close" }));
+    await waitFor(() =>
+      expect(
+        screen
+          .getAllByText("PTY process tree could not be terminated")
+          .some((element) => element.classList.contains("modal-error")),
+      ).toBe(true),
+    );
+    expect(closeWindow).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Stop and Close" }));
+    await waitFor(() => expect(closeWindow).toHaveBeenCalledOnce());
   });
 });

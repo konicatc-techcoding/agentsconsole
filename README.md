@@ -117,11 +117,10 @@ validates them. If Terminal launches but the history write fails, the launch
 remains successful and the app displays a separate history warning.
 
 Tauri mode also uses a Console-oriented shell with a compact title, a fixed
-Provider sidebar, and four layout slots. The visible slots remain placeholders
-and sidebar launches still open in Terminal.app. The native backend now
-contains a Slot 1-only embedded PTY foundation for the next UI stage, but the
-current interface does not start or render that PTY. Slot assignments are
-stored separately in
+Provider sidebar, and four layout slots. Slot 1 contains an embedded xterm
+terminal backed by the native PTY session engine; Slots 2 through 4 remain
+placeholders. Sidebar launches continue to open independently in Terminal.app.
+Slot assignments are stored separately in
 `console-layout.json` under the same App Data directory:
 
 - A missing file is initialized with Hermes, Codex, Claude, and Antigravity in
@@ -130,21 +129,32 @@ stored separately in
   fixed identity.
 - Changing a slot creates an in-app draft. Use `Save Layout` to persist it;
   `Refresh` remains disabled until the draft is saved or manually reverted.
+- An unsaved Slot 1 Provider may still be started in the embedded terminal.
+  Starting it does not save the draft layout.
 - An invalid layout file is preserved and reported with its full path. Fix,
   rename, or delete it outside the app, then use `Refresh`.
 
 Web mode keeps the existing Provider card page and never reads, writes, or
 synchronizes `console-layout.json`.
 
-The embedded PTY foundation is exposed only through fixed typed Tauri
-commands. It accepts Slot 1, one of the four registered Providers, the existing
-New/Continue mode, a validated workspace, and terminal rows/columns. It does
-not accept an executable, shell command, custom arguments, environment
-settings, or permission-bypass flags. At most one embedded session can run;
-input and output remain binary-safe, resize is supported, stale session IDs
-are rejected, and Stop or app shutdown terminates the PTY process tree. Output
-and process identifiers are not persisted. Web mode has no PTY commands, and
-the existing Terminal.app launcher remains independent.
+The embedded terminal reuses the existing New/Continue workspace dialog and
+starts the selected Slot 1 Provider with `Start in Slot 1`. It renders ordered
+ANSI output, sends raw keyboard input and control sequences, supports
+Command+C/Command+V, fits to window resizes, and keeps 5,000 lines of
+scrollback. Its lifecycle is shown as Idle, Starting, Running, Stopped, Exited,
+or Error. Stop terminates the PTY process tree while preserving visible output;
+Start again opens the session dialog again.
+
+The PTY remains exposed only through fixed typed Tauri commands. It accepts
+Slot 1, one of the four registered Providers, the existing New/Continue mode,
+a validated workspace, and terminal rows/columns. It does not accept an
+executable, shell command, custom arguments, environment settings, or
+permission-bypass flags. At most one embedded session can run; input and
+output remain binary-safe, resize is supported, stale session IDs are rejected,
+and Stop or app shutdown terminates the PTY process tree. Closing or reloading
+while a session is active requires confirmation and cleanup. Output and process
+identifiers are not persisted, so a reopened App starts at Idle. Web mode has
+no PTY commands, and the existing Terminal.app launcher remains independent.
 
 Both runtimes accept only the fixed provider commands documented by the UI.
 They reject relative, missing, file, and filesystem-root base workspaces. New

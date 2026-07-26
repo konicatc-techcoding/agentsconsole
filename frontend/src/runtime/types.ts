@@ -18,6 +18,7 @@ import type {
 } from "../types";
 
 export type RuntimeUnlisten = () => void;
+export type CloseRequestHandler = () => boolean;
 
 export interface RuntimeAdapter {
   kind: RuntimeKind;
@@ -40,4 +41,9 @@ export interface RuntimeAdapter {
     handler: (event: PtyOutputEvent) => void,
   ): Promise<RuntimeUnlisten>;
   onPtyExit?(handler: (event: PtyExitEvent) => void): Promise<RuntimeUnlisten>;
+  onCloseRequested?(
+    handler: CloseRequestHandler,
+  ): Promise<RuntimeUnlisten>;
+  closeWindow?(): Promise<void>;
+  reloadWindow?(): Promise<void>;
 }

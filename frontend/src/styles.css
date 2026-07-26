@@ -804,6 +804,138 @@ details code {
   font-size: 0.72rem;
 }
 
+.terminal-slot {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: #080c12;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.terminal-viewport {
+  min-width: 0;
+  min-height: 0;
+  padding: 6px 7px 2px;
+  overflow: hidden;
+}
+
+.terminal-viewport .xterm {
+  height: 100%;
+}
+
+.terminal-hidden {
+  visibility: hidden;
+}
+
+.terminal-empty {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  inset: 0 0 35px;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  padding: 18px;
+  text-align: center;
+  background: linear-gradient(145deg, #111720, #0c1118);
+}
+
+.terminal-empty .availability {
+  justify-self: center;
+}
+
+.terminal-start-button,
+.terminal-start-again-button,
+.terminal-stop-button {
+  padding: 6px 10px;
+  border: 1px solid #526bff;
+  border-radius: 7px;
+  color: #e5eaff;
+  font: inherit;
+  background: #1a2349;
+  cursor: pointer;
+}
+
+.terminal-start-button {
+  margin-top: 4px;
+}
+
+.terminal-start-button:disabled,
+.terminal-stop-button:disabled {
+  border-color: #303847;
+  color: #687487;
+  background: #151a22;
+  cursor: not-allowed;
+}
+
+.terminal-stop-button {
+  margin-left: auto;
+  border-color: #7a3f4d;
+  color: #ffd5db;
+  background: #321821;
+}
+
+.terminal-start-again-button {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.terminal-starting {
+  color: #a9b9d6;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.76rem;
+}
+
+.terminal-statusbar {
+  z-index: 2;
+  display: flex;
+  min-width: 0;
+  min-height: 35px;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 8px;
+  border-top: 1px solid #252d3a;
+  color: #8491a5;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.65rem;
+  background: #0d131c;
+}
+
+.terminal-statusbar > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.terminal-phase {
+  flex: 0 0 auto;
+  color: #9ba8bc;
+}
+
+.terminal-phase-running {
+  color: #5ce1a4;
+}
+
+.terminal-phase-stopped,
+.terminal-phase-exited {
+  color: #f0c877;
+}
+
+.terminal-phase-error,
+.terminal-error {
+  color: #f1a1aa;
+}
+
+.terminal-error {
+  flex: 1;
+}
+
+.close-confirmation {
+  width: min(460px, 100%);
+}
+
 @media (max-width: 760px) {
   .shell {
     width: min(100% - 28px, 1180px);

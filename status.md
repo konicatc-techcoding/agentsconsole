@@ -1,30 +1,39 @@
 # AgentOS Console — 工作交接狀態
 
-最後更新：2026-07-25
+最後更新：2026-07-26
 
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md。LOO-10 的 Slot 1 PTY foundation 已實作完成並進入 review；
-下一步先處理 LOO-10 review，不要提前實作被它阻擋的 LOO-11 terminal UI。
+請先讀取 status.md。LOO-11 的 Slot 1 embedded terminal UI 已實作完成；
+下一步使用 `$finn-review` 檢查 LOO-11 PR，不要直接 merge。
 ```
 
-LOO-10 已在 Tauri Rust backend 建立只服務 Slot 1 的單一 embedded PTY
-session engine，並加入 typed frontend runtime boundary；目前 Console Slot
-仍維持 placeholder，外部 Terminal.app Launch 與 Web runtime 不變。
+LOO-11 已把 LOO-10 的 PTY engine 接到 Tauri Slot 1 xterm UI，支援完整
+Start／Stop／retry、clipboard、resize 與關閉清理；Slot 2–4 placeholder、
+外部 Terminal.app Launch 與 Web runtime 維持不變。
 
 ## Source of truth
 
 - Workspace：`/Users/zackchiu/CodexCLI/agentsconsole`
-- Git branch：`LOO-10-slot-1-pty-session-engine`
-- 最新合併基線：`95d61ff LOO-9 Add Tauri console slot layout (#5)`
-- 目前 Linear issue：`LOO-10 建立 Slot 1 embedded terminal 的 Rust PTY session engine`
+- Git branch：`LOO-11-slot-1-terminal-ui`
+- 最新合併基線：`7b9565d LOO-10 Add Slot 1 PTY session engine (#6)`
+- 目前 Linear issue：`LOO-11 建立 Slot 1 embedded terminal UI 與完整互動生命週期`
+- LOO-11 URL：<https://linear.app/loopent/issue/LOO-11/建立-slot-1-embedded-terminal-ui-與完整互動生命週期>
+- LOO-11 狀態：`In Progress`
+- LOO-11 label：`agent-ready`
+- LOO-11 assignee：Zack Chiu
+- LOO-11 relation：`blocked by LOO-10`；LOO-10 已 Done
+- 最近完成的 Linear issue：`LOO-10 建立 Slot 1 embedded terminal 的 Rust PTY session engine`
 - LOO-10 URL：<https://linear.app/loopent/issue/LOO-10/建立-slot-1-embedded-terminal-的-rust-pty-session-engine>
-- LOO-10 狀態：`In Review`
+- LOO-10 狀態：`Done`
 - LOO-10 label：`agent-ready`
 - LOO-10 assignee：Zack Chiu
 - LOO-10 relation：`blocked by LOO-9`；LOO-9 已 Done；LOO-10 blocks LOO-11
 - LOO-10 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/6>
+- PR #6 狀態：Merged
+- PR #6 merge commit：`7b9565d551a8b78d8fc23ed78ace8f4fbbd219a5`
+- PR #6 review：`loop-approved`
 - 最近完成的 Linear issue：`LOO-9 建立 Tauri Console 佈局與可保存的四 Slot Provider 配置`
 - LOO-9 URL：<https://linear.app/loopent/issue/LOO-9/建立-tauri-console-佈局與可保存的四-slot-provider-配置>
 - LOO-9 狀態：`Done`
@@ -292,7 +301,7 @@ LOO-9 已完成實作，PR #5 已通過 `$finn-review` 並合併：
 
 ## LOO-10 Slot 1 PTY foundation
 
-LOO-10 已完成實作並等待 review：
+LOO-10 已完成並透過 PR #6 合併：
 
 - Tauri Rust backend 新增只接受固定 `slot-1` 的 PTY session engine；同時間
   最多一個 active session，session ID 為 opaque 且 stale ID 無法操作新
@@ -312,8 +321,8 @@ LOO-10 已完成實作並等待 review：
 - frontend event 無法送達或 App backend 結束時執行 cleanup，避免 CLI 成為
   orphan；明確 Stop 的 cleanup failure 會回傳 structured error。
 - frontend 只新增 typed Tauri runtime boundary 與 output/exit subscription；
-  Web runtime 不提供 PTY，Console Slot 尚未加入 xterm、Start/Stop UI、
-  clipboard 或 close confirmation。
+  Web runtime 不提供 PTY；xterm、Start/Stop UI、clipboard 與 close
+  confirmation 由後續 LOO-11 實作。
 - Start 不寫入 workspace preferences、recent workspaces、console layout、
   Markdown、terminal output、process ID 或 native CLI session ID。
 - capability 仍只有 `core:default`；沒有新增 generic shell 或 filesystem
@@ -329,9 +338,47 @@ LOO-10 已完成實作並等待 review：
 - Unsigned Tauri macOS `.app` build：passed
 - `cargo fmt --all --check`：passed
 - `git diff --check`：passed
-- 真實 Tauri UI smoke：未執行；本機在驗證時處於鎖定狀態，Computer Use
-  無法自動解鎖。未啟動任何真實 Provider CLI；runtime regression 與 PTY
-  lifecycle 由 frontend/Rust fake tests 覆蓋。
+- 真實 Tauri UI smoke：LOO-10 階段未執行；其 runtime regression 與 PTY
+  lifecycle 由 frontend/Rust fake tests 覆蓋，LOO-11 已補上真實 App smoke。
+
+## LOO-11 Slot 1 embedded terminal UI
+
+LOO-11 已完成實作並等待 review：
+
+- Tauri Slot 1 使用 `@xterm/xterm` 與 FitAddon 呈現真實 embedded terminal；
+  Slot 2–4 仍為 placeholder，Web provider card 頁不變。
+- Slot 1 沿用既有 Provider、New／Continue、default workspace、Save、recent
+  workspace 與安全 New Folder 規則；未保存的 Slot 1 Provider draft 可直接
+  Start，但不會自動保存 layout。
+- ordered binary output、raw keyboard/control input、Ctrl+C、Command+C／V、
+  5,000 行 scrollback 與視窗 resize 均已接到 typed PTY runtime。
+- 狀態包含 Idle、Starting、Running、Stopped、Exited、Error；Stop 後保留
+  output，Start again 會重新開啟 session dialog。
+- 執行期間只鎖定 Slot 1 Provider selector；sidebar external Launch、Refresh、
+  其他 Slot 與 Save Layout 維持各自既有規則。
+- 關閉或 Command+R reload 遇到 active session 時先要求確認並停止 process
+  tree；unexpected WebView reload 與 backend shutdown 也會清理。重新開啟
+  App 不恢復 terminal output、process ID 或 native session。
+- capability 維持 `core:default`；關閉 App 透過固定 Rust command 完成，沒有
+  新增 generic window、shell 或 filesystem permission。
+
+## LOO-11 驗證結果
+
+- Frontend tests：47 passed（App 32、runtime 11、TerminalSlot 4）
+- Rust tests：38 passed
+- Backend tests：34 passed（另有一則 upstream Starlette TestClient
+  deprecation warning）
+- Frontend production build：passed（xterm 使主 chunk 產生非阻擋的
+  500 kB size warning）
+- Unsigned Tauri macOS `.app` build：passed
+- `cargo fmt --all --check`：passed
+- `git diff --check`：passed
+- 真實 Tauri App smoke：
+  - 未保存的 Codex Slot 1 draft 可用既有 workspace 啟動，ANSI UI 正常
+  - 真實 Codex prompt 輸入／輸出、Ctrl+C、Command+C／V 與 resize 正常
+  - Stop、自然 exit、Start again、Continue recent workspace 與 output 保留正常
+  - 執行中關閉會確認；`Stop and Close` 後 App 與 CLI child 均消失
+  - 重開 App 為乾淨 Idle，沒有恢復舊 output 或 process
 
 ## 本機預覽方式
 
@@ -355,10 +402,10 @@ npm run dev
 
 ## 接續流程
 
-1. 使用 `$finn-review` 檢查 LOO-10 PR 與 required checks；不要直接 merge。
-2. 使用者確認並合併 LOO-10 後，同步 `main`、Linear 與本檔完成狀態。
-3. LOO-10 Done 後再檢查已建立且被其阻擋的 LOO-11；由使用者明確加入
-   `agent-ready` 後，才使用 `$finn-build` 實作 terminal UI。
+1. 使用 `$finn-review` 檢查 LOO-11 PR 與 required checks；不要直接 merge。
+2. 若 review 回傳 changes-requested，使用 `$finn-build` 修正同一 PR。
+3. 使用者確認並合併 LOO-11 後，同步 `main`、Linear 與本檔完成狀態，再
+   規格化後續 Slot 2–4 terminal UI。
 
 ## 本檔注意事項
 

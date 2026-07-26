@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import type {
   ConsoleLayout,
@@ -187,5 +188,25 @@ export const tauriRuntime: RuntimeAdapter = {
     return listen<PtyExitEvent>("pty-exit", ({ payload }) => {
       handler(payload);
     });
+  },
+
+  async onCloseRequested(handler: () => boolean): Promise<() => void> {
+    return getCurrentWindow().onCloseRequested((event) => {
+      if (handler()) {
+        event.preventDefault();
+      }
+    });
+  },
+
+  async closeWindow(): Promise<void> {
+    try {
+      await invoke("close_app_window");
+    } catch (error) {
+      throw commandError(error, "App window could not be closed");
+    }
+  },
+
+  async reloadWindow(): Promise<void> {
+    window.location.reload();
   },
 };
