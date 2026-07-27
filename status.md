@@ -5,11 +5,12 @@
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md。LOO-12 至 LOO-18 已依序合併；四個 Slot 已完成
+請先讀取 status.md。LOO-12 至 LOO-19 已依序合併；四個 Slot 已完成
 embedded terminal rollout、自適應版面、Session 顯示名稱、全域 Stop All、
-status.md handoff、Slot 注意力指示與 provider 專屬色標題列。Finn-loop 三個
-skill 已安裝於 .claude/skills，綁定 Linear team LOO。下一步完成 README／
-status 文件 commit、push 後，執行 /finn-spec 建立下一個規格。
+status.md handoff、Slot 注意力指示與 provider 專屬色標題列，CI 也已補上
+Rust 測試。Finn-loop 三個 skill 已安裝於 .claude/skills，綁定 Linear team
+LOO。下一步完成 README／status 文件 commit、push 後，執行 /finn-spec
+建立下一個規格。
 ```
 
 LOO-12 將 PTY engine 擴展為最多四個獨立 session 並啟用 Slot 2；
@@ -28,6 +29,9 @@ LOO-17 是第一個完全由該流程產出的 issue 與 PR。
 LOO-18 讓每格終端標題列以 provider 專屬色標示：15% 透明度底色加 4px 左側
 強邊，顏色跟隨目前選取的 provider，並在 `:root` 首次引入 CSS 自訂屬性作為
 唯一色彩來源。
+LOO-19 在 CI 新增 `rust` job，補上 `src-tauri` 一直沒有的自動化覆蓋。合併後
+已由人工把 `rust` 加入 `main` 的 required status checks，Rust 測試失敗自此
+會實際擋下合併。
 
 ## Source of truth
 
@@ -42,12 +46,26 @@ LOO-18 讓每格終端標題列以 provider 專屬色標示：15% 透明度底�
   `status.md` 為共用追蹤檔案，任一邊的修改合併後都會影響另一邊；同一個
   分支無法同時在兩個 worktree checkout，切換開發環境時先合併回 `main`，
   再於另一個 worktree `git pull`。
-- 最新合併基線：`16f06b8 feat: color console slot headers by provider (#18)`
+- 最新合併基線：`2ce988f ci: add rust test job (#20)`
 - Finn-loop：`.claude/skills` 已安裝 finn-spec／finn-build／finn-review，
   綁定 Linear team `LOO`；GitHub labels `loop-approved`、
   `loop-changes-requested`、`needs-human-review` 均已建立
+- `main` required status checks：`smoke`（ubuntu-latest，backend 與 frontend）
+  與 `rust`（macos-latest，`cargo fmt --all --check` 與 `cargo test`），
+  `strict` 為 true，即合併前分支必須為最新
 - 目前 Linear issue：無；下一步使用 `/finn-spec` 建立新規格
-- 最近完成的 Linear issue：`LOO-18 讓每格終端標題列以 provider 專屬色標示`
+- 最近完成的 Linear issue：`LOO-19 在 CI 加入 Rust 測試 job，補上 src-tauri 的自動化覆蓋`
+- LOO-19 URL：<https://linear.app/loopent/issue/LOO-19/在-ci-加入-rust-測試-job補上-src-tauri-的自動化覆蓋>
+- LOO-19 狀態：`Done`
+- LOO-19 label：`agent-ready`
+- LOO-19 assignee：Zack Chiu
+- LOO-19 blocker：無
+- LOO-19 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/20>
+- PR #20 狀態：Merged
+- PR #20 merge commit：`2ce988f`
+- PR #20 review：`loop-approved`（由 `finn-review` 產生）
+- PR #20 required check：`smoke` — `SUCCESS`；`rust` — `SUCCESS`
+- 前一個完成的 Linear issue：`LOO-18 讓每格終端標題列以 provider 專屬色標示`
 - LOO-18 URL：<https://linear.app/loopent/issue/LOO-18/讓每格終端標題列以-provider-專屬色標示>
 - LOO-18 狀態：`Done`
 - LOO-18 label：`agent-ready`
@@ -651,6 +669,47 @@ LOO-18 已完成並透過 PR #18 合併，同樣由 `/finn-spec` → `/finn-buil
   測試覆蓋
 - 說明：jsdom 不計算 `color-mix`，自動化測試只能驗證 `data-provider-id`
   是否正確對應，顏色的實際呈現必須在真實 WebView 確認
+
+## LOO-19 CI Rust 覆蓋
+
+LOO-19 已完成並透過 PR #20 合併，由 `/finn-spec` → `/finn-build` →
+`/finn-review` 全程產出：
+
+- `.github/workflows/finn-loop-smoke.yml` 新增與 `smoke` 並行的 `rust` job，
+  `runs-on: macos-latest`，沿用既有的 `pull_request` 與 push 到 `main` 觸發。
+- 以官方 rustup 安裝 stable toolchain 並補上 `rustfmt` component；
+  `src-tauri/rust-toolchain.toml` 只指定 channel，未列 component，因此
+  workflow 明確安裝是必要的。
+- `actions/cache@v4` 快取 `~/.cargo/registry`、`~/.cargo/git` 與
+  `src-tauri/target`，key 以 `src-tauri/Cargo.lock` 的 hash 組成並附
+  `restore-keys` fallback。
+- 在 `src-tauri` 依序執行 `cargo fmt --all --check` 與 `cargo test`。
+- workflow 內沒有任何 `paths`／`paths-ignore`。這是刻意的：required check
+  若因過濾條件而未執行，GitHub 會判定為永久 pending，反而鎖死所有未觸及
+  Rust 的 PR。
+- 既有 `smoke` job 完全未動，仍在 `ubuntu-latest` 執行 backend 與 frontend。
+- 未修改任何 Rust 程式碼或測試，變更僅限 workflow 檔案。
+
+合併後已由人工把 `rust` 加入 `main` 的 required status checks。在那之前
+`finn-review` 只讀得到 `smoke`，新 job 綠或紅都不會影響合併判定；補上之後
+Rust 測試失敗會成為 `[CI]` must-fix，進入 Finn-loop 的自動修復迴圈。
+
+## LOO-19 驗證結果
+
+- Linear：LOO-19 為 `Done`
+- GitHub：PR #20 已合併，`smoke` 與 `rust` 兩個 required check 皆為 `SUCCESS`
+- `rust` job：於 `macos-latest` 執行，`cargo test` 輸出 `40 passed; 0 failed`。
+  **這是這 40 個測試首次在本機 macOS 以外的環境通過**，先前規格中標記的
+  「從未在其他環境執行過」風險已排除
+- `smoke` job：36 秒；`rust` job：1 分 52 秒（首次冷建置，無快取可命中）
+- 格式檢查負面驗證：builder 於本機暫時在 `src-tauri/src/providers.rs` 插入
+  錯誤格式後確認 `cargo fmt --all --check` 回傳非零，再還原
+- branch protection：`required_status_checks.contexts` 已為
+  `["smoke", "rust"]`，`strict` 為 true
+- `finn-review` 提出兩項 Should fix，均未阻擋合併，尚未建立追蹤 issue：
+  快取 key 未包含 rustc 版本（stable 滾動更新後會退化成「還原無用 target
+  加完整重建」且不寫回新 cache）；`cargo` 指令未加 `--locked`（lockfile 與
+  `Cargo.toml` 不同步時 CI 不會失敗）
 
 ## 本機預覽方式
 
