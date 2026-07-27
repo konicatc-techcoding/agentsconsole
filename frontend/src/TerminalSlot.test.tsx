@@ -143,17 +143,17 @@ describe("TerminalSlot", () => {
     const { runtime, emitOutput, emitExit } = terminalRuntime();
     const onExit = vi.fn();
     renderTerminal(runtime, {
-      slotId: "slot-2",
-      session: { ...session, slotId: "slot-2" },
+      slotId: "slot-3",
+      session: { ...session, slotId: "slot-3" },
       onExit,
     });
     const terminal = xterm.FakeTerminal.instances[0];
 
-    act(() => terminal.dataHandler?.("slot-two"));
+    act(() => terminal.dataHandler?.("slot-three"));
     expect(runtime.writePtyInput).toHaveBeenCalledWith({
-      slotId: "slot-2",
+      slotId: "slot-3",
       sessionId: session.sessionId,
-      data: Array.from(new TextEncoder().encode("slot-two")),
+      data: Array.from(new TextEncoder().encode("slot-three")),
     });
 
     act(() => {
@@ -163,7 +163,7 @@ describe("TerminalSlot", () => {
         data: [49],
       });
       emitOutput({
-        slotId: "slot-2",
+        slotId: "slot-3",
         sessionId: session.sessionId,
         data: [50],
       });
@@ -174,7 +174,7 @@ describe("TerminalSlot", () => {
         reason: "exited",
       });
       emitExit({
-        slotId: "slot-2",
+        slotId: "slot-3",
         sessionId: session.sessionId,
         exitCode: 0,
         reason: "exited",
@@ -184,7 +184,7 @@ describe("TerminalSlot", () => {
     expect(terminal.writes.map((value) => Array.from(value))).toEqual([[50]]);
     expect(onExit).toHaveBeenCalledOnce();
     expect(onExit).toHaveBeenCalledWith(
-      expect.objectContaining({ slotId: "slot-2" }),
+      expect.objectContaining({ slotId: "slot-3" }),
     );
   });
 
