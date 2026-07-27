@@ -28,10 +28,10 @@ interface AppProps {
   runtime?: RuntimeAdapter;
 }
 
-type EmbeddedSlotId = "slot-1" | "slot-2";
+type EmbeddedSlotId = "slot-1" | "slot-2" | "slot-3";
 type LaunchDestination = "external" | EmbeddedSlotId;
 type WindowAction = "close" | "reload";
-const EMBEDDED_SLOT_IDS: EmbeddedSlotId[] = ["slot-1", "slot-2"];
+const EMBEDDED_SLOT_IDS: EmbeddedSlotId[] = ["slot-1", "slot-2", "slot-3"];
 
 interface TerminalState {
   phase: TerminalPhase;
@@ -51,6 +51,7 @@ function initialTerminalStates(): Record<EmbeddedSlotId, TerminalState> {
   return {
     "slot-1": { ...IDLE_TERMINAL },
     "slot-2": { ...IDLE_TERMINAL },
+    "slot-3": { ...IDLE_TERMINAL },
   };
 }
 
@@ -58,13 +59,16 @@ function initialTerminalSizes() {
   return {
     "slot-1": { rows: 24, columns: 80 },
     "slot-2": { rows: 24, columns: 80 },
+    "slot-3": { rows: 24, columns: 80 },
   };
 }
 
 function isEmbeddedSlot(
   slotId: ConsoleSlotId | LaunchDestination,
 ): slotId is EmbeddedSlotId {
-  return slotId === "slot-1" || slotId === "slot-2";
+  return (
+    slotId === "slot-1" || slotId === "slot-2" || slotId === "slot-3"
+  );
 }
 
 function isActiveTerminal(state: TerminalState): boolean {
@@ -115,6 +119,7 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
   const [terminalResetTokens, setTerminalResetTokens] = useState({
     "slot-1": 0,
     "slot-2": 0,
+    "slot-3": 0,
   });
   const [terminalSizes, setTerminalSizes] = useState(initialTerminalSizes);
   const [windowAction, setWindowAction] = useState<WindowAction | null>(null);
@@ -125,12 +130,14 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
   const pendingExitRefs = useRef<Record<EmbeddedSlotId, PtyExitEvent | null>>({
     "slot-1": null,
     "slot-2": null,
+    "slot-3": null,
   });
   const pendingStartRefs = useRef<
     Record<EmbeddedSlotId, Promise<PtySession> | null>
   >({
     "slot-1": null,
     "slot-2": null,
+    "slot-3": null,
   });
 
   const updateTerminalState = useCallback(
