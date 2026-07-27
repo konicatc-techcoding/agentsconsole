@@ -116,10 +116,10 @@ retry. Missing workspace paths remain in history until a later Save or Start
 validates them. If Terminal launches but the history write fails, the launch
 remains successful and the app displays a separate history warning.
 
-Tauri mode also uses a Console-oriented shell with a compact title, a fixed
-Provider sidebar, and four layout slots. All four Slots contain an embedded
-xterm terminal backed by the native multi-session PTY engine. Sidebar launches
-continue to open independently in Terminal.app.
+Tauri mode also uses a Console-oriented shell with a compact title, a
+collapsible Provider sidebar, and four layout slots. All four Slots contain an
+embedded xterm terminal backed by the native multi-session PTY engine. Sidebar
+launches continue to open independently in Terminal.app.
 Slot assignments are stored separately in
 `console-layout.json` under the same App Data directory:
 

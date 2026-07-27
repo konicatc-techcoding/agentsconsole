@@ -5,29 +5,36 @@
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md。LOO-12、LOO-13、LOO-14 已依序合併，四個 Slot
-皆已完成 embedded terminal rollout。LOO-15 已完成 `$finn-spec` 並套用
-`agent-ready`；下一步在乾淨工作樹執行 `$finn-build`。
+請先讀取 status.md。LOO-12、LOO-13、LOO-14、LOO-15 已依序合併；
+四個 Slot 皆已完成 embedded terminal rollout，Sidebar 可收合，並可依
+選取順序顯示一至四個 Slot。下一步在乾淨 main 上執行 `$finn-spec`。
 ```
 
 LOO-12 將 PTY engine 擴展為最多四個獨立 session 並啟用 Slot 2；
 LOO-13、LOO-14 接續啟用 Slot 3、4。Tauri 目前四格皆支援完整
 Start／Stop／retry、clipboard、resize 與關閉清理；外部 Terminal.app
 Launch、Web runtime、workspace storage 與 Console layout schema 維持不變。
+LOO-15 加入可收合 Sidebar 與 queue-driven 自適應 Slot 版面；隱藏中的
+terminal component 與 CLI session 仍持續運作。
 
 ## Source of truth
 
 - Workspace：`/Volumes/1TBM2/AI_Drive/Codex_Projects/agentsconsole`
 - Git branch：`main`
-- 最新合併基線：`8102c19 feat: enable Slot 4 embedded terminal (#10)`
-- 目前 Linear issue：`LOO-15 新增可收合 Sidebar 與可選 Slot 的自適應 Console 版面`
+- 最新合併基線：`ea7fa51 feat: add adaptive console views (#11)`
+- 目前 Linear issue：無；下一步使用 `$finn-spec` 建立新規格
+- 最近完成的 Linear issue：`LOO-15 新增可收合 Sidebar 與可選 Slot 的自適應 Console 版面`
 - LOO-15 URL：<https://linear.app/loopent/issue/LOO-15/新增可收合-sidebar-與可選-slot-的自適應-console-版面>
-- LOO-15 狀態：`Backlog`
+- LOO-15 狀態：`Done`
 - LOO-15 label：`agent-ready`
-- LOO-15 assignee：無
+- LOO-15 assignee：Zack Chiu
 - LOO-15 blocker：無
-- LOO-15 GitHub PR：無；下一步使用 `$finn-build`
-- 最近完成的 Linear issue：`LOO-14 啟用 Slot 4 embedded terminal 並完成四格獨立互動`
+- LOO-15 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/11>
+- PR #11 狀態：Merged
+- PR #11 merge commit：`ea7fa517fe0a16f8d3f6a62c17e355ef207505d7`
+- PR #11 review：`loop-approved`
+- PR #11 required check：`smoke` — `SUCCESS`
+- 前一個完成的 Linear issue：`LOO-14 啟用 Slot 4 embedded terminal 並完成四格獨立互動`
 - LOO-14 URL：<https://linear.app/loopent/issue/LOO-14/啟用-slot-4-embedded-terminal-並完成四格獨立互動>
 - LOO-14 狀態：`Done`
 - LOO-14 label：`agent-ready`
@@ -438,6 +445,40 @@ LOO-12、LOO-13、LOO-14 均已完成並透過 PR #8、#9、#10 合併：
   關閉清理；LOO-14 以四 Slot 自動化 regression 與 production bundle build
   完成驗證，未另跑四個真實 CLI 同時互動 smoke。
 
+## LOO-15 自適應 Console 版面
+
+LOO-15 已完成、通過 `$finn-review`，並透過 PR #11 合併：
+
+- Tauri Header 新增 Sidebar 展開／收合開關，以及 `All`、Slot 1–4
+  顯示控制；Web runtime 維持既有 Provider card 頁面。
+- `All` 維持固定 Slot 1／2 在上、Slot 3／4 在下的 2×2；自訂模式依點擊
+  queue 顯示一格全畫面、兩格左右、三格主要 Slot 加右側上下排列。
+- 自訂模式加入第四格時使用固定 2×2，但保留 queue；移除一格後依原 queue
+  恢復三格主次順序，且至少保留一個可見 Slot。
+- 隱藏 Slot 僅離開可見版面，React terminal component、phase、session、
+  error、workspace 與 terminal buffer 均保留；重新顯示時自動 fit 並
+  resize PTY。
+- Header Slot 控制持續反映 hidden session 的 lifecycle phase；既有
+  Start／Stop／retry、Provider locking、close／reload cleanup 與 stale
+  event isolation 維持不變。
+- Sidebar 與 Slot view state 只存在 React 記憶體；一般 Refresh 保留，
+  App 重開或 reload 回復 Sidebar 展開與 `All`，不修改任何 storage schema。
+
+## LOO-15 驗證結果
+
+- Linear：LOO-15 為 `Done`
+- GitHub：PR #11 已合併，`smoke` required check 為 `SUCCESS`
+- Frontend tests：56 passed
+- Backend tests：34 passed（另有一則既有 Starlette TestClient deprecation warning）
+- Rust tests：40 passed
+- Frontend production build：passed（既有 xterm chunk-size warning 不阻擋）
+- Unsigned Tauri macOS `.app` build：passed
+- `cargo fmt --all --check`：passed
+- `git diff --check`：passed
+- 真實 Tauri App smoke：Hermes 與 Codex 同時 Running；隱藏 Slot 1 時
+  session 與 Header phase 持續為 Running，重新顯示後兩個 session 均保持
+  Running，最後皆透過 App 正常停止。
+
 ## 本機預覽方式
 
 Terminal 1：
@@ -460,9 +501,11 @@ npm run dev
 
 ## 接續流程
 
-1. 先將本次 README／status 文件同步以獨立方式完成，確保工作樹乾淨。
-2. 執行 `$finn-build` 認領並實作 `LOO-15`，完成後建立 PR；不得直接合併。
-3. 若要在目前外接硬碟工作區執行本機 backend 或既有 Rust build cache，
+1. 先確認本次 README／status 文件 diff，取得使用者確認後依序 commit、
+   push，確保 `main` 與 `origin/main` 同步且工作樹乾淨。
+2. 執行 `$finn-spec` 訪談並建立下一個 `agent-ready` issue。
+3. 規格完成後再執行 `$finn-build`；完成後建立 PR，不得直接合併。
+4. 若要在目前外接硬碟工作區執行本機 backend 或既有 Rust build cache，
    先重建 `.venv` 並清除舊工作區留下的 build cache 絕對路徑。
 
 ## 本檔注意事項
@@ -470,7 +513,8 @@ npm run dev
 `status.md` 是納入 Git 追蹤的開發進度與工作交接文件。功能狀態、active
 issue 或接續流程改變時應同步更新；不得用它取代 Linear issue 的完整規格。
 
-使用者說 `agent-ready` 時，先核對 Linear 與目前實作狀態，再同步
-`README.md` 與 `status.md`：README 只描述已完成行為，不預告未實作功能；
-status 記錄 active issue、approval gate 與下一步。文件同步不得以未提交的
-工作樹狀態進入 `$finn-build` preflight。
+使用者通知 PR 已 merge 時，先同步 `main`，再更新 `README.md` 與
+`status.md`：README 只描述已完成行為，不預告未實作功能；status 記錄最新
+合併基線、完成 issue 與下一步。先提供 diff 讓使用者確認，確認後才依序
+commit、push；若文件沒有實際變更，不建立空 commit。完成文件同步並保持
+乾淨工作樹後，再開始下一次 `$finn-spec`。
