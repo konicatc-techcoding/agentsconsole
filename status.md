@@ -28,9 +28,10 @@ LOO-16 加入全域 active session 計數、可處理 Starting／Running／Stopp
 - Workspace（Claude Code 工作區）：
   `/Volumes/1TBM2/AI_Drive/ClaudeCode_Projects/agentsconsole`，branch
   `claude/agentsconsole-continuation`
-- 兩個 workspace 是同一個 repo 的 git worktree，目前都停在 `dffeebf`；
-  兩邊都可以繼續開發，但 `status.md` 為共用追蹤檔案，任一邊的修改都會
-  同時影響另一邊。
+- 兩個 workspace 是同一個 repo 的 git worktree，兩邊都可以繼續開發。
+  `status.md` 為共用追蹤檔案，任一邊的修改合併後都會影響另一邊；同一個
+  分支無法同時在兩個 worktree checkout，切換開發環境時先合併回 `main`，
+  再於另一個 worktree `git pull`。
 - 最新合併基線：`54a88cd feat: add global session controls (#12)`
 - 目前 Linear issue：無；下一步使用 `$finn-spec` 建立新規格
 - 最近完成的 Linear issue：`LOO-16 新增全域 Stop All、Session 顯示名稱與 status handoff`
