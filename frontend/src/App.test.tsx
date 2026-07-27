@@ -756,19 +756,20 @@ describe("AgentOS Console", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("CLI PROVIDERS")).not.toBeInTheDocument();
     expect(screen.getByLabelText("CLI providers")).toBeInTheDocument();
+    expect(await screen.findByText("Saved")).toHaveAttribute("role", "status");
     expect(
-      await screen.findAllByText("Embedded terminal coming next"),
-    ).toHaveLength(1);
+      screen.queryByText("Embedded terminal coming next"),
+    ).not.toBeInTheDocument();
     expect(screen.getByLabelText("Slot 1 terminal")).toBeInTheDocument();
     expect(screen.getByLabelText("Slot 2 terminal")).toBeInTheDocument();
     expect(screen.getByLabelText("Slot 3 terminal")).toBeInTheDocument();
+    expect(screen.getByLabelText("Slot 4 terminal")).toBeInTheDocument();
     expect(screen.getByLabelText("Slot 1 provider")).toHaveValue("hermes");
     expect(screen.getByLabelText("Slot 2 provider")).toHaveValue("codex");
     expect(screen.getByLabelText("Slot 3 provider")).toHaveValue("claude");
     expect(screen.getByLabelText("Slot 4 provider")).toHaveValue(
       "antigravity",
     );
-    expect(screen.getByText("Saved")).toHaveAttribute("role", "status");
     expect(screen.getByRole("button", { name: "Save Layout" })).toBeDisabled();
   });
 
@@ -1001,7 +1002,9 @@ describe("AgentOS Console", () => {
     expect(
       await screen.findByText("Codex CLI launched in /workspace"),
     ).toBeInTheDocument();
-    expect(screen.getAllByText("Embedded terminal coming next")).toHaveLength(1);
+    expect(
+      screen.queryByText("Embedded terminal coming next"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Running")).not.toBeInTheDocument();
     expect(screen.queryByText("Launched")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Slot 2 provider")).toHaveValue("codex");
@@ -1170,7 +1173,7 @@ describe("AgentOS Console", () => {
       sessionId: "session-slot-1",
     });
     await user.selectOptions(screen.getByLabelText("Slot 1 provider"), "codex");
-    expect(screen.getAllByText("Idle")).toHaveLength(3);
+    expect(screen.getAllByText("Idle")).toHaveLength(4);
     expect(
       screen.getByRole("button", { name: "Configure Slot 1 session" }),
     ).toBeEnabled();
@@ -1341,7 +1344,7 @@ describe("AgentOS Console", () => {
     await waitFor(() => expect(closeWindow).toHaveBeenCalledOnce());
   });
 
-  it("runs the same Provider independently in Slot 1, Slot 2, and Slot 3", async () => {
+  it("runs the same Provider independently in all four Slots", async () => {
     const startPty = vi.fn<
       NonNullable<RuntimeAdapter["startPtySession"]>
     >(async (request) => ({
@@ -1393,8 +1396,20 @@ describe("AgentOS Console", () => {
       screen.getByRole("button", { name: "Start in Slot 3" }),
     );
 
+    await user.selectOptions(screen.getByLabelText("Slot 4 provider"), "codex");
+    await user.click(
+      screen.getByRole("button", { name: "Configure Slot 4 session" }),
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Default workspace path" }),
+      "/workspace-four",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Start in Slot 4" }),
+    );
+
     await waitFor(() =>
-      expect(screen.getAllByText("Running")).toHaveLength(3),
+      expect(screen.getAllByText("Running")).toHaveLength(4),
     );
     expect(startPty).toHaveBeenNthCalledWith(
       1,
@@ -1420,11 +1435,20 @@ describe("AgentOS Console", () => {
         workspacePath: "/workspace-three",
       }),
     );
+    expect(startPty).toHaveBeenNthCalledWith(
+      4,
+      expect.objectContaining({
+        slotId: "slot-4",
+        providerId: "codex",
+        workspacePath: "/workspace-four",
+      }),
+    );
     expect(runtime.saveWorkspacePreferences).toHaveBeenLastCalledWith(
       {
         codex: {
           defaultWorkspace: "",
           recentWorkspaces: [
+            "/workspace-four",
             "/workspace-three",
             "/workspace-two",
             "/workspace-one",
@@ -1436,17 +1460,19 @@ describe("AgentOS Console", () => {
     expect(screen.getByLabelText("Slot 1 provider")).toBeDisabled();
     expect(screen.getByLabelText("Slot 2 provider")).toBeDisabled();
     expect(screen.getByLabelText("Slot 3 provider")).toBeDisabled();
+    expect(screen.getByLabelText("Slot 4 provider")).toBeDisabled();
 
     await user.click(screen.getByRole("button", { name: "Stop Slot 1" }));
     expect(await screen.findByText("Stopped")).toBeInTheDocument();
-    expect(screen.getAllByText("Running")).toHaveLength(2);
+    expect(screen.getAllByText("Running")).toHaveLength(3);
     expect(screen.getByLabelText("Slot 1 provider")).toBeEnabled();
     expect(screen.getByLabelText("Slot 2 provider")).toBeDisabled();
     expect(screen.getByLabelText("Slot 3 provider")).toBeDisabled();
+    expect(screen.getByLabelText("Slot 4 provider")).toBeDisabled();
 
     await user.selectOptions(screen.getByLabelText("Slot 1 provider"), "hermes");
     expect(screen.getByText("Idle")).toBeInTheDocument();
-    expect(screen.getAllByText("Running")).toHaveLength(2);
+    expect(screen.getAllByText("Running")).toHaveLength(3);
   });
 
   it("stops every active Slot and blocks closing when one Slot fails", async () => {
@@ -1472,7 +1498,7 @@ describe("AgentOS Console", () => {
     const user = userEvent.setup();
     render(<App runtime={runtime} />);
 
-    for (const slotNumber of [1, 2, 3]) {
+    for (const slotNumber of [1, 2, 3, 4]) {
       await user.click(
         await screen.findByRole("button", {
           name: `Configure Slot ${slotNumber} session`,
@@ -1489,14 +1515,14 @@ describe("AgentOS Console", () => {
       );
     }
     await waitFor(() =>
-      expect(screen.getAllByText("Running")).toHaveLength(3),
+      expect(screen.getAllByText("Running")).toHaveLength(4),
     );
     await waitFor(() => expect(closeHandler).toBeDefined());
 
     act(() => expect(closeHandler?.()).toBe(true));
     expect(
       screen.getByRole("heading", {
-        name: "Slot 1, Slot 2, Slot 3 are running",
+        name: "Slot 1, Slot 2, Slot 3, Slot 4 are running",
       }),
     ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Stop and Close" }));
@@ -1504,7 +1530,7 @@ describe("AgentOS Console", () => {
       await screen.findByText("Slot 2 could not be stopped"),
     ).toBeInTheDocument();
     expect(closeWindow).not.toHaveBeenCalled();
-    expect(screen.getAllByText("Stopped")).toHaveLength(2);
+    expect(screen.getAllByText("Stopped")).toHaveLength(3);
     expect(screen.getByText("Running")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Stop and Close" }));
@@ -1520,6 +1546,10 @@ describe("AgentOS Console", () => {
     expect(stopPty).toHaveBeenCalledWith({
       slotId: "slot-3",
       sessionId: "session-slot-3",
+    });
+    expect(stopPty).toHaveBeenCalledWith({
+      slotId: "slot-4",
+      sessionId: "session-slot-4",
     });
   });
 
