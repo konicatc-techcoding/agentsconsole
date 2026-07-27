@@ -8,7 +8,10 @@ import {
 } from "./runtime/consoleLayout";
 import { RECENT_WORKSPACE_LIMIT } from "./runtime/preferences";
 import type { RuntimeAdapter } from "./runtime/types";
-import TerminalSlot, { type TerminalPhase } from "./TerminalSlot";
+import TerminalSlot, {
+  DEFAULT_FONT_SIZE,
+  type TerminalPhase,
+} from "./TerminalSlot";
 import type {
   ConsoleLayout,
   ConsoleProviderId,
@@ -41,6 +44,8 @@ const EMBEDDED_SLOT_IDS: EmbeddedSlotId[] = [
   "slot-4",
 ];
 const SESSION_NAME_LIMIT = 48;
+const MIN_FONT_SIZE = 10;
+const MAX_FONT_SIZE = 20;
 const STATUS_HANDOFF_PROMPT =
   "請在目前 workspace 新增或更新 status.md，記錄已完成項目、未完成項目、驗證結果與下一步。不要 commit 或 push；完成後回覆 STATUS_READY。\r";
 const textEncoder = new TextEncoder();
@@ -250,6 +255,7 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
     "slot-4": 0,
   });
   const [terminalSizes, setTerminalSizes] = useState(initialTerminalSizes);
+  const [terminalFontSize, setTerminalFontSize] = useState(DEFAULT_FONT_SIZE);
   const [slotAttention, setSlotAttention] = useState(initialSlotAttention);
   const [focusedSlotId, setFocusedSlotId] = useState<EmbeddedSlotId | null>(
     null,
@@ -1209,6 +1215,36 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                   Stop All ({activeTerminalSlots.length})
                 </button>
               </div>
+              <div
+                className="terminal-font-controls"
+                aria-label="Terminal font size"
+              >
+                <button
+                  type="button"
+                  aria-label="Decrease terminal font size"
+                  disabled={terminalFontSize <= MIN_FONT_SIZE}
+                  onClick={() =>
+                    setTerminalFontSize((current) =>
+                      Math.max(MIN_FONT_SIZE, current - 1),
+                    )
+                  }
+                >
+                  <span aria-hidden="true">−</span>
+                </button>
+                <span>{terminalFontSize}px</span>
+                <button
+                  type="button"
+                  aria-label="Increase terminal font size"
+                  disabled={terminalFontSize >= MAX_FONT_SIZE}
+                  onClick={() =>
+                    setTerminalFontSize((current) =>
+                      Math.min(MAX_FONT_SIZE, current + 1),
+                    )
+                  }
+                >
+                  <span aria-hidden="true">+</span>
+                </button>
+              </div>
               <nav
                 className="slot-view-controls"
                 aria-label="Visible terminals"
@@ -1468,6 +1504,7 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                           terminalStates[embeddedSlotId].displayName
                         }
                         visible={visible}
+                        fontSize={terminalFontSize}
                         startDisabled={slotStartDisabled(provider)}
                         runtime={runtime}
                         onStart={() => openLaunch(provider, embeddedSlotId)}

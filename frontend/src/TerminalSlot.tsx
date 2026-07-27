@@ -31,6 +31,7 @@ interface TerminalSlotProps {
   resetToken: number;
   displayName?: string | null;
   visible?: boolean;
+  fontSize?: number;
   startDisabled: boolean;
   runtime: RuntimeAdapter;
   onStart(): void;
@@ -42,6 +43,8 @@ interface TerminalSlotProps {
 }
 
 const encoder = new TextEncoder();
+
+export const DEFAULT_FONT_SIZE = 12;
 
 function terminalStatus(
   phase: TerminalPhase,
@@ -65,6 +68,7 @@ export default function TerminalSlot({
   resetToken,
   displayName = null,
   visible = true,
+  fontSize = DEFAULT_FONT_SIZE,
   startDisabled,
   runtime,
   onStart,
@@ -83,6 +87,7 @@ export default function TerminalSlot({
   const onSizeRef = useRef(onSize);
   const onOutputRef = useRef(onOutput);
   const onFocusChangeRef = useRef(onFocusChange);
+  const fontSizeRef = useRef(fontSize);
   const pendingOutputRef = useRef<PtyOutputEvent[]>([]);
   const previousSessionIdRef = useRef<string | null>(null);
 
@@ -92,6 +97,7 @@ export default function TerminalSlot({
   onSizeRef.current = onSize;
   onOutputRef.current = onOutput;
   onFocusChangeRef.current = onFocusChange;
+  fontSizeRef.current = fontSize;
 
   const fitAndReport = useCallback(() => {
     const terminal = terminalRef.current;
@@ -127,7 +133,7 @@ export default function TerminalSlot({
       convertEol: false,
       cursorBlink: true,
       fontFamily: 'ui-monospace, "SFMono-Regular", Consolas, monospace',
-      fontSize: 12,
+      fontSize: fontSizeRef.current,
       scrollback: 5000,
       theme: {
         background: "#080c12",
@@ -268,6 +274,15 @@ export default function TerminalSlot({
       fitAndReport();
     }
   }, [fitAndReport, visible]);
+
+  useEffect(() => {
+    const terminal = terminalRef.current;
+    if (!terminal) {
+      return;
+    }
+    terminal.options.fontSize = fontSize;
+    fitAndReport();
+  }, [fitAndReport, fontSize]);
 
   useEffect(() => {
     if (phase === "idle") {

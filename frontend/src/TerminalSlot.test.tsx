@@ -368,6 +368,31 @@ describe("TerminalSlot", () => {
     expect(onExit).toHaveBeenCalledOnce();
   });
 
+  it("applies a new font size in place and refits the live session", async () => {
+    const { runtime } = terminalRuntime();
+    const view = renderTerminal(runtime, { fontSize: 12 });
+    await waitFor(() => expect(runtime.onPtyOutput).toHaveBeenCalledOnce());
+    const terminal = xterm.FakeTerminal.instances[0];
+    expect(terminal.options.fontSize).toBe(12);
+    const sizeReports = vi.mocked(view.props.onSize).mock.calls.length;
+    const resetsBeforeChange = terminal.resets;
+
+    view.rerender(<TerminalSlot {...view.props} fontSize={17} />);
+
+    expect(xterm.FakeTerminal.instances).toHaveLength(1);
+    expect(terminal.options.fontSize).toBe(17);
+    expect(terminal.resets).toBe(resetsBeforeChange);
+    expect(vi.mocked(view.props.onSize).mock.calls.length).toBeGreaterThan(
+      sizeReports,
+    );
+    expect(runtime.resizePty).toHaveBeenLastCalledWith({
+      slotId: "slot-1",
+      sessionId: "session-1",
+      rows: 24,
+      columns: 80,
+    });
+  });
+
   it("reports rendered output and terminal focus changes to its owner", async () => {
     const { runtime, emitOutput } = terminalRuntime();
     const onOutput = vi.fn();
