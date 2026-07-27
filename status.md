@@ -5,10 +5,11 @@
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md。LOO-12 至 LOO-16 已依序合併；四個 Slot 已完成
-embedded terminal rollout、自適應版面、Session 顯示名稱、全域 Stop All
-與 status.md handoff。下一步完成 README／status 文件 commit、push 後，
-在乾淨 main 上執行 `$finn-spec`。
+請先讀取 status.md。LOO-12 至 LOO-17 已依序合併；四個 Slot 已完成
+embedded terminal rollout、自適應版面、Session 顯示名稱、全域 Stop All、
+status.md handoff 與 Slot 注意力指示。Finn-loop 三個 skill 已安裝於
+.claude/skills，綁定 Linear team LOO。下一步完成 README／status 文件
+commit、push 後，執行 /finn-spec 建立下一個規格。
 ```
 
 LOO-12 將 PTY engine 擴展為最多四個獨立 session 並啟用 Slot 2；
@@ -20,6 +21,10 @@ terminal component 與 CLI session 仍持續運作。
 LOO-16 加入全域 active session 計數、可處理 Starting／Running／Stopping
 的 Stop All、可選 session 的 status.md handoff，以及只存在 React 記憶體
 的 Session 顯示名稱。
+LOO-17 加入 Slot 注意力指示：未持有鍵盤焦點的 Slot 收到新輸出或 session
+結束時，以終端邊框光暈與 Header 標記提示，兩者皆只存在 React 記憶體。
+本輪並安裝 Finn-loop 的 finn-spec／finn-build／finn-review 三個 skill，
+LOO-17 是第一個完全由該流程產出的 issue 與 PR。
 
 ## Source of truth
 
@@ -34,9 +39,23 @@ LOO-16 加入全域 active session 計數、可處理 Starting／Running／Stopp
   `status.md` 為共用追蹤檔案，任一邊的修改合併後都會影響另一邊；同一個
   分支無法同時在兩個 worktree checkout，切換開發環境時先合併回 `main`，
   再於另一個 worktree `git pull`。
-- 最新合併基線：`54a88cd feat: add global session controls (#12)`
-- 目前 Linear issue：無；下一步使用 `$finn-spec` 建立新規格
-- 最近完成的 Linear issue：`LOO-16 新增全域 Stop All、Session 顯示名稱與 status handoff`
+- 最新合併基線：`9146473 feat: add slot attention indicators (#16)`
+- Finn-loop：`.claude/skills` 已安裝 finn-spec／finn-build／finn-review，
+  綁定 Linear team `LOO`；GitHub labels `loop-approved`、
+  `loop-changes-requested`、`needs-human-review` 均已建立
+- 目前 Linear issue：無；下一步使用 `/finn-spec` 建立新規格
+- 最近完成的 Linear issue：`LOO-17 新增 Slot 注意力指示，標記需要處理的 embedded session`
+- LOO-17 URL：<https://linear.app/loopent/issue/LOO-17/新增-slot-注意力指示標記需要處理的-embedded-session>
+- LOO-17 狀態：`Done`
+- LOO-17 label：`agent-ready`
+- LOO-17 assignee：Zack Chiu
+- LOO-17 blocker：無
+- LOO-17 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/16>
+- PR #16 狀態：Merged
+- PR #16 merge commit：`9146473a809a3a19fc961a201524696dff55aa39`
+- PR #16 review：`loop-approved`（由 `finn-review` 產生）
+- PR #16 required check：`smoke` — `SUCCESS`
+- 前一個完成的 Linear issue：`LOO-16 新增全域 Stop All、Session 顯示名稱與 status handoff`
 - LOO-16 URL：<https://linear.app/loopent/issue/LOO-16/新增全域-stop-allsession-顯示名稱與-status-handoff>
 - LOO-16 狀態：`Done`
 - LOO-16 label：`agent-ready`
@@ -542,11 +561,54 @@ LOO-16 已完成並透過 PR #12 合併：
   partial failure retry、Session name 生命週期與既有 terminal regression
   由 frontend/Rust 自動化測試及 production bundle build 覆蓋。
 
+## LOO-17 Slot 注意力指示
+
+LOO-17 已完成並透過 PR #16 合併。這是第一個完全由 Finn-loop 流程產出的
+issue 與 PR：`/finn-spec` 訪談建立規格、`/finn-build` 實作並開 PR、
+`/finn-review` 給出 `loop-approved`，合併仍由人工決定：
+
+- App 為四個 embedded Slot 各自維護注意力狀態 `none`／`output`／
+  `terminated`；`terminated` 覆寫 `output`，不會被後續輸出降級。
+- `TerminalSlot` 新增 `onOutput` 與 `onFocusChange`，把已寫入終端的 PTY
+  輸出與 xterm focus／blur 回報給 App；跨 Slot 與 stale session 事件仍被
+  忽略。
+- 可見且未持有焦點的 Slot 以 `.console-slot` 邊框光暈提示，`output` 與
+  `terminated` 使用可區分的兩種光暈；Header 的 Slot 控制另有獨立標記，
+  是隱藏 Slot 唯一的提示來源，並反映在 `aria-label` 與 `title`。
+- 標記在該 Slot 同時可見且其終端持有鍵盤焦點時清除，因此 `All` 版面下只有
+  點進去的那一格會清除。沒有任何終端持有焦點時，可見 Slot 收到輸出仍會被
+  標記。
+- `exited` 與 `error` 產生 `terminated`；使用者主動 Stop 造成的 `stopped`
+  不標記。
+- 注意力狀態只存在 React 記憶體：`Refresh` 保留，App 重新載入清空；未新增
+  storage schema、Rust command 或 PTY 契約變更。
+- capability 仍為 `core:default`，未發送 macOS 系統通知；Web runtime、
+  既有 phase 圓點、`Stop All`、status.md handoff 與 Slot view 佇列行為
+  均未改變。
+
+## LOO-17 驗證結果
+
+- Linear：LOO-17 為 `Done`
+- GitHub：PR #16 已合併，`smoke` required check 為 `SUCCESS`（36 秒）
+- Frontend tests：67 passed（既有 63 加新增 4）
+- Frontend production build：passed（既有 xterm chunk-size warning 不阻擋）
+- `git diff --check`：clean
+- 新增的 4 個測試已在移除實作後確認會失敗，非空測試
+- 本次未在 Claude Code worktree 執行 `pytest backend` 與 `cargo test`：
+  變更僅限 `frontend/src`，且該 worktree 尚未建立 `.venv` 與 Rust build
+  cache；CI 的 `smoke` 已涵蓋 backend 測試與 frontend build
+- 真實 Tauri App 手動 smoke：已完成。四個 Provider 均偵測為 Available，
+  2×2 版面、Header 的 active session 計數與 Slot 顯示控制正常；LOO-17 的
+  弱光暈、強標記、Header 標記、focus 清除與 Stop 不標記均由人工確認符合
+  Linear issue 的 How to verify 九個步驟
+
 ## 本機預覽方式
 
 以下指令在目前使用的 worktree 根目錄執行，路徑見上方兩個 Workspace。
 每個 worktree 各自需要自己的 `.venv` 與 `frontend/node_modules`，兩邊
-不共用。目前只有 Codex worktree 已安裝，Claude Code worktree 尚未建立。
+不共用。
+
+### Web mode
 
 Terminal 1：
 
@@ -565,6 +627,32 @@ npm run dev
 
 停止時在兩個 Terminal 分別按 `Control + C`。
 
+### Tauri mode
+
+外接硬碟是 ExFAT，不支援延伸屬性，macOS 會產生 `._*` AppleDouble 伴隨檔。
+Tauri 的 build script 把權限 `.toml` 寫進 `OUT_DIR` 後會用萬用字元掃回來
+解析，掃到 AppleDouble 檔就會 panic（`stream did not contain valid
+UTF-8`）。這些檔案是建置過程中即時產生的，事前清除無效，因此**不能**直接
+在外接碟上建置 Tauri。
+
+解法是把建置目錄放在 APFS 稀疏映像裡。映像已建立於
+`/Volumes/1TBM2/AI_Drive/agentos-build.sparseimage`（20 GB 上限，稀疏，
+用多少佔多少）。重開機或重新插拔外接碟後不會自動掛載，每次先掛載：
+
+```bash
+hdiutil attach /Volumes/1TBM2/AI_Drive/agentos-build.sparseimage
+```
+
+再從 worktree 的 `frontend/` 啟動，不要啟動 FastAPI：
+
+```bash
+CARGO_TARGET_DIR=/Volumes/AgentOSBuild/target npm run tauri:dev
+```
+
+內建碟長期只剩約 4 GB，放不下約 6 至 7 GB 的 debug build，所以不建議改用
+內建碟。Codex worktree 的 `src-tauri/target` 殘留 875 個指向舊路徑
+`/Users/zackchiu/CodexCLI/agentsconsole` 的檔案，該快取已失效無法沿用。
+
 ## 接續流程
 
 1. 先確認本次 README／status 文件 diff，取得使用者確認後 commit。若目前
@@ -572,10 +660,15 @@ npm run dev
    同樣要 push 分支並開 PR，待 required check `smoke` 通過後才合併，不可
    直接推 `main`。合併後在另一個 worktree `git pull`，確保兩個 worktree
    都與 `origin/main` 同步且工作樹乾淨。
-2. 執行 `$finn-spec` 訪談並建立下一個 `agent-ready` issue。
-3. 規格完成後再執行 `$finn-build`；完成後建立 PR，不得直接合併。
+2. 執行 `/finn-spec` 訪談並建立下一個 issue。`agent-ready` 標籤一律由人工
+   在 Linear 掛上，skill 不會自行套用，那是動工前的核准閘門。
+3. 掛上標籤後執行 `/loop /finn-build` 認領並實作，完成後建立 PR；審查可另
+   開 session 執行 `/loop /finn-review`。兩者都不會合併，merge 由人工決定。
 4. 若要在目前外接硬碟工作區執行本機 backend 或既有 Rust build cache，
    先重建 `.venv` 並清除舊工作區留下的 build cache 絕對路徑。
+5. 在外接硬碟上執行 `npm test` 前先清除 `._*` AppleDouble 檔案，否則
+   vitest 會把它們當成測試檔而產生假失敗。`.gitignore` 已排除這些檔案，
+   但不影響 vitest 的檔案掃描。
 
 ## 本檔注意事項
 
@@ -586,4 +679,4 @@ issue 或接續流程改變時應同步更新；不得用它取代 Linear issue 
 `status.md`：README 只描述已完成行為，不預告未實作功能；status 記錄最新
 合併基線、完成 issue 與下一步。先提供 diff 讓使用者確認，確認後才依序
 commit、push；若文件沒有實際變更，不建立空 commit。完成文件同步並保持
-乾淨工作樹後，再開始下一次 `$finn-spec`。
+乾淨工作樹後，再開始下一次 `/finn-spec`。
