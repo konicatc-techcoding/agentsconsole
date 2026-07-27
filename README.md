@@ -232,4 +232,5 @@ npm run tauri:build
 The automated tests mock CLI discovery and Terminal launch. They never invoke
 the real tools installed on the machine. Manual Tauri verification should be
 performed without FastAPI running and should cover real discovery, valid and
-invalid Save, and one New and Continue launch.
+invalid Save, one New and Continue launch, a named embedded session, selective
+status handoff delivery, and Stop All with the App remaining open.

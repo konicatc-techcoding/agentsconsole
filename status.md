@@ -5,9 +5,10 @@
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md。LOO-12、LOO-13、LOO-14、LOO-15 已依序合併；
-四個 Slot 皆已完成 embedded terminal rollout，Sidebar 可收合，並可依
-選取順序顯示一至四個 Slot。下一步在乾淨 main 上執行 `$finn-spec`。
+請先讀取 status.md。LOO-12 至 LOO-16 已依序合併；四個 Slot 已完成
+embedded terminal rollout、自適應版面、Session 顯示名稱、全域 Stop All
+與 status.md handoff。下一步完成 README／status 文件 commit、push 後，
+在乾淨 main 上執行 `$finn-spec`。
 ```
 
 LOO-12 將 PTY engine 擴展為最多四個獨立 session 並啟用 Slot 2；
@@ -16,14 +17,27 @@ Start／Stop／retry、clipboard、resize 與關閉清理；外部 Terminal.app
 Launch、Web runtime、workspace storage 與 Console layout schema 維持不變。
 LOO-15 加入可收合 Sidebar 與 queue-driven 自適應 Slot 版面；隱藏中的
 terminal component 與 CLI session 仍持續運作。
+LOO-16 加入全域 active session 計數、可處理 Starting／Running／Stopping
+的 Stop All、可選 session 的 status.md handoff，以及只存在 React 記憶體
+的 Session 顯示名稱。
 
 ## Source of truth
 
 - Workspace：`/Volumes/1TBM2/AI_Drive/Codex_Projects/agentsconsole`
 - Git branch：`main`
-- 最新合併基線：`ea7fa51 feat: add adaptive console views (#11)`
+- 最新合併基線：`54a88cd feat: add global session controls (#12)`
 - 目前 Linear issue：無；下一步使用 `$finn-spec` 建立新規格
-- 最近完成的 Linear issue：`LOO-15 新增可收合 Sidebar 與可選 Slot 的自適應 Console 版面`
+- 最近完成的 Linear issue：`LOO-16 新增全域 Stop All、Session 顯示名稱與 status handoff`
+- LOO-16 URL：<https://linear.app/loopent/issue/LOO-16/新增全域-stop-allsession-顯示名稱與-status-handoff>
+- LOO-16 狀態：`Done`
+- LOO-16 label：`agent-ready`
+- LOO-16 assignee：Zack Chiu
+- LOO-16 blocker：無
+- LOO-16 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/12>
+- PR #12 狀態：Merged
+- PR #12 merge commit：`54a88cd4c4aa8b884ebc0cdf013024381f000187`
+- PR #12 required check：`smoke` — `SUCCESS`
+- 前一個完成的 Linear issue：`LOO-15 新增可收合 Sidebar 與可選 Slot 的自適應 Console 版面`
 - LOO-15 URL：<https://linear.app/loopent/issue/LOO-15/新增可收合-sidebar-與可選-slot-的自適應-console-版面>
 - LOO-15 狀態：`Done`
 - LOO-15 label：`agent-ready`
@@ -478,6 +492,46 @@ LOO-15 已完成、通過 `$finn-review`，並透過 PR #11 合併：
 - 真實 Tauri App smoke：Hermes 與 Codex 同時 Running；隱藏 Slot 1 時
   session 與 Header phase 持續為 Running，重新顯示後兩個 session 均保持
   Running，最後皆透過 App 正常停止。
+
+## LOO-16 全域 Session 控制與顯示名稱
+
+LOO-16 已完成並透過 PR #12 合併：
+
+- Tauri Header 顯示 Starting、Running、Stopping 的 active session 數量，
+  並提供 Tauri-only `Stop All (N)`；沒有 active session 時 disabled。
+- Stop All dialog 列出 Slot ID、Session name、Provider、workspace 與 phase；
+  `已完成 — Stop All` 平行處理所有 active sessions，不關閉 App，部分失敗
+  仍保留成功結果、列出錯誤並只重試剩餘 active Slot。
+- Starting session 會等待啟動後停止；Stopping session 沿用既有 stop promise，
+  不重複呼叫 native stop。
+- `未完成 — 先更新 status.md` 可勾選 Starting／Running session，傳送固定
+  prompt 與 Enter；Starting 先顯示 Queued，送達顯示 Sent，失敗可個別重試。
+- 多個選取 session 使用相同 workspace 時顯示非阻擋警告；App 不直接修改
+  `status.md`、不解析 `STATUS_READY`，也不執行 commit 或 push。
+- Embedded Start modal 支援 optional Session name：trim、最多 48 字元、
+  禁止換行／控制字元；留白時使用 `Provider · workspace資料夾名`。
+- Header Slot 控制、terminal header、accessible name 與 Stop All dialog
+  均保留 `Slot N · Session name`；Start failure、Stopped／Exited 與
+  Start again 保留名稱，更換 inactive Slot Provider 或 App reload 時清除。
+- Session name、handoff delivery 與 dialog state 只存在 React 記憶體；
+  Provider Refresh 保留目前名稱，未新增 storage schema 或 Rust command。
+- Web runtime、Sidebar Terminal.app Launch、Rust PTY engine、typed contracts、
+  process cleanup、Slot visibility 與 close／reload cleanup 維持原行為。
+
+## LOO-16 驗證結果
+
+- Linear：LOO-16 為 `Done`
+- GitHub：PR #12 已合併，`smoke` required check 為 `SUCCESS`
+- Frontend tests：63 passed
+- Backend tests：34 passed（另有一則既有 Starlette TestClient deprecation warning）
+- Rust tests：40 passed
+- Frontend production build：passed（既有 xterm chunk-size warning 不阻擋）
+- Unsigned Tauri macOS `.app` build：passed
+- `cargo fmt --all --check`：passed
+- `git diff --check`：passed
+- 本次未執行真實 CLI 的手動 Tauri smoke；Stop All、Starting queue、
+  partial failure retry、Session name 生命週期與既有 terminal regression
+  由 frontend/Rust 自動化測試及 production bundle build 覆蓋。
 
 ## 本機預覽方式
 
