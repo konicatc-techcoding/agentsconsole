@@ -32,17 +32,29 @@ type EmbeddedSlotId = "slot-1" | "slot-2" | "slot-3" | "slot-4";
 type LaunchDestination = "external" | EmbeddedSlotId;
 type WindowAction = "close" | "reload";
 type VisibleSlotQueue = EmbeddedSlotId[] | null;
+type HandoffPhase = "idle" | "queued" | "sent" | "failed";
 const EMBEDDED_SLOT_IDS: EmbeddedSlotId[] = [
   "slot-1",
   "slot-2",
   "slot-3",
   "slot-4",
 ];
+const SESSION_NAME_LIMIT = 48;
+const STATUS_HANDOFF_PROMPT =
+  "請在目前 workspace 新增或更新 status.md，記錄已完成項目、未完成項目、驗證結果與下一步。不要 commit 或 push；完成後回覆 STATUS_READY。\r";
+const textEncoder = new TextEncoder();
 
 interface TerminalState {
   phase: TerminalPhase;
   session: PtySession | null;
   exitEvent: PtyExitEvent | null;
+  error: string | null;
+  displayName: string | null;
+  pendingWorkspace: string | null;
+}
+
+interface HandoffDelivery {
+  phase: HandoffPhase;
   error: string | null;
 }
 
@@ -51,6 +63,8 @@ const IDLE_TERMINAL: TerminalState = {
   session: null,
   exitEvent: null,
   error: null,
+  displayName: null,
+  pendingWorkspace: null,
 };
 
 function initialTerminalStates(): Record<EmbeddedSlotId, TerminalState> {
@@ -68,6 +82,24 @@ function initialTerminalSizes() {
     "slot-2": { rows: 24, columns: 80 },
     "slot-3": { rows: 24, columns: 80 },
     "slot-4": { rows: 24, columns: 80 },
+  };
+}
+
+function initialSlotSelection(value: boolean) {
+  return {
+    "slot-1": value,
+    "slot-2": value,
+    "slot-3": value,
+    "slot-4": value,
+  };
+}
+
+function initialHandoffDeliveries(): Record<EmbeddedSlotId, HandoffDelivery> {
+  return {
+    "slot-1": { phase: "idle", error: null },
+    "slot-2": { phase: "idle", error: null },
+    "slot-3": { phase: "idle", error: null },
+    "slot-4": { phase: "idle", error: null },
   };
 }
 
@@ -101,8 +133,50 @@ function slotLabel(slotId: EmbeddedSlotId): string {
   return slotId.replace("slot-", "Slot ");
 }
 
-function phaseLabel(phase: TerminalPhase): string {
+function phaseLabel(phase: TerminalPhase | HandoffPhase): string {
   return phase.charAt(0).toUpperCase() + phase.slice(1);
+}
+
+function workspaceBasename(workspace: string): string {
+  const normalized = workspace.replace(/\/+$/, "");
+  return normalized.split("/").pop() || normalized;
+}
+
+function requestedWorkspace(
+  workspace: string,
+  mode: SessionMode,
+  folder: string,
+): string {
+  return mode === "new" && folder
+    ? `${workspace.replace(/\/+$/, "")}/${folder}`
+    : workspace;
+}
+
+function defaultSessionName(provider: Provider, workspace: string): string {
+  return `${provider.display_name} · ${workspaceBasename(workspace)}`;
+}
+
+function sessionNameValidationError(value: string): string | null {
+  const trimmed = value.trim();
+  if (Array.from(trimmed).length > SESSION_NAME_LIMIT) {
+    return `Session name must be ${SESSION_NAME_LIMIT} characters or fewer`;
+  }
+  if (/[\u0000-\u001f\u007f]/u.test(trimmed)) {
+    return "Session name cannot contain line breaks or control characters";
+  }
+  return null;
+}
+
+function displayLabel(
+  slotId: EmbeddedSlotId,
+  state: TerminalState,
+): string {
+  const label = slotLabel(slotId);
+  return state.displayName ? `${label} · ${state.displayName}` : label;
+}
+
+function terminalWorkspace(state: TerminalState): string {
+  return state.session?.workspacePath ?? state.pendingWorkspace ?? "";
 }
 
 export default function App({ runtime = defaultRuntime }: AppProps) {
@@ -119,6 +193,7 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
     useState<LaunchDestination>("external");
   const [workspacePath, setWorkspacePath] = useState("");
   const [newFolder, setNewFolder] = useState("");
+  const [sessionNameInput, setSessionNameInput] = useState("");
   const [workspacePreferences, setWorkspacePreferences] =
     useState<WorkspacePreferences>({});
   const [storageReady, setStorageReady] = useState(false);
@@ -145,6 +220,18 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
     "slot-4": 0,
   });
   const [terminalSizes, setTerminalSizes] = useState(initialTerminalSizes);
+  const [sessionControlSlots, setSessionControlSlots] = useState<
+    EmbeddedSlotId[] | null
+  >(null);
+  const [handoffSelection, setHandoffSelection] = useState(() =>
+    initialSlotSelection(false),
+  );
+  const [handoffDeliveries, setHandoffDeliveries] = useState(
+    initialHandoffDeliveries,
+  );
+  const [handoffBusy, setHandoffBusy] = useState(false);
+  const [stopAllBusy, setStopAllBusy] = useState(false);
+  const [stopAllFailures, setStopAllFailures] = useState<EmbeddedSlotId[]>([]);
   const [windowAction, setWindowAction] = useState<WindowAction | null>(null);
   const [windowActionError, setWindowActionError] = useState<string | null>(
     null,
@@ -164,6 +251,17 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
     "slot-3": null,
     "slot-4": null,
   });
+  const pendingStopRefs = useRef<
+    Record<EmbeddedSlotId, Promise<void> | null>
+  >({
+    "slot-1": null,
+    "slot-2": null,
+    "slot-3": null,
+    "slot-4": null,
+  });
+  const retryHandoffRefs = useRef<Record<EmbeddedSlotId, boolean>>(
+    initialSlotSelection(false),
+  );
 
   const updateTerminalState = useCallback(
     (slotId: EmbeddedSlotId, next: TerminalState) => {
@@ -265,6 +363,11 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
     setLaunchDestination(destination);
     setWorkspacePath(preference?.defaultWorkspace ?? "");
     setNewFolder("");
+    setSessionNameInput(
+      isEmbeddedSlot(destination)
+        ? terminalStatesRef.current[destination].displayName ?? ""
+        : "",
+    );
     setSessionMode("new");
     setLaunchError(null);
     setSaveNotice(null);
@@ -289,6 +392,9 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
 
   const closeLaunch = () => {
     if (!launching && !savingDefault) {
+      if (isEmbeddedSlot(launchDestination)) {
+        retryHandoffRefs.current[launchDestination] = false;
+      }
       setLaunchTarget(null);
       setLaunchError(null);
       setSaveNotice(null);
@@ -410,6 +516,41 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
     setLaunchWarning(warning ?? null);
   };
 
+  const sendHandoffInput = async (
+    slotId: EmbeddedSlotId,
+    session: PtySession,
+  ) => {
+    const setDelivery = (delivery: HandoffDelivery) => {
+      setHandoffDeliveries((current) => ({
+        ...current,
+        [slotId]: delivery,
+      }));
+    };
+    if (!runtime.writePtyInput) {
+      setDelivery({
+        phase: "failed",
+        error: "Terminal input is unavailable",
+      });
+      return;
+    }
+    try {
+      await runtime.writePtyInput({
+        slotId,
+        sessionId: session.sessionId,
+        data: Array.from(textEncoder.encode(STATUS_HANDOFF_PROMPT)),
+      });
+      setDelivery({ phase: "sent", error: null });
+    } catch (error) {
+      setDelivery({
+        phase: "failed",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Handoff prompt could not be sent",
+      });
+    }
+  };
+
   const submitLaunch = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!launchTarget || launching || savingDefault || !workspacePath) {
@@ -418,12 +559,17 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
     const embeddedSlot = isEmbeddedSlot(launchDestination)
       ? launchDestination
       : null;
+    const nameError = embeddedSlot
+      ? sessionNameValidationError(sessionNameInput)
+      : null;
     if (
       embeddedSlot &&
-      slotStartDisabled(
-        providers.find((provider) => provider.id === launchTarget.id),
-      )
+      (nameError ||
+        slotStartDisabled(
+          providers.find((provider) => provider.id === launchTarget.id),
+        ))
     ) {
+      setLaunchError(nameError);
       return;
     }
 
@@ -433,12 +579,21 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
     setLaunchWarning(null);
     try {
       if (embeddedSlot && runtime.startPtySession) {
+        const targetWorkspace = requestedWorkspace(
+          workspacePath,
+          sessionMode,
+          newFolder,
+        );
+        const customName = sessionNameInput.trim();
         pendingExitRefs.current[embeddedSlot] = null;
         updateTerminalState(embeddedSlot, {
           phase: "starting",
           session: null,
           exitEvent: null,
           error: null,
+          displayName:
+            customName || defaultSessionName(launchTarget, targetWorkspace),
+          pendingWorkspace: targetWorkspace,
         });
         const startPromise = runtime.startPtySession({
           slotId: embeddedSlot,
@@ -463,9 +618,26 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
           session,
           exitEvent: earlyExit,
           error: null,
+          displayName:
+            customName ||
+            defaultSessionName(launchTarget, session.workspacePath),
+          pendingWorkspace: null,
         });
         await persistRecentWorkspace(launchTarget, session.workspacePath);
         setLaunchTarget(null);
+        if (retryHandoffRefs.current[embeddedSlot]) {
+          retryHandoffRefs.current[embeddedSlot] = false;
+          setSessionControlSlots([embeddedSlot]);
+          setHandoffSelection({
+            ...initialSlotSelection(false),
+            [embeddedSlot]: true,
+          });
+          setHandoffDeliveries((current) => ({
+            ...current,
+            [embeddedSlot]: { phase: "queued", error: null },
+          }));
+          await sendHandoffInput(embeddedSlot, session);
+        }
       } else {
         const result = await runtime.launchProvider({
           provider_id: launchTarget.id,
@@ -485,10 +657,12 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
       if (embeddedSlot) {
         pendingStartRefs.current[embeddedSlot] = null;
         updateTerminalState(embeddedSlot, {
+          ...terminalStatesRef.current[embeddedSlot],
           phase: "error",
           session: null,
           exitEvent: null,
           error: error instanceof Error ? error.message : "PTY start failed",
+          pendingWorkspace: null,
         });
       }
       setLaunchError(
@@ -517,52 +691,66 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
         return;
       }
       updateTerminalState(event.slotId, {
+        ...current,
         phase:
           current.phase === "stopping" || event.reason === "stopped"
             ? "stopped"
             : "exited",
-        session: current.session,
         exitEvent: event,
         error: null,
+        pendingWorkspace: null,
       });
     },
     [updateTerminalState],
   );
 
   const stopTerminal = useCallback(
-    async (slotId: EmbeddedSlotId) => {
+    (slotId: EmbeddedSlotId): Promise<void> => {
+      const existingStop = pendingStopRefs.current[slotId];
+      if (existingStop) {
+        return existingStop;
+      }
       const current = terminalStatesRef.current[slotId];
       if (!current.session || !runtime.stopPtySession) {
-        return;
+        return Promise.resolve();
       }
-      updateTerminalState(slotId, {
-        ...current,
-        phase: "stopping",
-        error: null,
-      });
-      try {
-        await runtime.stopPtySession({
-          slotId,
-          sessionId: current.session.sessionId,
-        });
-        const latest = terminalStatesRef.current[slotId];
-        updateTerminalState(slotId, {
-          phase: "stopped",
-          session: current.session,
-          exitEvent: latest.exitEvent,
-          error: null,
-        });
-      } catch (error) {
+      const session = current.session;
+      const stopPtySession = runtime.stopPtySession;
+      const stopPromise = (async () => {
         updateTerminalState(slotId, {
           ...current,
-          phase: "running",
-          error:
-            error instanceof Error
-              ? error.message
-              : "PTY process tree could not be terminated",
+          phase: "stopping",
+          error: null,
         });
-        throw error;
-      }
+        try {
+          await stopPtySession({
+            slotId,
+            sessionId: session.sessionId,
+          });
+          const latest = terminalStatesRef.current[slotId];
+          updateTerminalState(slotId, {
+            ...latest,
+            phase: "stopped",
+            session,
+            error: null,
+            pendingWorkspace: null,
+          });
+        } catch (error) {
+          updateTerminalState(slotId, {
+            ...current,
+            phase: "running",
+            error:
+              error instanceof Error
+                ? error.message
+                : "PTY process tree could not be terminated",
+          });
+          throw error;
+        } finally {
+          pendingStopRefs.current[slotId] = null;
+        }
+      })();
+      pendingStopRefs.current[slotId] = stopPromise;
+      return stopPromise;
     },
     [runtime, updateTerminalState],
   );
@@ -699,9 +887,143 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
     slotStartDisabled(
       providers.find((provider) => provider.id === launchTarget?.id),
     );
+  const sessionNameError = isEmbeddedSlot(launchDestination)
+    ? sessionNameValidationError(sessionNameInput)
+    : null;
   const activeTerminalSlots = EMBEDDED_SLOT_IDS.filter((slotId) =>
     isActiveTerminal(terminalStates[slotId]),
   );
+  const updateHandoffDelivery = (
+    slotId: EmbeddedSlotId,
+    delivery: HandoffDelivery,
+  ) => {
+    setHandoffDeliveries((current) => ({
+      ...current,
+      [slotId]: delivery,
+    }));
+  };
+  const openSessionControl = () => {
+    const activeSlots = EMBEDDED_SLOT_IDS.filter((slotId) =>
+      isActiveTerminal(terminalStatesRef.current[slotId]),
+    );
+    setSessionControlSlots(activeSlots);
+    setHandoffSelection({
+      "slot-1":
+        terminalStatesRef.current["slot-1"].phase === "starting" ||
+        terminalStatesRef.current["slot-1"].phase === "running",
+      "slot-2":
+        terminalStatesRef.current["slot-2"].phase === "starting" ||
+        terminalStatesRef.current["slot-2"].phase === "running",
+      "slot-3":
+        terminalStatesRef.current["slot-3"].phase === "starting" ||
+        terminalStatesRef.current["slot-3"].phase === "running",
+      "slot-4":
+        terminalStatesRef.current["slot-4"].phase === "starting" ||
+        terminalStatesRef.current["slot-4"].phase === "running",
+    });
+    setHandoffDeliveries(initialHandoffDeliveries());
+    setStopAllFailures([]);
+  };
+  const closeSessionControl = () => {
+    if (!stopAllBusy && !handoffBusy) {
+      setSessionControlSlots(null);
+      setStopAllFailures([]);
+    }
+  };
+  const queueHandoff = async (slotId: EmbeddedSlotId) => {
+    const current = terminalStatesRef.current[slotId];
+    updateHandoffDelivery(slotId, { phase: "queued", error: null });
+    if (current.phase === "starting") {
+      const pending = pendingStartRefs.current[slotId];
+      if (!pending) {
+        updateHandoffDelivery(slotId, {
+          phase: "failed",
+          error: "Starting session is unavailable",
+        });
+        return;
+      }
+      void pending
+        .then((session) => sendHandoffInput(slotId, session))
+        .catch((error: unknown) => {
+          updateHandoffDelivery(slotId, {
+            phase: "failed",
+            error:
+              error instanceof Error
+                ? error.message
+                : "Session could not start",
+          });
+        });
+      return;
+    }
+    if (current.phase !== "running" || !current.session) {
+      updateHandoffDelivery(slotId, {
+        phase: "failed",
+        error: "Session is not accepting input",
+      });
+      return;
+    }
+    await sendHandoffInput(slotId, current.session);
+  };
+  const sendSelectedHandoffs = async () => {
+    if (!sessionControlSlots || handoffBusy) {
+      return;
+    }
+    const selectedSlots = sessionControlSlots.filter(
+      (slotId) =>
+        handoffSelection[slotId] &&
+        handoffDeliveries[slotId].phase !== "sent" &&
+        handoffDeliveries[slotId].phase !== "queued",
+    );
+    if (selectedSlots.length === 0) {
+      return;
+    }
+    setHandoffBusy(true);
+    await Promise.all(selectedSlots.map((slotId) => queueHandoff(slotId)));
+    setHandoffBusy(false);
+  };
+  const stopAllSessions = async () => {
+    if (stopAllBusy) {
+      return;
+    }
+    setStopAllBusy(true);
+    setStopAllFailures([]);
+    const pendingStarts = EMBEDDED_SLOT_IDS.map(
+      (slotId) => pendingStartRefs.current[slotId],
+    ).filter((pending): pending is Promise<PtySession> => pending !== null);
+    await Promise.allSettled(pendingStarts);
+    const slotsToStop = EMBEDDED_SLOT_IDS.filter((slotId) =>
+      isActiveTerminal(terminalStatesRef.current[slotId]),
+    );
+    const results = await Promise.allSettled(
+      slotsToStop.map((slotId) => stopTerminal(slotId)),
+    );
+    const failures = slotsToStop.filter(
+      (_, index) => results[index].status === "rejected",
+    );
+    setStopAllFailures(failures);
+    setStopAllBusy(false);
+    if (failures.length === 0) {
+      setSessionControlSlots(null);
+    }
+  };
+  const selectedHandoffSlots = (sessionControlSlots ?? []).filter(
+    (slotId) =>
+      handoffSelection[slotId] &&
+      (terminalStates[slotId].phase === "starting" ||
+        terminalStates[slotId].phase === "running"),
+  );
+  const duplicateWorkspaceGroups = Array.from(
+    selectedHandoffSlots.reduce((groups, slotId) => {
+      const workspace = terminalWorkspace(terminalStates[slotId]);
+      if (!workspace) {
+        return groups;
+      }
+      const slots = groups.get(workspace) ?? [];
+      slots.push(slotId);
+      groups.set(workspace, slots);
+      return groups;
+    }, new Map<string, EmbeddedSlotId[]>()),
+  ).filter(([, slots]) => slots.length > 1);
   const visibleSlotIds = visibleSlotQueue ?? EMBEDDED_SLOT_IDS;
   const visibleSlotSet = new Set(visibleSlotIds);
   const displayedSlotIds =
@@ -774,38 +1096,58 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
               </button>
               <h1>AI Agent Console</h1>
             </div>
-            <nav className="slot-view-controls" aria-label="Visible terminals">
-              <button
-                className="slot-view-button"
-                type="button"
-                aria-pressed={visibleSlotQueue === null}
-                onClick={showAllSlots}
+            <div className="tauri-header-controls">
+              <div
+                className="global-session-controls"
+                aria-label="Global session controls"
               >
-                All
-              </button>
-              {EMBEDDED_SLOT_IDS.map((slotId) => {
-                const phase = terminalStates[slotId].phase;
-                return (
-                  <button
-                    className="slot-view-button"
-                    type="button"
-                    key={slotId}
-                    aria-label={`${slotLabel(slotId)} — ${phaseLabel(phase)}`}
-                    aria-pressed={
-                      visibleSlotQueue?.includes(slotId) ?? false
-                    }
-                    onClick={() => toggleVisibleSlot(slotId)}
-                  >
-                    <span>{slotLabel(slotId)}</span>
-                    <span
-                      className={`slot-view-phase terminal-phase-${phase}`}
-                      aria-hidden="true"
-                      title={phaseLabel(phase)}
-                    />
-                  </button>
-                );
-              })}
-            </nav>
+                <span>Sessions · {activeTerminalSlots.length} active</span>
+                <button
+                  type="button"
+                  disabled={activeTerminalSlots.length === 0}
+                  aria-label={`Stop all ${activeTerminalSlots.length} active sessions`}
+                  onClick={openSessionControl}
+                >
+                  Stop All ({activeTerminalSlots.length})
+                </button>
+              </div>
+              <nav
+                className="slot-view-controls"
+                aria-label="Visible terminals"
+              >
+                <button
+                  className="slot-view-button"
+                  type="button"
+                  aria-pressed={visibleSlotQueue === null}
+                  onClick={showAllSlots}
+                >
+                  All
+                </button>
+                {EMBEDDED_SLOT_IDS.map((slotId) => {
+                  const state = terminalStates[slotId];
+                  const label = displayLabel(slotId, state);
+                  return (
+                    <button
+                      className="slot-view-button"
+                      type="button"
+                      key={slotId}
+                      aria-label={`${label} — ${phaseLabel(state.phase)}`}
+                      aria-pressed={
+                        visibleSlotQueue?.includes(slotId) ?? false
+                      }
+                      onClick={() => toggleVisibleSlot(slotId)}
+                      title={`${label} — ${phaseLabel(state.phase)}`}
+                    >
+                      <span>{label}</span>
+                      <span
+                        className={`slot-view-phase terminal-phase-${state.phase}`}
+                        aria-hidden="true"
+                      />
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
           </header>
 
           <div
@@ -946,7 +1288,11 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                   const provider = providerForConsole(slot.providerId);
                   const embeddedSlotId = slot.slotId;
                   const visible = visibleSlotSet.has(embeddedSlotId);
-                  const label = slotLabel(embeddedSlotId);
+                  const label = displayLabel(
+                    embeddedSlotId,
+                    terminalStates[embeddedSlotId],
+                  );
+                  const slotOnlyLabel = slotLabel(embeddedSlotId);
                   return (
                     <article
                       className={`console-slot ${
@@ -966,10 +1312,10 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                         <span>{label}</span>
                         <label>
                           <span className="sr-only">
-                            {label} provider
+                            {slotOnlyLabel} provider
                           </span>
                           <select
-                            aria-label={`${label} provider`}
+                            aria-label={`${slotOnlyLabel} provider`}
                             value={slot.providerId}
                             disabled={
                               !layoutReady ||
@@ -999,6 +1345,9 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                         exitEvent={terminalStates[embeddedSlotId].exitEvent}
                         error={terminalStates[embeddedSlotId].error}
                         resetToken={terminalResetTokens[embeddedSlotId]}
+                        displayName={
+                          terminalStates[embeddedSlotId].displayName
+                        }
                         visible={visible}
                         startDisabled={slotStartDisabled(provider)}
                         runtime={runtime}
@@ -1164,6 +1513,34 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
             </p>
 
             <form onSubmit={(event) => void submitLaunch(event)}>
+              {isEmbeddedSlot(launchDestination) && (
+                <label className="workspace-field session-name-field">
+                  <span>Session name (optional)</span>
+                  <input
+                    type="text"
+                    value={sessionNameInput}
+                    onChange={(event) => {
+                      setSessionNameInput(event.target.value);
+                      setLaunchError(null);
+                    }}
+                    maxLength={SESSION_NAME_LIMIT}
+                    placeholder="Provider · workspace"
+                    disabled={modalBusy}
+                    aria-describedby="session-name-hint"
+                  />
+                  <span className="workspace-hint" id="session-name-hint">
+                    Blank uses Provider and workspace folder.{" "}
+                    {Array.from(sessionNameInput.trim()).length}/
+                    {SESSION_NAME_LIMIT}
+                  </span>
+                  {sessionNameError && (
+                    <span className="field-error" role="alert">
+                      {sessionNameError}
+                    </span>
+                  )}
+                </label>
+              )}
+
               <fieldset disabled={modalBusy}>
                 <legend>Session</legend>
                 <label>
@@ -1294,7 +1671,10 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                   className="modal-launch-button"
                   type="submit"
                   disabled={
-                    modalBusy || !workspacePath || embeddedLaunchDisabled
+                    modalBusy ||
+                    !workspacePath ||
+                    embeddedLaunchDisabled ||
+                    Boolean(sessionNameError)
                   }
                 >
                   {launching
@@ -1305,6 +1685,177 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                 </button>
               </div>
             </form>
+          </section>
+        </div>
+      )}
+
+      {sessionControlSlots && (
+        <div className="modal-backdrop">
+          <section
+            className="launch-modal session-control-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="session-control-heading"
+          >
+            <p className="section-label">GLOBAL SESSIONS</p>
+            <h2 id="session-control-heading">Stop all active sessions</h2>
+            <p className="modal-copy">
+              Stop every embedded session, or request a status.md handoff
+              without stopping any session.
+            </p>
+
+            <div className="session-control-list">
+              {sessionControlSlots.map((slotId) => {
+                const state = terminalStates[slotId];
+                const slot = consoleLayout.slots.find(
+                  (item) => item.slotId === slotId,
+                )!;
+                const provider = providerForConsole(slot.providerId);
+                const label = displayLabel(slotId, state);
+                const selectable =
+                  state.phase === "starting" || state.phase === "running";
+                const delivery = handoffDeliveries[slotId];
+                return (
+                  <article className="session-control-row" key={slotId}>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={handoffSelection[slotId]}
+                        disabled={!selectable || handoffBusy || stopAllBusy}
+                        aria-label={`Send status handoff to ${label}`}
+                        onChange={(event) => {
+                          setHandoffSelection((current) => ({
+                            ...current,
+                            [slotId]: event.target.checked,
+                          }));
+                          if (!event.target.checked) {
+                            updateHandoffDelivery(slotId, {
+                              phase: "idle",
+                              error: null,
+                            });
+                          }
+                        }}
+                      />
+                      <span title={label}>{label}</span>
+                    </label>
+                    <span>{provider.display_name}</span>
+                    <span title={terminalWorkspace(state)}>
+                      {terminalWorkspace(state)}
+                    </span>
+                    <span
+                      className={`handoff-phase terminal-phase-${state.phase}`}
+                    >
+                      {phaseLabel(state.phase)}
+                    </span>
+                    {delivery.phase !== "idle" && (
+                      <div className="handoff-delivery" role="status">
+                        <span
+                          className={`handoff-delivery-${delivery.phase}`}
+                        >
+                          {phaseLabel(delivery.phase)}
+                        </span>
+                        {delivery.error && <span>{delivery.error}</span>}
+                        {delivery.phase === "failed" && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (state.phase === "error") {
+                                retryHandoffRefs.current[slotId] = true;
+                                setSessionControlSlots(null);
+                              } else {
+                                void queueHandoff(slotId);
+                              }
+                            }}
+                          >
+                            {state.phase === "error"
+                              ? "Retry session"
+                              : "Retry"}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+
+            {duplicateWorkspaceGroups.length > 0 && (
+              <div className="workspace-conflict-warning" role="alert">
+                <strong>Shared workspace warning.</strong>
+                {duplicateWorkspaceGroups.map(([workspace, slots]) => (
+                  <span key={workspace}>
+                    {workspace}:{" "}
+                    {slots
+                      .map((slotId) =>
+                        displayLabel(slotId, terminalStates[slotId]),
+                      )
+                      .join(", ")}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {stopAllFailures.length > 0 && (
+              <div className="modal-error" role="alert">
+                Could not stop:{" "}
+                {stopAllFailures
+                  .map((slotId) =>
+                    displayLabel(slotId, terminalStates[slotId]),
+                  )
+                  .join(", ")}
+              </div>
+            )}
+
+            {Object.values(handoffDeliveries).some(
+              (delivery) => delivery.phase !== "idle",
+            ) && (
+              <p className="handoff-note">
+                Sent only confirms terminal delivery. Wait for STATUS_READY
+                before stopping finished work.
+              </p>
+            )}
+
+            <div className="modal-actions session-control-actions">
+              <button
+                className="cancel-button"
+                type="button"
+                onClick={closeSessionControl}
+                disabled={stopAllBusy || handoffBusy}
+              >
+                {Object.values(handoffDeliveries).some(
+                  (delivery) => delivery.phase !== "idle",
+                )
+                  ? "Done"
+                  : "Cancel"}
+              </button>
+              <button
+                className="handoff-button"
+                type="button"
+                onClick={() => void sendSelectedHandoffs()}
+                disabled={
+                  handoffBusy ||
+                  stopAllBusy ||
+                  selectedHandoffSlots.length === 0 ||
+                  selectedHandoffSlots.every((slotId) =>
+                    ["queued", "sent"].includes(
+                      handoffDeliveries[slotId].phase,
+                    ),
+                  )
+                }
+              >
+                {handoffBusy
+                  ? "Sending…"
+                  : "未完成 — 先更新 status.md"}
+              </button>
+              <button
+                className="modal-launch-button"
+                type="button"
+                onClick={() => void stopAllSessions()}
+                disabled={stopAllBusy || handoffBusy}
+              >
+                {stopAllBusy ? "Stopping all…" : "已完成 — Stop All"}
+              </button>
+            </div>
           </section>
         </div>
       )}

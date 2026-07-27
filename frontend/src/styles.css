@@ -421,6 +421,11 @@ details code {
   line-height: 1.45;
 }
 
+.field-error {
+  color: #f1a1aa;
+  font-size: 0.78rem;
+}
+
 .workspace-preview code {
   overflow-wrap: anywhere;
   color: #cbd4e2;
@@ -475,7 +480,8 @@ details code {
 }
 
 .cancel-button,
-.modal-launch-button {
+.modal-launch-button,
+.handoff-button {
   padding: 10px 16px;
   border-radius: 9px;
   cursor: pointer;
@@ -494,8 +500,15 @@ details code {
   background: #4056d6;
 }
 
+.handoff-button {
+  border: 1px solid #62734d;
+  color: #e4efcf;
+  background: #25301d;
+}
+
 .cancel-button:disabled,
-.modal-launch-button:disabled {
+.modal-launch-button:disabled,
+.handoff-button:disabled {
   cursor: wait;
   opacity: 0.6;
 }
@@ -535,6 +548,44 @@ details code {
   min-width: 0;
   align-items: center;
   gap: 9px;
+}
+
+.tauri-header-controls {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.global-session-controls {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 5px 4px 9px;
+  border: 1px solid #303b4e;
+  border-radius: 9px;
+  color: #95a3b8;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.66rem;
+  background: #0d141e;
+}
+
+.global-session-controls button {
+  padding: 5px 8px;
+  border: 1px solid #7a3f4d;
+  border-radius: 7px;
+  color: #ffd5db;
+  background: #321821;
+  cursor: pointer;
+}
+
+.global-session-controls button:disabled {
+  border-color: #303847;
+  color: #687487;
+  background: #151a22;
+  cursor: not-allowed;
 }
 
 .tauri-header h1 {
@@ -609,6 +660,17 @@ details code {
   font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
   font-size: 0.66rem;
   text-transform: capitalize;
+}
+
+.slot-view-button > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slot-view-button:not(:first-child) {
+  width: 96px;
 }
 
 .slot-view-button:first-child {
@@ -1035,6 +1097,114 @@ details code {
 
 .terminal-error {
   flex: 1;
+}
+
+.session-control-modal {
+  width: min(760px, 100%);
+}
+
+.session-control-list {
+  display: grid;
+  max-height: min(48vh, 430px);
+  overflow-y: auto;
+  gap: 8px;
+}
+
+.session-control-row {
+  display: grid;
+  min-width: 0;
+  gap: 5px 10px;
+  padding: 11px 12px;
+  border: 1px solid #293344;
+  border-radius: 11px;
+  color: #92a0b5;
+  background: #0b1119;
+  grid-template-columns: minmax(170px, 1.3fr) minmax(95px, 0.7fr) minmax(
+      160px,
+      1fr
+    ) auto;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.72rem;
+}
+
+.session-control-row > label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  color: #e1e7f0;
+}
+
+.session-control-row > label span,
+.session-control-row > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.handoff-phase {
+  justify-self: end;
+}
+
+.handoff-delivery {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  grid-column: 1 / -1;
+}
+
+.handoff-delivery > span:nth-child(2) {
+  min-width: 0;
+  overflow: hidden;
+  color: #f1a1aa;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.handoff-delivery-sent {
+  color: #5ce1a4;
+}
+
+.handoff-delivery-queued {
+  color: #a9b9d6;
+}
+
+.handoff-delivery-failed {
+  color: #f1a1aa;
+}
+
+.handoff-delivery button {
+  margin-left: auto;
+  padding: 4px 8px;
+  border: 1px solid #49566a;
+  border-radius: 6px;
+  color: #dce3ee;
+  background: #1a2230;
+  cursor: pointer;
+}
+
+.workspace-conflict-warning {
+  display: grid;
+  gap: 5px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid #725d32;
+  border-radius: 9px;
+  color: #f0d699;
+  background: #2b2415;
+  font-size: 0.76rem;
+}
+
+.handoff-note {
+  margin: 14px 0 0;
+  color: #98a5b7;
+  font-size: 0.76rem;
+}
+
+.session-control-actions {
+  flex-wrap: wrap;
 }
 
 .close-confirmation {

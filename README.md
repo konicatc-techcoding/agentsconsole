@@ -157,12 +157,40 @@ Web mode keeps the existing Provider card page and never reads, writes, or
 synchronizes `console-layout.json`.
 
 The embedded terminal reuses the existing New/Continue workspace dialog and
-starts the selected Provider in that Slot. Each terminal renders ordered ANSI
-output, sends raw keyboard input and control sequences, supports
-Command+C/Command+V, fits to window resizes, and keeps 5,000 lines of scrollback.
-Each Slot independently reports Idle, Starting, Running, Stopped, Exited, or
-Error. Stop terminates that Slot's PTY process tree while preserving visible
-output; Start again opens the session dialog again.
+starts the selected Provider in that Slot. An optional Session name (up to 48
+characters) identifies the work in the Header, terminal title, and global
+session dialog. Blank names use `Provider · workspace-folder`. Names are
+in-memory only: `Refresh` preserves them, while an App reload clears them.
+Stopped, exited, and failed sessions retain their name for Start again; changing
+an inactive Slot's Provider clears it.
+
+The Tauri Header also shows the number of Starting, Running, or Stopping
+sessions and a matching `Stop All` action. Its confirmation dialog lists each
+active Slot's name, Provider, workspace, and phase. `已完成 — Stop All` attempts
+to stop every active embedded session without closing the App, reports partial
+failures, and can retry the remaining sessions. A session already Starting is
+allowed to finish starting before Stop; a session already Stopping reuses its
+existing stop operation.
+
+For unfinished work, select the Starting or Running sessions in that dialog and
+choose `未完成 — 先更新 status.md`. The App sends this prompt plus Enter to each
+selected terminal:
+
+```text
+請在目前 workspace 新增或更新 status.md，記錄已完成項目、未完成項目、驗證結果與下一步。不要 commit 或 push；完成後回覆 STATUS_READY。
+```
+
+Delivery is reported independently as Queued, Sent, or Failed. Starting
+sessions queue the prompt until their PTY is ready, and failed deliveries can
+be retried. A shared-workspace warning is informational and does not block
+sending. `Sent` confirms terminal input delivery only: the App does not inspect
+`STATUS_READY`, edit `status.md`, or perform Git actions.
+
+Each terminal renders ordered ANSI output, sends raw keyboard input and control
+sequences, supports Command+C/Command+V, fits to window resizes, and keeps 5,000
+lines of scrollback. Each Slot independently reports Idle, Starting, Running,
+Stopped, Exited, or Error. Stop terminates that Slot's PTY process tree while
+preserving visible output; Start again opens the session dialog again.
 
 The PTY remains exposed only through fixed typed Tauri commands. It accepts
 one of the fixed Slot IDs from Slot 1 through Slot 4, one of the four registered
