@@ -134,6 +134,25 @@ Slot assignments are stored separately in
 - An invalid layout file is preserved and reported with its full path. Fix,
   rename, or delete it outside the app, then use `Refresh`.
 
+The Tauri header can collapse the Provider sidebar so the Console uses the
+full window width. It also provides `All` and Slot 1 through Slot 4 view
+controls:
+
+- `All` restores the fixed 2×2 order.
+- Selecting one Slot fills the Console; two Slots split left to right in
+  selection order.
+- With three Slots, the first selected Slot fills the left side while the next
+  two stack on the right.
+- Selecting all four Slots uses the fixed 2×2 order but retains the custom
+  selection queue, so removing one restores the expected three-Slot priority.
+- At least one Slot remains visible. Hidden Slots stay mounted and continue
+  running, receiving output, and reporting their lifecycle phase in the header.
+  Showing one again preserves its terminal buffer and refits it to the new size.
+
+Sidebar and Slot view choices are in-memory UI state. `Refresh` preserves them,
+but reopening or reloading the App restores the expanded sidebar and `All`.
+They are not written to Console layout or workspace preference storage.
+
 Web mode keeps the existing Provider card page and never reads, writes, or
 synchronizes `console-layout.json`.
 

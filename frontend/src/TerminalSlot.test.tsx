@@ -282,6 +282,39 @@ describe("TerminalSlot", () => {
     });
   });
 
+  it("stays mounted while hidden and refits with buffered output when shown", async () => {
+    const { runtime, emitOutput } = terminalRuntime();
+    const view = renderTerminal(runtime, { visible: true });
+    await waitFor(() => expect(runtime.onPtyOutput).toHaveBeenCalledOnce());
+    const terminal = xterm.FakeTerminal.instances[0];
+
+    view.rerender(<TerminalSlot {...view.props} visible={false} />);
+    act(() =>
+      emitOutput({
+        slotId: "slot-1",
+        sessionId: "session-1",
+        data: [72, 73, 68, 68, 69, 78],
+      }),
+    );
+    expect(xterm.FakeTerminal.instances).toHaveLength(1);
+    expect(Array.from(terminal.writes.at(-1)!)).toEqual([
+      72, 73, 68, 68, 69, 78,
+    ]);
+    const sizeReportsWhileHidden = vi.mocked(view.props.onSize).mock.calls.length;
+
+    view.rerender(<TerminalSlot {...view.props} visible />);
+    expect(xterm.FakeTerminal.instances).toHaveLength(1);
+    expect(vi.mocked(view.props.onSize).mock.calls.length).toBeGreaterThan(
+      sizeReportsWhileHidden,
+    );
+    expect(runtime.resizePty).toHaveBeenLastCalledWith({
+      slotId: "slot-1",
+      sessionId: "session-1",
+      rows: 24,
+      columns: 80,
+    });
+  });
+
   it("reports exit events and exposes retry controls for ended sessions", async () => {
     const { runtime, emitExit } = terminalRuntime();
     const onExit = vi.fn();

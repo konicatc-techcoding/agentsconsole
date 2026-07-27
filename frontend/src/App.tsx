@@ -31,6 +31,7 @@ interface AppProps {
 type EmbeddedSlotId = "slot-1" | "slot-2" | "slot-3" | "slot-4";
 type LaunchDestination = "external" | EmbeddedSlotId;
 type WindowAction = "close" | "reload";
+type VisibleSlotQueue = EmbeddedSlotId[] | null;
 const EMBEDDED_SLOT_IDS: EmbeddedSlotId[] = [
   "slot-1",
   "slot-2",
@@ -96,8 +97,19 @@ function readPendingExit(
   return pending[slotId];
 }
 
+function slotLabel(slotId: EmbeddedSlotId): string {
+  return slotId.replace("slot-", "Slot ");
+}
+
+function phaseLabel(phase: TerminalPhase): string {
+  return phase.charAt(0).toUpperCase() + phase.slice(1);
+}
+
 export default function App({ runtime = defaultRuntime }: AppProps) {
   const isTauri = runtime.kind === "tauri";
+  const [sidebarExpanded, setSidebarExpanded] = useState(true);
+  const [visibleSlotQueue, setVisibleSlotQueue] =
+    useState<VisibleSlotQueue>(null);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -690,6 +702,36 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
   const activeTerminalSlots = EMBEDDED_SLOT_IDS.filter((slotId) =>
     isActiveTerminal(terminalStates[slotId]),
   );
+  const visibleSlotIds = visibleSlotQueue ?? EMBEDDED_SLOT_IDS;
+  const visibleSlotSet = new Set(visibleSlotIds);
+  const displayedSlotIds =
+    visibleSlotIds.length === EMBEDDED_SLOT_IDS.length
+      ? EMBEDDED_SLOT_IDS
+      : visibleSlotIds;
+  const orderedSlotIds = [
+    ...displayedSlotIds,
+    ...EMBEDDED_SLOT_IDS.filter((slotId) => !visibleSlotSet.has(slotId)),
+  ];
+  const slotsById = new Map(
+    consoleLayout.slots.map((slot) => [slot.slotId, slot]),
+  );
+  const showAllSlots = () => {
+    setVisibleSlotQueue(null);
+  };
+  const toggleVisibleSlot = (slotId: EmbeddedSlotId) => {
+    setVisibleSlotQueue((current) => {
+      if (current === null) {
+        return [slotId];
+      }
+      if (!current.includes(slotId)) {
+        return [...current, slotId];
+      }
+      if (current.length === 1) {
+        return current;
+      }
+      return current.filter((visibleSlotId) => visibleSlotId !== slotId);
+    });
+  };
   const providersById = new Map(
     providers.map((provider) => [provider.id, provider]),
   );
@@ -717,102 +759,154 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
       {isTauri ? (
         <>
           <header className="tauri-header">
-            <h1>AI Agent Console</h1>
+            <div className="tauri-header-brand">
+              <button
+                className="sidebar-toggle"
+                type="button"
+                aria-label={
+                  sidebarExpanded
+                    ? "Hide provider sidebar"
+                    : "Show provider sidebar"
+                }
+                onClick={() => setSidebarExpanded((current) => !current)}
+              >
+                <span aria-hidden="true">{sidebarExpanded ? "‹" : "›"}</span>
+              </button>
+              <h1>AI Agent Console</h1>
+            </div>
+            <nav className="slot-view-controls" aria-label="Visible terminals">
+              <button
+                className="slot-view-button"
+                type="button"
+                aria-pressed={visibleSlotQueue === null}
+                onClick={showAllSlots}
+              >
+                All
+              </button>
+              {EMBEDDED_SLOT_IDS.map((slotId) => {
+                const phase = terminalStates[slotId].phase;
+                return (
+                  <button
+                    className="slot-view-button"
+                    type="button"
+                    key={slotId}
+                    aria-label={`${slotLabel(slotId)} — ${phaseLabel(phase)}`}
+                    aria-pressed={
+                      visibleSlotQueue?.includes(slotId) ?? false
+                    }
+                    onClick={() => toggleVisibleSlot(slotId)}
+                  >
+                    <span>{slotLabel(slotId)}</span>
+                    <span
+                      className={`slot-view-phase terminal-phase-${phase}`}
+                      aria-hidden="true"
+                      title={phaseLabel(phase)}
+                    />
+                  </button>
+                );
+              })}
+            </nav>
           </header>
 
-          <div className="tauri-body">
-            <aside className="provider-sidebar" aria-label="CLI providers">
-              <div className="sidebar-discovery">
-                <button
-                  className="refresh-button"
-                  type="button"
-                  onClick={() => void refresh()}
-                  disabled={loading || savingLayout || layoutDirty}
-                >
-                  <span aria-hidden="true">↻</span>
-                  {loading ? "Discovering…" : "Refresh"}
-                </button>
-                <div className="read-only-badge">
-                  <span className="status-dot" />
-                  Read-only discovery
+          <div
+            className={`tauri-body ${
+              sidebarExpanded ? "" : "sidebar-collapsed"
+            }`}
+          >
+            {sidebarExpanded && (
+              <aside className="provider-sidebar" aria-label="CLI providers">
+                <div className="sidebar-discovery">
+                  <button
+                    className="refresh-button"
+                    type="button"
+                    onClick={() => void refresh()}
+                    disabled={loading || savingLayout || layoutDirty}
+                  >
+                    <span aria-hidden="true">↻</span>
+                    {loading ? "Discovering…" : "Refresh"}
+                  </button>
+                  <div className="read-only-badge">
+                    <span className="status-dot" />
+                    Read-only discovery
+                  </div>
                 </div>
-              </div>
 
-              <div className="sidebar-provider-list">
-                {CONSOLE_PROVIDERS.map((option) => {
-                  const provider = providerForConsole(option.id);
-                  const available = isAvailable(provider);
-                  return (
-                    <article
-                      className={`sidebar-provider ${
-                        available ? "" : "unavailable"
-                      }`}
-                      key={option.id}
-                    >
-                      <div className="sidebar-provider-heading">
-                        <span className="sidebar-provider-name">
-                          {provider.display_name}
-                        </span>
-                        <span
-                          className={`availability ${
-                            available ? "available" : ""
-                          }`}
-                        >
-                          <span className="status-dot" />
-                          {available ? "Available" : "Unavailable"}
-                        </span>
-                      </div>
-                      <span className="sidebar-provider-version">
-                        {provider.version ?? "Version unavailable"}
-                      </span>
-                      {provider.error && (
-                        <span className="sidebar-provider-error">
-                          {provider.error}
-                        </span>
-                      )}
-                      <details className="sidebar-provider-path">
-                        <summary>Executable path</summary>
-                        <code>{provider.path ?? "Not found in PATH"}</code>
-                      </details>
-                      <button
-                        className="sidebar-launch-button"
-                        type="button"
-                        aria-label={`Launch ${provider.display_name}`}
-                        disabled={!available || !storageReady}
-                        onClick={() => openLaunch(provider)}
+                <div className="sidebar-provider-list">
+                  {CONSOLE_PROVIDERS.map((option) => {
+                    const provider = providerForConsole(option.id);
+                    const available = isAvailable(provider);
+                    return (
+                      <article
+                        className={`sidebar-provider ${
+                          available ? "" : "unavailable"
+                        }`}
+                        key={option.id}
                       >
-                        Launch
-                      </button>
-                    </article>
-                  );
-                })}
-              </div>
+                        <div className="sidebar-provider-heading">
+                          <span className="sidebar-provider-name">
+                            {provider.display_name}
+                          </span>
+                          <span
+                            className={`availability ${
+                              available ? "available" : ""
+                            }`}
+                          >
+                            <span className="status-dot" />
+                            {available ? "Available" : "Unavailable"}
+                          </span>
+                        </div>
+                        <span className="sidebar-provider-version">
+                          {provider.version ?? "Version unavailable"}
+                        </span>
+                        {provider.error && (
+                          <span className="sidebar-provider-error">
+                            {provider.error}
+                          </span>
+                        )}
+                        <details className="sidebar-provider-path">
+                          <summary>Executable path</summary>
+                          <code>{provider.path ?? "Not found in PATH"}</code>
+                        </details>
+                        <button
+                          className="sidebar-launch-button"
+                          type="button"
+                          aria-label={`Launch ${provider.display_name}`}
+                          disabled={!available || !storageReady}
+                          onClick={() => openLaunch(provider)}
+                        >
+                          Launch
+                        </button>
+                      </article>
+                    );
+                  })}
+                </div>
 
-              <div className="layout-save-panel">
-                <span
-                  className={`layout-save-status ${
-                    layoutDirty ? "unsaved" : ""
-                  }`}
-                  role="status"
-                >
-                  {savingLayout
-                    ? "Saving…"
-                    : layoutDirty
-                      ? "Unsaved changes"
-                      : layoutReady
-                        ? "Saved"
-                        : "Layout unavailable"}
-                </span>
-                <button
-                  className="save-layout-button"
-                  type="button"
-                  onClick={() => void saveConsoleLayout()}
-                  disabled={!layoutReady || !layoutDirty || savingLayout}
-                >
-                  {savingLayout ? "Saving…" : "Save Layout"}
-                </button>
-              </div>
-            </aside>
+                <div className="layout-save-panel">
+                  <span
+                    className={`layout-save-status ${
+                      layoutDirty ? "unsaved" : ""
+                    }`}
+                    role="status"
+                  >
+                    {savingLayout
+                      ? "Saving…"
+                      : layoutDirty
+                        ? "Unsaved changes"
+                        : layoutReady
+                          ? "Saved"
+                          : "Layout unavailable"}
+                  </span>
+                  <button
+                    className="save-layout-button"
+                    type="button"
+                    onClick={() => void saveConsoleLayout()}
+                    disabled={!layoutReady || !layoutDirty || savingLayout}
+                  >
+                    {savingLayout ? "Saving…" : "Save Layout"}
+                  </button>
+                </div>
+              </aside>
+            )}
 
             <section className="console-main" aria-label="Console layout">
               <div className="console-alerts">
@@ -844,20 +938,38 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                 )}
               </div>
 
-              <div className="console-grid">
-                {consoleLayout.slots.map((slot, index) => {
+              <div
+                className={`console-grid console-grid-${visibleSlotIds.length}`}
+              >
+                {orderedSlotIds.map((slotId, visibleIndex) => {
+                  const slot = slotsById.get(slotId)!;
                   const provider = providerForConsole(slot.providerId);
                   const embeddedSlotId = slot.slotId;
+                  const visible = visibleSlotSet.has(embeddedSlotId);
+                  const label = slotLabel(embeddedSlotId);
                   return (
-                    <article className="console-slot" key={slot.slotId}>
+                    <article
+                      className={`console-slot ${
+                        visible ? "" : "console-slot-hidden"
+                      } ${
+                        visible &&
+                        visibleSlotIds.length === 3 &&
+                        visibleIndex === 0
+                          ? "console-slot-primary"
+                          : ""
+                      }`}
+                      aria-hidden={!visible}
+                      data-slot-id={slot.slotId}
+                      key={slot.slotId}
+                    >
                       <header className="console-slot-header">
-                        <span>Slot {index + 1}</span>
+                        <span>{label}</span>
                         <label>
                           <span className="sr-only">
-                            Slot {index + 1} provider
+                            {label} provider
                           </span>
                           <select
-                            aria-label={`Slot ${index + 1} provider`}
+                            aria-label={`${label} provider`}
                             value={slot.providerId}
                             disabled={
                               !layoutReady ||
@@ -887,6 +999,7 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                         exitEvent={terminalStates[embeddedSlotId].exitEvent}
                         error={terminalStates[embeddedSlotId].error}
                         resetToken={terminalResetTokens[embeddedSlotId]}
+                        visible={visible}
                         startDisabled={slotStartDisabled(provider)}
                         runtime={runtime}
                         onStart={() => openLaunch(provider, embeddedSlotId)}

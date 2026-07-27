@@ -322,6 +322,12 @@ describe("AgentOS Console", () => {
     expect(screen.queryByText(/Create task/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Terminal/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Prompt submission/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Visible terminals"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Hide provider sidebar" }),
+    ).not.toBeInTheDocument();
   });
 
   it("saves a validated default without launching and isolates providers", async () => {
@@ -771,6 +777,160 @@ describe("AgentOS Console", () => {
       "antigravity",
     );
     expect(screen.getByRole("button", { name: "Save Layout" })).toBeDisabled();
+  });
+
+  it("collapses the Provider sidebar and preserves the view across Refresh", async () => {
+    const runtime = mockRuntime({ kind: "tauri" });
+    const user = userEvent.setup();
+    const { container } = render(<App runtime={runtime} />);
+
+    await screen.findByText("Saved");
+    expect(screen.getByLabelText("CLI providers")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "All" }),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    await user.click(
+      screen.getByRole("button", { name: "Hide provider sidebar" }),
+    );
+    expect(screen.queryByLabelText("CLI providers")).not.toBeInTheDocument();
+    expect(container.querySelector(".tauri-body")).toHaveClass(
+      "sidebar-collapsed",
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Show provider sidebar" }),
+    );
+    expect(screen.getByLabelText("CLI providers")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Slot 2 — Idle" }));
+    expect(container.querySelector(".console-grid")).toHaveClass(
+      "console-grid-1",
+    );
+    expect(
+      container.querySelector('[data-slot-id="slot-2"]'),
+    ).not.toHaveClass("console-slot-hidden");
+
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(runtime.fetchProviders).toHaveBeenCalledTimes(2));
+    expect(screen.getByLabelText("CLI providers")).toBeInTheDocument();
+    expect(container.querySelector(".console-grid")).toHaveClass(
+      "console-grid-1",
+    );
+    expect(
+      screen.getByRole("button", { name: "Slot 2 — Idle" }),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    expect(screen.getByRole("button", { name: "Save Layout" })).toBeDisabled();
+  });
+
+  it("uses the custom Slot queue for one, two, three, and four Slot views", async () => {
+    const runtime = mockRuntime({ kind: "tauri" });
+    const user = userEvent.setup();
+    const { container } = render(<App runtime={runtime} />);
+    await screen.findByText("Saved");
+
+    const grid = container.querySelector(".console-grid")!;
+    const visibleSlots = () =>
+      Array.from(
+        grid.querySelectorAll(
+          ".console-slot:not(.console-slot-hidden)",
+        ),
+      ).map((slot) => slot.getAttribute("data-slot-id"));
+
+    expect(grid).toHaveClass("console-grid-4");
+    expect(visibleSlots()).toEqual([
+      "slot-1",
+      "slot-2",
+      "slot-3",
+      "slot-4",
+    ]);
+
+    await user.click(screen.getByRole("button", { name: "Slot 2 — Idle" }));
+    expect(grid).toHaveClass("console-grid-1");
+    expect(visibleSlots()).toEqual(["slot-2"]);
+
+    await user.click(screen.getByRole("button", { name: "Slot 2 — Idle" }));
+    expect(visibleSlots()).toEqual(["slot-2"]);
+
+    await user.click(screen.getByRole("button", { name: "Slot 1 — Idle" }));
+    expect(grid).toHaveClass("console-grid-2");
+    expect(visibleSlots()).toEqual(["slot-2", "slot-1"]);
+
+    await user.click(screen.getByRole("button", { name: "Slot 3 — Idle" }));
+    expect(grid).toHaveClass("console-grid-3");
+    expect(visibleSlots()).toEqual(["slot-2", "slot-1", "slot-3"]);
+    expect(
+      container.querySelector('[data-slot-id="slot-2"]'),
+    ).toHaveClass("console-slot-primary");
+
+    await user.click(screen.getByRole("button", { name: "Slot 2 — Idle" }));
+    await user.click(screen.getByRole("button", { name: "Slot 2 — Idle" }));
+    expect(visibleSlots()).toEqual(["slot-1", "slot-3", "slot-2"]);
+    expect(
+      container.querySelector('[data-slot-id="slot-1"]'),
+    ).toHaveClass("console-slot-primary");
+
+    await user.click(screen.getByRole("button", { name: "Slot 4 — Idle" }));
+    expect(grid).toHaveClass("console-grid-4");
+    expect(visibleSlots()).toEqual([
+      "slot-1",
+      "slot-2",
+      "slot-3",
+      "slot-4",
+    ]);
+
+    await user.click(screen.getByRole("button", { name: "Slot 3 — Idle" }));
+    expect(visibleSlots()).toEqual(["slot-1", "slot-2", "slot-4"]);
+    expect(
+      container.querySelector('[data-slot-id="slot-1"]'),
+    ).toHaveClass("console-slot-primary");
+
+    await user.click(screen.getByRole("button", { name: "All" }));
+    expect(grid).toHaveClass("console-grid-4");
+    expect(
+      screen.getByRole("button", { name: "All" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await user.click(screen.getByRole("button", { name: "Slot 4 — Idle" }));
+    expect(visibleSlots()).toEqual(["slot-4"]);
+  });
+
+  it("keeps a hidden running Slot active and exposes its phase in the Header", async () => {
+    const stopPty = vi.fn().mockResolvedValue(undefined);
+    const runtime = mockRuntime({ kind: "tauri", stopPty });
+    const user = userEvent.setup();
+    const { container } = render(<App runtime={runtime} />);
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Configure Slot 1 session",
+      }),
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Default workspace path" }),
+      "/workspace-one",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Start in Slot 1" }),
+    );
+    await screen.findByText("Running");
+
+    await user.click(screen.getByRole("button", { name: "Slot 2 — Idle" }));
+    expect(
+      container.querySelector('[data-slot-id="slot-1"]'),
+    ).toHaveClass("console-slot-hidden");
+    expect(
+      screen.getByRole("button", { name: "Slot 1 — Running" }),
+    ).toBeInTheDocument();
+    expect(stopPty).not.toHaveBeenCalled();
+
+    await user.click(
+      screen.getByRole("button", { name: "Slot 1 — Running" }),
+    );
+    expect(
+      container.querySelector('[data-slot-id="slot-1"]'),
+    ).not.toHaveClass("console-slot-hidden");
+    expect(screen.getByRole("button", { name: "Stop Slot 1" })).toBeEnabled();
   });
 
   it("allows duplicate slot providers and saves only an explicit dirty layout", async () => {

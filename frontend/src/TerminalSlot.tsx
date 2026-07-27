@@ -1,7 +1,7 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import type { RuntimeAdapter } from "./runtime/types";
 import type {
@@ -29,6 +29,7 @@ interface TerminalSlotProps {
   exitEvent: PtyExitEvent | null;
   error: string | null;
   resetToken: number;
+  visible?: boolean;
   startDisabled: boolean;
   runtime: RuntimeAdapter;
   onStart(): void;
@@ -59,6 +60,7 @@ export default function TerminalSlot({
   exitEvent,
   error,
   resetToken,
+  visible = true,
   startDisabled,
   runtime,
   onStart,
@@ -80,6 +82,30 @@ export default function TerminalSlot({
   phaseRef.current = phase;
   onExitRef.current = onExit;
   onSizeRef.current = onSize;
+
+  const fitAndReport = useCallback(() => {
+    const terminal = terminalRef.current;
+    if (!terminal) {
+      return;
+    }
+    try {
+      fitRef.current?.fit();
+    } catch {
+      return;
+    }
+    if (terminal.rows > 0 && terminal.cols > 0) {
+      onSizeRef.current(terminal.rows, terminal.cols);
+      const active = sessionRef.current;
+      if (active && runtime.resizePty) {
+        void runtime.resizePty({
+          slotId,
+          sessionId: active.sessionId,
+          rows: terminal.rows,
+          columns: terminal.cols,
+        });
+      }
+    }
+  }, [runtime, slotId]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -135,25 +161,7 @@ export default function TerminalSlot({
       return true;
     });
 
-    const reportSize = () => {
-      try {
-        fit.fit();
-      } catch {
-        return;
-      }
-      if (terminal.rows > 0 && terminal.cols > 0) {
-        onSizeRef.current(terminal.rows, terminal.cols);
-        const active = sessionRef.current;
-        if (active && runtime.resizePty) {
-          void runtime.resizePty({
-            slotId,
-            sessionId: active.sessionId,
-            rows: terminal.rows,
-            columns: terminal.cols,
-          });
-        }
-      }
-    };
+    const reportSize = () => fitAndReport();
     reportSize();
     const resizeObserver =
       typeof ResizeObserver === "undefined"
@@ -207,7 +215,7 @@ export default function TerminalSlot({
       terminalRef.current = null;
       fitRef.current = null;
     };
-  }, [runtime, slotId]);
+  }, [fitAndReport, runtime, slotId]);
 
   useEffect(() => {
     const terminal = terminalRef.current;
@@ -225,24 +233,15 @@ export default function TerminalSlot({
       pendingOutputRef.current = [];
       previousSessionIdRef.current = sessionId;
       terminal.focus();
-      try {
-        fitRef.current?.fit();
-      } catch {
-        // The viewport may still be settling; ResizeObserver will retry.
-      }
-      if (terminal.rows > 0 && terminal.cols > 0) {
-        onSizeRef.current(terminal.rows, terminal.cols);
-        if (runtime.resizePty) {
-          void runtime.resizePty({
-            slotId,
-            sessionId,
-            rows: terminal.rows,
-            columns: terminal.cols,
-          });
-        }
-      }
+      fitAndReport();
     }
-  }, [runtime, session, slotId]);
+  }, [fitAndReport, session]);
+
+  useEffect(() => {
+    if (visible) {
+      fitAndReport();
+    }
+  }, [fitAndReport, visible]);
 
   useEffect(() => {
     if (phase === "idle") {
