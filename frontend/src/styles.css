@@ -1,4 +1,9 @@
 :root {
+  --hermes-color: #E5A93D;
+  --codex-color: #10A37F;
+  --claude-color: #D97757;
+  --antigravity-color: #4285F4;
+
   color: #f4f7fb;
   background: #080b10;
   font-family:
@@ -953,11 +958,29 @@ details code {
   gap: 12px;
   padding: 9px 11px;
   border-bottom: 1px solid #252d3a;
+  border-left: 4px solid var(--slot-provider-color);
   color: #8592a6;
+  background: color-mix(in srgb, var(--slot-provider-color) 15%, transparent);
   font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
   font-size: 0.72rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+.console-slot-header[data-provider-id="hermes"] {
+  --slot-provider-color: var(--hermes-color);
+}
+
+.console-slot-header[data-provider-id="codex"] {
+  --slot-provider-color: var(--codex-color);
+}
+
+.console-slot-header[data-provider-id="claude"] {
+  --slot-provider-color: var(--claude-color);
+}
+
+.console-slot-header[data-provider-id="antigravity"] {
+  --slot-provider-color: var(--antigravity-color);
 }
 
 .console-slot-header select {
