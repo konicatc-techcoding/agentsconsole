@@ -153,6 +153,16 @@ Sidebar and Slot view choices are in-memory UI state. `Refresh` preserves them,
 but reopening or reloading the App restores the expanded sidebar and `All`.
 They are not written to Console layout or workspace preference storage.
 
+Each Slot also reports whether it needs attention. A Slot whose terminal does
+not hold keyboard focus is marked when it receives new output, and marked
+differently when its session exits or fails. A visible Slot shows this as a
+glow around its terminal frame, and the header's Slot controls carry a matching
+mark that is the only indication for a hidden Slot. Stopping a session yourself
+does not mark it. A mark clears once that Slot is both visible and its terminal
+holds keyboard focus, so in the `All` layout only the Slot you click into
+clears. These marks are separate from the existing lifecycle phase dot, are
+in-memory like the Slot view choices, and are never persisted.
+
 Web mode keeps the existing Provider card page and never reads, writes, or
 synchronizes `console-layout.json`.
 
