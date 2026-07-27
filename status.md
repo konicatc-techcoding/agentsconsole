@@ -5,11 +5,11 @@
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md。LOO-12 至 LOO-17 已依序合併；四個 Slot 已完成
+請先讀取 status.md。LOO-12 至 LOO-18 已依序合併；四個 Slot 已完成
 embedded terminal rollout、自適應版面、Session 顯示名稱、全域 Stop All、
-status.md handoff 與 Slot 注意力指示。Finn-loop 三個 skill 已安裝於
-.claude/skills，綁定 Linear team LOO。下一步完成 README／status 文件
-commit、push 後，執行 /finn-spec 建立下一個規格。
+status.md handoff、Slot 注意力指示與 provider 專屬色標題列。Finn-loop 三個
+skill 已安裝於 .claude/skills，綁定 Linear team LOO。下一步完成 README／
+status 文件 commit、push 後，執行 /finn-spec 建立下一個規格。
 ```
 
 LOO-12 將 PTY engine 擴展為最多四個獨立 session 並啟用 Slot 2；
@@ -25,6 +25,9 @@ LOO-17 加入 Slot 注意力指示：未持有鍵盤焦點的 Slot 收到新輸�
 結束時，以終端邊框光暈與 Header 標記提示，兩者皆只存在 React 記憶體。
 本輪並安裝 Finn-loop 的 finn-spec／finn-build／finn-review 三個 skill，
 LOO-17 是第一個完全由該流程產出的 issue 與 PR。
+LOO-18 讓每格終端標題列以 provider 專屬色標示：15% 透明度底色加 4px 左側
+強邊，顏色跟隨目前選取的 provider，並在 `:root` 首次引入 CSS 自訂屬性作為
+唯一色彩來源。
 
 ## Source of truth
 
@@ -39,12 +42,23 @@ LOO-17 是第一個完全由該流程產出的 issue 與 PR。
   `status.md` 為共用追蹤檔案，任一邊的修改合併後都會影響另一邊；同一個
   分支無法同時在兩個 worktree checkout，切換開發環境時先合併回 `main`，
   再於另一個 worktree `git pull`。
-- 最新合併基線：`9146473 feat: add slot attention indicators (#16)`
+- 最新合併基線：`16f06b8 feat: color console slot headers by provider (#18)`
 - Finn-loop：`.claude/skills` 已安裝 finn-spec／finn-build／finn-review，
   綁定 Linear team `LOO`；GitHub labels `loop-approved`、
   `loop-changes-requested`、`needs-human-review` 均已建立
 - 目前 Linear issue：無；下一步使用 `/finn-spec` 建立新規格
-- 最近完成的 Linear issue：`LOO-17 新增 Slot 注意力指示，標記需要處理的 embedded session`
+- 最近完成的 Linear issue：`LOO-18 讓每格終端標題列以 provider 專屬色標示`
+- LOO-18 URL：<https://linear.app/loopent/issue/LOO-18/讓每格終端標題列以-provider-專屬色標示>
+- LOO-18 狀態：`Done`
+- LOO-18 label：`agent-ready`
+- LOO-18 assignee：Zack Chiu
+- LOO-18 blocker：無
+- LOO-18 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/18>
+- PR #18 狀態：Merged
+- PR #18 merge commit：`16f06b8`
+- PR #18 review：`loop-approved`（由 `finn-review` 產生）
+- PR #18 required check：`smoke` — `SUCCESS`
+- 前一個完成的 Linear issue：`LOO-17 新增 Slot 注意力指示，標記需要處理的 embedded session`
 - LOO-17 URL：<https://linear.app/loopent/issue/LOO-17/新增-slot-注意力指示標記需要處理的-embedded-session>
 - LOO-17 狀態：`Done`
 - LOO-17 label：`agent-ready`
@@ -601,6 +615,42 @@ issue 與 PR：`/finn-spec` 訪談建立規格、`/finn-build` 實作並開 PR�
   2×2 版面、Header 的 active session 計數與 Slot 顯示控制正常；LOO-17 的
   弱光暈、強標記、Header 標記、focus 清除與 Stop 不標記均由人工確認符合
   Linear issue 的 How to verify 九個步驟
+
+## LOO-18 Provider 專屬色標題列
+
+LOO-18 已完成並透過 PR #18 合併，同樣由 `/finn-spec` → `/finn-build` →
+`/finn-review` 全程產出：
+
+- `:root` 首次引入 CSS 自訂屬性作為唯一色彩來源：`--hermes-color: #E5A93D`、
+  `--codex-color: #10A37F`、`--claude-color: #D97757`、
+  `--antigravity-color: #4285F4`。
+- `.console-slot-header` 以 `data-provider-id` 屬性選擇器對應到
+  `--slot-provider-color`，背景使用
+  `color-mix(in srgb, var(--slot-provider-color) 15%, transparent)`，
+  左側加 `border-left: 4px solid var(--slot-provider-color)`。
+- 顏色跟隨該 Slot 目前選取的 provider，包含尚未 `Save Layout` 的 draft；
+  provider 不可用時仍上色，因為顏色代表身分而非狀態；多個 Slot 指派同一
+  provider 時顯示相同顏色。
+- Hermes 的 `#E5A93D` 與 LOO-17 terminated 標記的 `#ffa24a` 色相接近屬於
+  已知並接受的情況，靠位置區分：provider 色在標題列，注意力標記在
+  `.console-slot` 邊框與 Header 按鈕。
+- Web runtime、標題列文字顏色、`select` 樣式與既有底線分隔線均未改變；
+  未新增 storage schema，也未修改 `src-tauri/`。
+
+## LOO-18 驗證結果
+
+- Linear：LOO-18 為 `Done`
+- GitHub：PR #18 已合併，`smoke` required check 為 `SUCCESS`（34 秒）
+- Frontend tests：68 passed（既有 67 加新增 1）
+- Frontend production build：passed（既有 xterm chunk-size warning 不阻擋）
+- `git diff --check`：clean
+- 新增的測試已在移除實作後確認會失敗，非空測試
+- 真實 Tauri App：已啟動並由人工確認四色的實機呈現與可辨識度可接受，包含
+  Hermes 琥珀色與 LOO-17 terminated 橘色相鄰時不致混淆。How to verify 的
+  八個步驟未逐項執行，draft 即時更新與同 provider 同色等項目仍只有自動化
+  測試覆蓋
+- 說明：jsdom 不計算 `color-mix`，自動化測試只能驗證 `data-provider-id`
+  是否正確對應，顏色的實際呈現必須在真實 WebView 確認
 
 ## 本機預覽方式
 
