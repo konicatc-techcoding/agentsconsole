@@ -28,10 +28,15 @@ interface AppProps {
   runtime?: RuntimeAdapter;
 }
 
-type EmbeddedSlotId = "slot-1" | "slot-2" | "slot-3";
+type EmbeddedSlotId = "slot-1" | "slot-2" | "slot-3" | "slot-4";
 type LaunchDestination = "external" | EmbeddedSlotId;
 type WindowAction = "close" | "reload";
-const EMBEDDED_SLOT_IDS: EmbeddedSlotId[] = ["slot-1", "slot-2", "slot-3"];
+const EMBEDDED_SLOT_IDS: EmbeddedSlotId[] = [
+  "slot-1",
+  "slot-2",
+  "slot-3",
+  "slot-4",
+];
 
 interface TerminalState {
   phase: TerminalPhase;
@@ -52,6 +57,7 @@ function initialTerminalStates(): Record<EmbeddedSlotId, TerminalState> {
     "slot-1": { ...IDLE_TERMINAL },
     "slot-2": { ...IDLE_TERMINAL },
     "slot-3": { ...IDLE_TERMINAL },
+    "slot-4": { ...IDLE_TERMINAL },
   };
 }
 
@@ -60,6 +66,7 @@ function initialTerminalSizes() {
     "slot-1": { rows: 24, columns: 80 },
     "slot-2": { rows: 24, columns: 80 },
     "slot-3": { rows: 24, columns: 80 },
+    "slot-4": { rows: 24, columns: 80 },
   };
 }
 
@@ -67,7 +74,10 @@ function isEmbeddedSlot(
   slotId: ConsoleSlotId | LaunchDestination,
 ): slotId is EmbeddedSlotId {
   return (
-    slotId === "slot-1" || slotId === "slot-2" || slotId === "slot-3"
+    slotId === "slot-1" ||
+    slotId === "slot-2" ||
+    slotId === "slot-3" ||
+    slotId === "slot-4"
   );
 }
 
@@ -120,6 +130,7 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
     "slot-1": 0,
     "slot-2": 0,
     "slot-3": 0,
+    "slot-4": 0,
   });
   const [terminalSizes, setTerminalSizes] = useState(initialTerminalSizes);
   const [windowAction, setWindowAction] = useState<WindowAction | null>(null);
@@ -131,6 +142,7 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
     "slot-1": null,
     "slot-2": null,
     "slot-3": null,
+    "slot-4": null,
   });
   const pendingStartRefs = useRef<
     Record<EmbeddedSlotId, Promise<PtySession> | null>
@@ -138,6 +150,7 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
     "slot-1": null,
     "slot-2": null,
     "slot-3": null,
+    "slot-4": null,
   });
 
   const updateTerminalState = useCallback(
@@ -834,10 +847,7 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
               <div className="console-grid">
                 {consoleLayout.slots.map((slot, index) => {
                   const provider = providerForConsole(slot.providerId);
-                  const available = isAvailable(provider);
-                  const embeddedSlotId = isEmbeddedSlot(slot.slotId)
-                    ? slot.slotId
-                    : null;
+                  const embeddedSlotId = slot.slotId;
                   return (
                     <article className="console-slot" key={slot.slotId}>
                       <header className="console-slot-header">
@@ -852,8 +862,7 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                             disabled={
                               !layoutReady ||
                               savingLayout ||
-                              (isEmbeddedSlot(slot.slotId) &&
-                                isActiveTerminal(terminalStates[slot.slotId]))
+                              isActiveTerminal(terminalStates[slot.slotId])
                             }
                             onChange={(event) =>
                               updateConsoleSlot(
@@ -870,47 +879,28 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                           </select>
                         </label>
                       </header>
-                      {embeddedSlotId ? (
-                        <TerminalSlot
-                          slotId={embeddedSlotId}
-                          provider={provider}
-                          phase={terminalStates[embeddedSlotId].phase}
-                          session={terminalStates[embeddedSlotId].session}
-                          exitEvent={terminalStates[embeddedSlotId].exitEvent}
-                          error={terminalStates[embeddedSlotId].error}
-                          resetToken={terminalResetTokens[embeddedSlotId]}
-                          startDisabled={
-                            slotStartDisabled(provider)
-                          }
-                          runtime={runtime}
-                          onStart={() => openLaunch(provider, embeddedSlotId)}
-                          onStop={() => {
-                            void stopTerminal(embeddedSlotId).catch(() => {});
-                          }}
-                          onExit={handleTerminalExit}
-                          onSize={(rows, columns) => {
-                            setTerminalSizes((current) => ({
-                              ...current,
-                              [embeddedSlotId]: { rows, columns },
-                            }));
-                          }}
-                        />
-                      ) : (
-                        <div className="console-placeholder">
-                          <span className="console-provider-name">
-                            {provider.display_name}
-                          </span>
-                          <span
-                            className={`availability ${
-                              available ? "available" : ""
-                            }`}
-                          >
-                            <span className="status-dot" />
-                            {available ? "Available" : "Unavailable"}
-                          </span>
-                          <p>Embedded terminal coming next</p>
-                        </div>
-                      )}
+                      <TerminalSlot
+                        slotId={embeddedSlotId}
+                        provider={provider}
+                        phase={terminalStates[embeddedSlotId].phase}
+                        session={terminalStates[embeddedSlotId].session}
+                        exitEvent={terminalStates[embeddedSlotId].exitEvent}
+                        error={terminalStates[embeddedSlotId].error}
+                        resetToken={terminalResetTokens[embeddedSlotId]}
+                        startDisabled={slotStartDisabled(provider)}
+                        runtime={runtime}
+                        onStart={() => openLaunch(provider, embeddedSlotId)}
+                        onStop={() => {
+                          void stopTerminal(embeddedSlotId).catch(() => {});
+                        }}
+                        onExit={handleTerminalExit}
+                        onSize={(rows, columns) => {
+                          setTerminalSizes((current) => ({
+                            ...current,
+                            [embeddedSlotId]: { rows, columns },
+                          }));
+                        }}
+                      />
                     </article>
                   );
                 })}
