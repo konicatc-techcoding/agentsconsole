@@ -5,12 +5,12 @@
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md。LOO-12 至 LOO-19 已依序合併；四個 Slot 已完成
+請先讀取 status.md。LOO-12 至 LOO-20 已依序合併；四個 Slot 已完成
 embedded terminal rollout、自適應版面、Session 顯示名稱、全域 Stop All、
-status.md handoff、Slot 注意力指示與 provider 專屬色標題列，CI 也已補上
-Rust 測試。Finn-loop 三個 skill 已安裝於 .claude/skills，綁定 Linear team
-LOO。下一步完成 README／status 文件 commit、push 後，執行 /finn-spec
-建立下一個規格。
+status.md handoff、Slot 注意力指示與 provider 專屬色標題列，CI 已補上
+Rust 測試並修正快取與 lockfile 檢查。Finn-loop 三個 skill 已安裝於
+.claude/skills，綁定 Linear team LOO。下一步完成 README／status 文件
+commit、push 後，執行 /finn-spec 建立下一個規格。
 ```
 
 LOO-12 將 PTY engine 擴展為最多四個獨立 session 並啟用 Slot 2；
@@ -32,6 +32,9 @@ LOO-18 讓每格終端標題列以 provider 專屬色標示：15% 透明度底�
 LOO-19 在 CI 新增 `rust` job，補上 `src-tauri` 一直沒有的自動化覆蓋。合併後
 已由人工把 `rust` 加入 `main` 的 required status checks，Rust 測試失敗自此
 會實際擋下合併。
+LOO-20 修正該 job 的兩項缺陷：快取 key 與 restore-keys 納入 rustc 版本，
+`cargo test` 加上 `--locked`，並把 `rustfmt` 寫進 `rust-toolchain.toml` 的
+components。
 
 ## Source of truth
 
@@ -46,7 +49,7 @@ LOO-19 在 CI 新增 `rust` job，補上 `src-tauri` 一直沒有的自動化覆
   `status.md` 為共用追蹤檔案，任一邊的修改合併後都會影響另一邊；同一個
   分支無法同時在兩個 worktree checkout，切換開發環境時先合併回 `main`，
   再於另一個 worktree `git pull`。
-- 最新合併基線：`2ce988f ci: add rust test job (#20)`
+- 最新合併基線：`4d3871f ci: key rust cache by rustc version (#22)`
 - Finn-loop：`.claude/skills` 已安裝 finn-spec／finn-build／finn-review，
   綁定 Linear team `LOO`；GitHub labels `loop-approved`、
   `loop-changes-requested`、`needs-human-review` 均已建立
@@ -54,7 +57,20 @@ LOO-19 在 CI 新增 `rust` job，補上 `src-tauri` 一直沒有的自動化覆
   與 `rust`（macos-latest，`cargo fmt --all --check` 與 `cargo test`），
   `strict` 為 true，即合併前分支必須為最新
 - 目前 Linear issue：無；下一步使用 `/finn-spec` 建立新規格
-- 最近完成的 Linear issue：`LOO-19 在 CI 加入 Rust 測試 job，補上 src-tauri 的自動化覆蓋`
+- 最近完成的 Linear issue：`LOO-20 修正 rust CI job 的快取失效與 lockfile 檢查`
+- LOO-20 URL：<https://linear.app/loopent/issue/LOO-20/修正-rust-ci-job-的快取失效與-lockfile-檢查>
+- LOO-20 狀態：`Done`
+- LOO-20 label：`agent-ready`
+- LOO-20 assignee：Zack Chiu
+- LOO-20 blocker：無
+- LOO-20 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/22>
+- PR #22 狀態：Merged
+- PR #22 merge commit：`4d3871f`
+- PR #22 review：無 `finn-review` 審查。這是 LOO-17 以來第一個沒有跑
+  `/loop /finn-review` 就合併的 PR，兩個 required check 皆綠燈，程式碼由
+  人工確認
+- PR #22 required check：`smoke` — `SUCCESS`；`rust` — `SUCCESS`
+- 前一個完成的 Linear issue：`LOO-19 在 CI 加入 Rust 測試 job，補上 src-tauri 的自動化覆蓋`
 - LOO-19 URL：<https://linear.app/loopent/issue/LOO-19/在-ci-加入-rust-測試-job補上-src-tauri-的自動化覆蓋>
 - LOO-19 狀態：`Done`
 - LOO-19 label：`agent-ready`
@@ -706,10 +722,43 @@ Rust 測試失敗會成為 `[CI]` must-fix，進入 Finn-loop 的自動修復迴
   錯誤格式後確認 `cargo fmt --all --check` 回傳非零，再還原
 - branch protection：`required_status_checks.contexts` 已為
   `["smoke", "rust"]`，`strict` 為 true
-- `finn-review` 提出兩項 Should fix，均未阻擋合併，尚未建立追蹤 issue：
-  快取 key 未包含 rustc 版本（stable 滾動更新後會退化成「還原無用 target
-  加完整重建」且不寫回新 cache）；`cargo` 指令未加 `--locked`（lockfile 與
-  `Cargo.toml` 不同步時 CI 不會失敗）
+- `finn-review` 提出兩項 Should fix，均未阻擋合併：快取 key 未包含 rustc
+  版本（stable 滾動更新後會退化成「還原無用 target 加完整重建」且不寫回新
+  cache）；`cargo` 指令未加 `--locked`（lockfile 與 `Cargo.toml` 不同步時
+  CI 不會失敗）。兩者已由 LOO-20 處理完畢
+
+## LOO-20 rust CI 快取與 lockfile 修正
+
+LOO-20 已完成並透過 PR #22 合併，處理 `finn-review` 對 PR #20 提出的兩項
+Should fix：
+
+- `Set up Rust` 簡化為 `rustup toolchain install`，改由
+  `src-tauri/rust-toolchain.toml` 決定 toolchain 與 component；該檔新增
+  `components = ["rustfmt"]`，`channel`、`profile`、`targets` 未變。這讓
+  本機與 CI 一致，新 clone 下來即可執行 `cargo fmt`。
+- 新增 `Resolve rustc version` 步驟，以
+  `rustc --version | cut -d ' ' -f 2` 取出乾淨版本號寫入 `$GITHUB_OUTPUT`，
+  避免原始字串的空白與括號污染 cache key。
+- 快取 key 改為
+  `${{ runner.os }}-cargo-${{ steps.rustc.outputs.version }}-${{ hashFiles('src-tauri/Cargo.lock') }}`，
+  `restore-keys` 同樣限縮在相同 rustc 版本，不再退回到僅 `-cargo-`。
+- `cargo test` 加上 `--locked`，`Cargo.lock` 與 `Cargo.toml` 不同步時 CI
+  會失敗而非在 runner 上默默改寫 lockfile。
+- **`cargo fmt --all --check` 刻意不加 `--locked`。** `finn-review` 的原始
+  建議是兩個指令都加，但實測 `cargo fmt` 不支援該旗標，會以
+  `error: unexpected argument '--locked' found` 失敗。這一點寫進 LOO-20 的
+  AC-5 作為明文契約，避免日後被當成漏做而補上。
+
+## LOO-20 驗證結果
+
+- Linear：LOO-20 為 `Done`
+- GitHub：PR #22 已合併，`smoke` 與 `rust` 兩個 required check 皆為 `SUCCESS`
+- `smoke` job：37 秒；`rust` job：2 分 33 秒
+- `rust` 本次耗時較 PR #21 的 39 秒長，屬預期行為：cache key 改變必然
+  miss 一次並完整重建，新 key 的快取效果要到下一個 PR 才觀察得到
+- 變更範圍：`.github/workflows/finn-loop-smoke.yml` 與
+  `src-tauri/rust-toolchain.toml` 兩個檔案，未觸及任何原始碼或 `Cargo.lock`
+- 本 PR 未經 `finn-review` 審查即合併，詳見 Source of truth 的 PR #22 記錄
 
 ## 本機預覽方式
 
