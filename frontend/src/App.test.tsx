@@ -14,6 +14,7 @@ import { defaultConsoleLayout } from "./runtime/consoleLayout";
 import type { RuntimeAdapter } from "./runtime/types";
 import type {
   ConsoleLayout,
+  ConsoleSlotId,
   Provider,
   PtyExitEvent,
   PtyOutputEvent,
@@ -215,6 +216,52 @@ function mockRuntime(options?: {
       options?.reloadWindow ?? vi.fn().mockResolvedValue(undefined);
   }
   return runtime;
+}
+
+async function startSlotSession(
+  user: ReturnType<typeof userEvent.setup>,
+  slotNumber: 1 | 2 | 3 | 4,
+  workspace: string,
+) {
+  await user.click(
+    await screen.findByRole("button", {
+      name: `Configure Slot ${slotNumber} session`,
+    }),
+  );
+  await user.type(
+    screen.getByRole("textbox", { name: "Default workspace path" }),
+    workspace,
+  );
+  await user.click(
+    screen.getByRole("button", { name: `Start in Slot ${slotNumber}` }),
+  );
+}
+
+function slotArticle(
+  container: HTMLElement,
+  slotId: ConsoleSlotId,
+): HTMLElement {
+  return container.querySelector<HTMLElement>(`[data-slot-id="${slotId}"]`)!;
+}
+
+function slotViewport(
+  container: HTMLElement,
+  slotId: ConsoleSlotId,
+): HTMLElement {
+  return slotArticle(container, slotId).querySelector<HTMLElement>(
+    ".terminal-viewport",
+  )!;
+}
+
+function emitOutput(
+  handlers: Array<(event: PtyOutputEvent) => void>,
+  slotId: ConsoleSlotId,
+) {
+  act(() => {
+    for (const handler of handlers) {
+      handler({ slotId, sessionId: `session-${slotId}`, data: [79, 75] });
+    }
+  });
 }
 
 afterEach(() => {
@@ -2059,5 +2106,180 @@ describe("AgentOS Console", () => {
     );
     expect(stopPty).toHaveBeenCalledTimes(3);
     expect(screen.getByText("Sessions · 0 active")).toBeInTheDocument();
+  });
+
+  it("marks unfocused Slots on new output and clears the mark on focus", async () => {
+    const outputHandlers: Array<(event: PtyOutputEvent) => void> = [];
+    const runtime = mockRuntime({
+      kind: "tauri",
+      onPtyOutput: async (handler) => {
+        outputHandlers.push(handler);
+        return () => {};
+      },
+    });
+    const user = userEvent.setup();
+    const { container } = render(<App runtime={runtime} />);
+    await startSlotSession(user, 1, "/workspace-one");
+    await startSlotSession(user, 2, "/workspace-two");
+    await waitFor(() => expect(screen.getAllByText("Running")).toHaveLength(2));
+
+    emitOutput(outputHandlers, "slot-2");
+    expect(slotArticle(container, "slot-2")).toHaveClass(
+      "console-slot-attention-output",
+    );
+    expect(slotArticle(container, "slot-1")).not.toHaveClass(
+      "console-slot-attention",
+    );
+    expect(
+      screen.getByRole("button", {
+        name: "Slot 2 · Codex CLI · workspace-two — Running — New output",
+      }),
+    ).toBeInTheDocument();
+
+    fireEvent.focusIn(slotViewport(container, "slot-1"));
+    emitOutput(outputHandlers, "slot-1");
+    expect(slotArticle(container, "slot-1")).not.toHaveClass(
+      "console-slot-attention",
+    );
+    expect(slotArticle(container, "slot-2")).toHaveClass(
+      "console-slot-attention-output",
+    );
+
+    fireEvent.focusOut(slotViewport(container, "slot-1"));
+    fireEvent.focusIn(slotViewport(container, "slot-2"));
+    expect(slotArticle(container, "slot-2")).not.toHaveClass(
+      "console-slot-attention",
+    );
+    expect(
+      screen.getByRole("button", {
+        name: "Slot 2 · Codex CLI · workspace-two — Running",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps hidden Slot marks and separates ended sessions from Stop", async () => {
+    const outputHandlers: Array<(event: PtyOutputEvent) => void> = [];
+    const exitHandlers: Array<(event: PtyExitEvent) => void> = [];
+    const runtime = mockRuntime({
+      kind: "tauri",
+      onPtyOutput: async (handler) => {
+        outputHandlers.push(handler);
+        return () => {};
+      },
+      onPtyExit: async (handler) => {
+        exitHandlers.push(handler);
+        return () => {};
+      },
+    });
+    const user = userEvent.setup();
+    const { container } = render(<App runtime={runtime} />);
+    await startSlotSession(user, 1, "/workspace-one");
+    await startSlotSession(user, 2, "/workspace-two");
+    await waitFor(() => expect(screen.getAllByText("Running")).toHaveLength(2));
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Slot 1 · Hermes CLI · workspace-one — Running",
+      }),
+    );
+    expect(slotArticle(container, "slot-2")).toHaveClass(
+      "console-slot-hidden",
+    );
+
+    emitOutput(outputHandlers, "slot-2");
+    const hiddenSlotTwo = screen.getByRole("button", {
+      name: "Slot 2 · Codex CLI · workspace-two — Running — New output",
+    });
+    expect(hiddenSlotTwo).toHaveAttribute(
+      "title",
+      "Slot 2 · Codex CLI · workspace-two — Running — New output",
+    );
+    expect(slotArticle(container, "slot-2")).not.toHaveClass(
+      "console-slot-attention-output",
+    );
+
+    await user.click(hiddenSlotTwo);
+    expect(slotArticle(container, "slot-2")).toHaveClass(
+      "console-slot-attention-output",
+    );
+
+    act(() => {
+      for (const handler of exitHandlers) {
+        handler({
+          slotId: "slot-1",
+          sessionId: "session-slot-1",
+          exitCode: 0,
+          reason: "exited",
+        });
+      }
+    });
+    expect(slotArticle(container, "slot-1")).toHaveClass(
+      "console-slot-attention-terminated",
+    );
+    expect(
+      screen.getByRole("button", {
+        name: "Slot 1 · Hermes CLI · workspace-one — Exited — Session ended",
+      }),
+    ).toBeInTheDocument();
+
+    emitOutput(outputHandlers, "slot-1");
+    expect(slotArticle(container, "slot-1")).toHaveClass(
+      "console-slot-attention-terminated",
+    );
+    expect(slotArticle(container, "slot-1")).not.toHaveClass(
+      "console-slot-attention-output",
+    );
+
+    fireEvent.focusIn(slotViewport(container, "slot-2"));
+    fireEvent.focusOut(slotViewport(container, "slot-2"));
+    await user.click(screen.getByRole("button", { name: "Stop Slot 2" }));
+    await screen.findByText("Stopped");
+    expect(slotArticle(container, "slot-2")).not.toHaveClass(
+      "console-slot-attention",
+    );
+    expect(
+      screen.getByRole("button", {
+        name: "Slot 2 · Codex CLI · workspace-two — Stopped",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps Slot marks across Refresh and clears them on App reload", async () => {
+    const outputHandlers: Array<(event: PtyOutputEvent) => void> = [];
+    const runtime = mockRuntime({
+      kind: "tauri",
+      onPtyOutput: async (handler) => {
+        outputHandlers.push(handler);
+        return () => {};
+      },
+    });
+    const user = userEvent.setup();
+    const view = render(<App runtime={runtime} />);
+    await startSlotSession(user, 1, "/workspace-one");
+    await screen.findByText("Running");
+
+    emitOutput(outputHandlers, "slot-1");
+    expect(
+      view.container.querySelector('[data-slot-id="slot-1"]'),
+    ).toHaveClass("console-slot-attention-output");
+
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    await waitFor(() =>
+      expect(runtime.fetchProviders).toHaveBeenCalledTimes(2),
+    );
+    expect(
+      await screen.findByRole("button", {
+        name: "Slot 1 · Hermes CLI · workspace-one — Running — New output",
+      }),
+    ).toBeInTheDocument();
+
+    view.unmount();
+    const reloaded = render(<App runtime={runtime} />);
+    expect(
+      await screen.findByRole("button", { name: "Slot 1 — Idle" }),
+    ).toBeInTheDocument();
+    expect(
+      reloaded.container.querySelector('[data-slot-id="slot-1"]'),
+    ).not.toHaveClass("console-slot-attention");
   });
 });

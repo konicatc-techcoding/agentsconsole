@@ -33,6 +33,7 @@ type LaunchDestination = "external" | EmbeddedSlotId;
 type WindowAction = "close" | "reload";
 type VisibleSlotQueue = EmbeddedSlotId[] | null;
 type HandoffPhase = "idle" | "queued" | "sent" | "failed";
+type SlotAttention = "none" | "output" | "terminated";
 const EMBEDDED_SLOT_IDS: EmbeddedSlotId[] = [
   "slot-1",
   "slot-2",
@@ -94,6 +95,24 @@ function initialSlotSelection(value: boolean) {
   };
 }
 
+function initialSlotAttention(): Record<EmbeddedSlotId, SlotAttention> {
+  return {
+    "slot-1": "none",
+    "slot-2": "none",
+    "slot-3": "none",
+    "slot-4": "none",
+  };
+}
+
+function initialSlotPhases(): Record<EmbeddedSlotId, TerminalPhase> {
+  return {
+    "slot-1": "idle",
+    "slot-2": "idle",
+    "slot-3": "idle",
+    "slot-4": "idle",
+  };
+}
+
 function initialHandoffDeliveries(): Record<EmbeddedSlotId, HandoffDelivery> {
   return {
     "slot-1": { phase: "idle", error: null },
@@ -131,6 +150,17 @@ function readPendingExit(
 
 function slotLabel(slotId: EmbeddedSlotId): string {
   return slotId.replace("slot-", "Slot ");
+}
+
+function slotIsVisible(
+  queue: VisibleSlotQueue,
+  slotId: EmbeddedSlotId,
+): boolean {
+  return queue === null || queue.includes(slotId);
+}
+
+function attentionLabel(attention: SlotAttention): string {
+  return attention === "output" ? "New output" : "Session ended";
 }
 
 function phaseLabel(phase: TerminalPhase | HandoffPhase): string {
@@ -220,6 +250,10 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
     "slot-4": 0,
   });
   const [terminalSizes, setTerminalSizes] = useState(initialTerminalSizes);
+  const [slotAttention, setSlotAttention] = useState(initialSlotAttention);
+  const [focusedSlotId, setFocusedSlotId] = useState<EmbeddedSlotId | null>(
+    null,
+  );
   const [sessionControlSlots, setSessionControlSlots] = useState<
     EmbeddedSlotId[] | null
   >(null);
@@ -237,6 +271,9 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
     null,
   );
   const terminalStatesRef = useRef(terminalStates);
+  const focusedSlotIdRef = useRef(focusedSlotId);
+  const visibleSlotQueueRef = useRef(visibleSlotQueue);
+  const slotPhasesRef = useRef(initialSlotPhases());
   const pendingExitRefs = useRef<Record<EmbeddedSlotId, PtyExitEvent | null>>({
     "slot-1": null,
     "slot-2": null,
@@ -271,6 +308,67 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
     },
     [],
   );
+
+  focusedSlotIdRef.current = focusedSlotId;
+  visibleSlotQueueRef.current = visibleSlotQueue;
+
+  const markSlotAttention = useCallback(
+    (slotId: EmbeddedSlotId, attention: Exclude<SlotAttention, "none">) => {
+      const attended =
+        focusedSlotIdRef.current === slotId &&
+        slotIsVisible(visibleSlotQueueRef.current, slotId);
+      if (attended) {
+        return;
+      }
+      setSlotAttention((current) => {
+        const existing = current[slotId];
+        if (
+          existing === attention ||
+          (attention === "output" && existing === "terminated")
+        ) {
+          return current;
+        }
+        return { ...current, [slotId]: attention };
+      });
+    },
+    [],
+  );
+
+  const clearSlotAttention = useCallback((slotId: EmbeddedSlotId) => {
+    setSlotAttention((current) =>
+      current[slotId] === "none" ? current : { ...current, [slotId]: "none" },
+    );
+  }, []);
+
+  const handleTerminalFocusChange = useCallback(
+    (slotId: EmbeddedSlotId, focused: boolean) => {
+      setFocusedSlotId((current) => {
+        if (focused) {
+          return slotId;
+        }
+        return current === slotId ? null : current;
+      });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!focusedSlotId || !slotIsVisible(visibleSlotQueue, focusedSlotId)) {
+      return;
+    }
+    clearSlotAttention(focusedSlotId);
+  }, [clearSlotAttention, focusedSlotId, visibleSlotQueue]);
+
+  useEffect(() => {
+    for (const slotId of EMBEDDED_SLOT_IDS) {
+      const phase = terminalStates[slotId].phase;
+      const previous = slotPhasesRef.current[slotId];
+      slotPhasesRef.current[slotId] = phase;
+      if (phase !== previous && (phase === "exited" || phase === "error")) {
+        markSlotAttention(slotId, "terminated");
+      }
+    }
+  }, [markSlotAttention, terminalStates]);
 
   const layoutDirty =
     isTauri && layoutReady
@@ -1126,19 +1224,32 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                 {EMBEDDED_SLOT_IDS.map((slotId) => {
                   const state = terminalStates[slotId];
                   const label = displayLabel(slotId, state);
+                  const attention = slotAttention[slotId];
+                  const buttonLabel =
+                    attention === "none"
+                      ? `${label} — ${phaseLabel(state.phase)}`
+                      : `${label} — ${phaseLabel(state.phase)} — ${attentionLabel(
+                          attention,
+                        )}`;
                   return (
                     <button
                       className="slot-view-button"
                       type="button"
                       key={slotId}
-                      aria-label={`${label} — ${phaseLabel(state.phase)}`}
+                      aria-label={buttonLabel}
                       aria-pressed={
                         visibleSlotQueue?.includes(slotId) ?? false
                       }
                       onClick={() => toggleVisibleSlot(slotId)}
-                      title={`${label} — ${phaseLabel(state.phase)}`}
+                      title={buttonLabel}
                     >
                       <span>{label}</span>
+                      {attention !== "none" && (
+                        <span
+                          className={`slot-view-attention slot-view-attention-${attention}`}
+                          aria-hidden="true"
+                        />
+                      )}
                       <span
                         className={`slot-view-phase terminal-phase-${state.phase}`}
                         aria-hidden="true"
@@ -1293,6 +1404,7 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                     terminalStates[embeddedSlotId],
                   );
                   const slotOnlyLabel = slotLabel(embeddedSlotId);
+                  const attention = slotAttention[embeddedSlotId];
                   return (
                     <article
                       className={`console-slot ${
@@ -1302,6 +1414,10 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                         visibleSlotIds.length === 3 &&
                         visibleIndex === 0
                           ? "console-slot-primary"
+                          : ""
+                      } ${
+                        visible && attention !== "none"
+                          ? `console-slot-attention console-slot-attention-${attention}`
                           : ""
                       }`}
                       aria-hidden={!visible}
@@ -1356,6 +1472,12 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                           void stopTerminal(embeddedSlotId).catch(() => {});
                         }}
                         onExit={handleTerminalExit}
+                        onOutput={() =>
+                          markSlotAttention(embeddedSlotId, "output")
+                        }
+                        onFocusChange={(focused) =>
+                          handleTerminalFocusChange(embeddedSlotId, focused)
+                        }
                         onSize={(rows, columns) => {
                           setTerminalSizes((current) => ({
                             ...current,
