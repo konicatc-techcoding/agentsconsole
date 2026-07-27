@@ -163,8 +163,16 @@ holds keyboard focus, so in the `All` layout only the Slot you click into
 clears. These marks are separate from the existing lifecycle phase dot, are
 in-memory like the Slot view choices, and are never persisted.
 
+Each Slot's title bar is tinted with its Provider's own colour and carries a
+matching accent bar on its left edge, so the four Slots stay distinguishable at
+a glance. The colour follows whichever Provider is currently selected in that
+Slot, including an unsaved layout draft, and applies even when that Provider is
+unavailable, because it identifies the Provider rather than its status. Several
+Slots running the same Provider share the same colour.
+
 Web mode keeps the existing Provider card page and never reads, writes, or
-synchronizes `console-layout.json`.
+synchronizes `console-layout.json`. Provider colours are Console-only and do not
+apply to the Provider cards.
 
 The embedded terminal reuses the existing New/Continue workspace dialog and
 starts the selected Provider in that Slot. An optional Session name (up to 48
