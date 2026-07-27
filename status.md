@@ -26,8 +26,10 @@ LOO-16 加入全域 active session 計數、可處理 Starting／Running／Stopp
 - Workspace（Codex 原始開發區）：
   `/Volumes/1TBM2/AI_Drive/Codex_Projects/agentsconsole`，branch `main`
 - Workspace（Claude Code 工作區）：
-  `/Volumes/1TBM2/AI_Drive/ClaudeCode_Projects/agentsconsole`，branch
-  `claude/agentsconsole-continuation`
+  `/Volumes/1TBM2/AI_Drive/ClaudeCode_Projects/agentsconsole`；每個 issue
+  各自從預設分支開工作分支，Finn-loop builder 使用 `LOO-NNN-short-slug`。
+  本 repo 以 squash merge 合併，長期分支重複使用會需要 force-push，因此
+  合併後即丟棄工作分支。
 - 兩個 workspace 是同一個 repo 的 git worktree，兩邊都可以繼續開發。
   `status.md` 為共用追蹤檔案，任一邊的修改合併後都會影響另一邊；同一個
   分支無法同時在兩個 worktree checkout，切換開發環境時先合併回 `main`，
