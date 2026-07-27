@@ -244,6 +244,15 @@ function slotArticle(
   return container.querySelector<HTMLElement>(`[data-slot-id="${slotId}"]`)!;
 }
 
+function slotHeaderProvider(
+  container: HTMLElement,
+  slotId: ConsoleSlotId,
+): string | null {
+  return slotArticle(container, slotId)
+    .querySelector(".console-slot-header")!
+    .getAttribute("data-provider-id");
+}
+
 function slotViewport(
   container: HTMLElement,
   slotId: ConsoleSlotId,
@@ -2106,6 +2115,43 @@ describe("AgentOS Console", () => {
     );
     expect(stopPty).toHaveBeenCalledTimes(3);
     expect(screen.getByText("Sessions · 0 active")).toBeInTheDocument();
+  });
+
+  it("tags each Slot header with its provider, including unsaved drafts", async () => {
+    const runtime = mockRuntime({ kind: "tauri" });
+    runtime.fetchProviders = vi.fn().mockResolvedValue(
+      providers.map((provider) =>
+        provider.id === "antigravity"
+          ? {
+              ...provider,
+              installed: false,
+              path: null,
+              version: null,
+              error: "Executable not found in PATH",
+            }
+          : provider,
+      ),
+    );
+    const user = userEvent.setup();
+    const { container } = render(<App runtime={runtime} />);
+    await screen.findByText("Saved");
+
+    expect(slotHeaderProvider(container, "slot-1")).toBe("hermes");
+    expect(slotHeaderProvider(container, "slot-2")).toBe("codex");
+    expect(slotHeaderProvider(container, "slot-3")).toBe("claude");
+    expect(slotHeaderProvider(container, "slot-4")).toBe("antigravity");
+
+    await user.selectOptions(screen.getByLabelText("Slot 2 provider"), "claude");
+    expect(slotHeaderProvider(container, "slot-2")).toBe("claude");
+    expect(slotHeaderProvider(container, "slot-3")).toBe("claude");
+    expect(slotHeaderProvider(container, "slot-1")).toBe("hermes");
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+    expect(runtime.saveConsoleLayout).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Save Layout" }));
+    await screen.findByText("Saved");
+    expect(slotHeaderProvider(container, "slot-2")).toBe("claude");
+    expect(slotHeaderProvider(container, "slot-4")).toBe("antigravity");
   });
 
   it("marks unfocused Slots on new output and clears the mark on focus", async () => {

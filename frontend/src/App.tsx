@@ -1424,7 +1424,10 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                       data-slot-id={slot.slotId}
                       key={slot.slotId}
                     >
-                      <header className="console-slot-header">
+                      <header
+                        className="console-slot-header"
+                        data-provider-id={slot.providerId}
+                      >
                         <span>{label}</span>
                         <label>
                           <span className="sr-only">
