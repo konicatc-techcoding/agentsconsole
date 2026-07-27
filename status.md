@@ -1,37 +1,52 @@
 # AgentOS Console — 工作交接狀態
 
-最後更新：2026-07-26
+最後更新：2026-07-27
 
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md。LOO-11 的 Slot 1 embedded terminal UI 已合併並完成；
-下一步使用 `$finn-spec` 規格化 Slot 2–4 的 embedded terminal rollout，
-建議先評估是否逐 Slot 交付。
+請先讀取 status.md。LOO-12、LOO-13、LOO-14 已依序合併，四個 Slot
+皆已完成 embedded terminal rollout。LOO-15 已完成 `$finn-spec` 並套用
+`agent-ready`；下一步在乾淨工作樹執行 `$finn-build`。
 ```
 
-LOO-11 已把 LOO-10 的 PTY engine 接到 Tauri Slot 1 xterm UI，支援完整
-Start／Stop／retry、clipboard、resize 與關閉清理；Slot 2–4 placeholder、
-外部 Terminal.app Launch 與 Web runtime 維持不變。
+LOO-12 將 PTY engine 擴展為最多四個獨立 session 並啟用 Slot 2；
+LOO-13、LOO-14 接續啟用 Slot 3、4。Tauri 目前四格皆支援完整
+Start／Stop／retry、clipboard、resize 與關閉清理；外部 Terminal.app
+Launch、Web runtime、workspace storage 與 Console layout schema 維持不變。
 
 ## Source of truth
 
-- Workspace：`/Users/zackchiu/CodexCLI/agentsconsole`
+- Workspace：`/Volumes/1TBM2/AI_Drive/Codex_Projects/agentsconsole`
 - Git branch：`main`
-- 最新合併基線：`fb5645a LOO-11 Add Slot 1 embedded terminal UI (#7)`
-- 目前 Linear issue：無；下一步待 `$finn-spec`
-- 最近完成的 Linear issue：`LOO-11 建立 Slot 1 embedded terminal UI 與完整互動生命週期`
-- LOO-11 URL：<https://linear.app/loopent/issue/LOO-11/建立-slot-1-embedded-terminal-ui-與完整互動生命週期>
-- LOO-11 狀態：`Done`
-- LOO-11 label：`agent-ready`
-- LOO-11 assignee：Zack Chiu
-- LOO-11 relation：`blocked by LOO-10`；LOO-10 已 Done
+- 最新合併基線：`8102c19 feat: enable Slot 4 embedded terminal (#10)`
+- 目前 Linear issue：`LOO-15 新增可收合 Sidebar 與可選 Slot 的自適應 Console 版面`
+- LOO-15 URL：<https://linear.app/loopent/issue/LOO-15/新增可收合-sidebar-與可選-slot-的自適應-console-版面>
+- LOO-15 狀態：`Backlog`
+- LOO-15 label：`agent-ready`
+- LOO-15 assignee：無
+- LOO-15 blocker：無
+- LOO-15 GitHub PR：無；下一步使用 `$finn-build`
+- 最近完成的 Linear issue：`LOO-14 啟用 Slot 4 embedded terminal 並完成四格獨立互動`
+- LOO-14 URL：<https://linear.app/loopent/issue/LOO-14/啟用-slot-4-embedded-terminal-並完成四格獨立互動>
+- LOO-14 狀態：`Done`
+- LOO-14 label：`agent-ready`
+- LOO-14 assignee：Zack Chiu
+- LOO-14 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/10>
+- PR #10 狀態：Merged
+- PR #10 merge commit：`8102c195b01ce8d580ae5cb832ee152a3494cae1`
+- PR #10 required check：`smoke` — `SUCCESS`
+- 前一個完成的 Linear issue：`LOO-13 啟用 Slot 3 embedded terminal 與三 Slot 獨立互動`
+- LOO-13 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/9>
+- PR #9 merge commit：`e980e1df4e8dc2210ec863752d4c001625fec482`
+- PR #9 required check：`smoke` — `SUCCESS`
+- 前一個完成的 Linear issue：`LOO-12 擴展 multi-session PTY engine 並啟用 Slot 2 embedded terminal`
+- LOO-12 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/8>
+- PR #8 merge commit：`943d8d6585d478fac28f22a32bd2cc38a592b8b3`
+- PR #8 required check：`smoke` — `SUCCESS`
+- LOO-11 Linear issue：`建立 Slot 1 embedded terminal UI 與完整互動生命週期`
 - LOO-11 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/7>
-- PR #7 狀態：Merged
 - PR #7 merge commit：`fb5645a70bc3a64e6a7ecc417e8180b4cf4d3a19`
-- PR #7 review：`loop-approved`
-- PR #7 required check：`smoke` — `SUCCESS`
-- PR #7 CI run：<https://github.com/konicatc-techcoding/agentsconsole/actions/runs/30206655290/job/89805809526>
 - 前一個完成的 Linear issue：`LOO-10 建立 Slot 1 embedded terminal 的 Rust PTY session engine`
 - LOO-10 URL：<https://linear.app/loopent/issue/LOO-10/建立-slot-1-embedded-terminal-的-rust-pty-session-engine>
 - LOO-10 狀態：`Done`
@@ -390,19 +405,52 @@ LOO-11 已完成、通過 `$finn-review`，並透過 PR #7 合併：
   - 執行中關閉會確認；`Stop and Close` 後 App 與 CLI child 均消失
   - 重開 App 為乾淨 Idle，沒有恢復舊 output 或 process
 
+## LOO-12–14 Multi-slot embedded terminal rollout
+
+LOO-12、LOO-13、LOO-14 均已完成並透過 PR #8、#9、#10 合併：
+
+- Rust PTY engine 支援固定 `slot-1` 至 `slot-4`，每個 Slot 最多一個 active
+  session，全 App 最多四個；所有操作同時驗證 Slot ID 與 opaque session ID。
+- 四個 Slot 均使用相同的 embedded terminal 生命週期，並各自保存 phase、
+  session、output、terminal size、pending state、reset token 與 error。
+- 四格可同時執行相同或不同 Provider；input、output、resize、Stop、自然 exit
+  與 Start again 不會跨 Slot。
+- 執行中只鎖定該 Slot 的 Provider selector；其他 Slot、外部 Launch 與
+  Save Layout 保留既有規則。
+- 關閉或 reload 時以單一確認列出所有 active Slots，嘗試停止全部 session；
+  部分清理失敗時保留失敗的 Slot 與錯誤資訊。
+- Provider-scoped workspace preferences、recent workspace、Console layout
+  schema、Web runtime 與 Tauri capability 均未改變。
+- 不保存 terminal output、PID、PTY session 或 native CLI session。
+
+## LOO-12–14 最終驗證結果
+
+- Linear：LOO-12、LOO-13、LOO-14 均為 `Done`
+- GitHub：PR #8、#9、#10 均已合併，`smoke` required check 均為 `SUCCESS`
+- Frontend tests：52 passed
+- Backend tests：34 passed（另有一則既有 Starlette TestClient deprecation warning）
+- Rust tests：40 passed
+- Frontend production build：passed（既有 xterm chunk-size warning 不阻擋）
+- Unsigned Tauri macOS `.app` build：PR #8、#9、#10 均 passed
+- `cargo fmt --all --check`：passed
+- `git diff --check`：passed
+- LOO-13 真實 Tauri smoke 已驗證三個 Codex Slot 同時獨立輸入輸出、Stop 與
+  關閉清理；LOO-14 以四 Slot 自動化 regression 與 production bundle build
+  完成驗證，未另跑四個真實 CLI 同時互動 smoke。
+
 ## 本機預覽方式
 
 Terminal 1：
 
 ```bash
-cd /Users/zackchiu/CodexCLI/agentsconsole
+cd /Volumes/1TBM2/AI_Drive/Codex_Projects/agentsconsole
 .venv/bin/uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
 ```
 
 Terminal 2：
 
 ```bash
-cd /Users/zackchiu/CodexCLI/agentsconsole/frontend
+cd /Volumes/1TBM2/AI_Drive/Codex_Projects/agentsconsole/frontend
 npm run dev
 ```
 
@@ -412,11 +460,17 @@ npm run dev
 
 ## 接續流程
 
-1. 使用 `$finn-spec` 訪談並規格化 Slot 2–4 embedded terminal rollout。
-2. 優先決定逐 Slot 交付或一次開放多 Slot，以及多個同時執行 PTY 的上限。
-3. 新 issue 確認 `agent-ready` 後，再使用 `$finn-build` 開始下一個單位。
+1. 先將本次 README／status 文件同步以獨立方式完成，確保工作樹乾淨。
+2. 執行 `$finn-build` 認領並實作 `LOO-15`，完成後建立 PR；不得直接合併。
+3. 若要在目前外接硬碟工作區執行本機 backend 或既有 Rust build cache，
+   先重建 `.venv` 並清除舊工作區留下的 build cache 絕對路徑。
 
 ## 本檔注意事項
 
 `status.md` 是納入 Git 追蹤的開發進度與工作交接文件。功能狀態、active
 issue 或接續流程改變時應同步更新；不得用它取代 Linear issue 的完整規格。
+
+使用者說 `agent-ready` 時，先核對 Linear 與目前實作狀態，再同步
+`README.md` 與 `status.md`：README 只描述已完成行為，不預告未實作功能；
+status 記錄 active issue、approval gate 與下一步。文件同步不得以未提交的
+工作樹狀態進入 `$finn-build` preflight。
