@@ -694,6 +694,26 @@ details code {
   box-shadow: 0 0 7px currentcolor;
 }
 
+.slot-view-attention {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
+.slot-view-attention-output {
+  background: #6c82ff;
+  box-shadow: 0 0 6px rgb(108 130 255 / 85%);
+}
+
+.slot-view-attention-terminated {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: #ffa24a;
+  box-shadow: 0 0 8px rgb(255 162 74 / 90%);
+}
+
 .tauri-body {
   display: grid;
   min-width: 0;
@@ -913,6 +933,16 @@ details code {
   border-radius: 14px;
   background: linear-gradient(145deg, #111720, #0c1118);
   grid-template-rows: auto minmax(0, 1fr);
+}
+
+.console-slot.console-slot-attention-output {
+  border-color: #4a5fd4;
+  box-shadow: 0 0 10px rgb(108 130 255 / 35%);
+}
+
+.console-slot.console-slot-attention-terminated {
+  border-color: #ffa24a;
+  box-shadow: 0 0 0 1px rgb(255 162 74 / 55%), 0 0 18px rgb(255 162 74 / 45%);
 }
 
 .console-slot-header {

@@ -37,6 +37,8 @@ interface TerminalSlotProps {
   onStop(): void;
   onExit(event: PtyExitEvent): void;
   onSize(rows: number, columns: number): void;
+  onOutput?(): void;
+  onFocusChange?(focused: boolean): void;
 }
 
 const encoder = new TextEncoder();
@@ -69,6 +71,8 @@ export default function TerminalSlot({
   onStop,
   onExit,
   onSize,
+  onOutput,
+  onFocusChange,
 }: TerminalSlotProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
@@ -77,6 +81,8 @@ export default function TerminalSlot({
   const phaseRef = useRef(phase);
   const onExitRef = useRef(onExit);
   const onSizeRef = useRef(onSize);
+  const onOutputRef = useRef(onOutput);
+  const onFocusChangeRef = useRef(onFocusChange);
   const pendingOutputRef = useRef<PtyOutputEvent[]>([]);
   const previousSessionIdRef = useRef<string | null>(null);
 
@@ -84,6 +90,8 @@ export default function TerminalSlot({
   phaseRef.current = phase;
   onExitRef.current = onExit;
   onSizeRef.current = onSize;
+  onOutputRef.current = onOutput;
+  onFocusChangeRef.current = onFocusChange;
 
   const fitAndReport = useCallback(() => {
     const terminal = terminalRef.current;
@@ -171,6 +179,17 @@ export default function TerminalSlot({
         : new ResizeObserver(reportSize);
     resizeObserver?.observe(viewport);
 
+    const reportFocus = () => onFocusChangeRef.current?.(true);
+    const reportBlur = (event: FocusEvent) => {
+      const next = event.relatedTarget;
+      if (next instanceof Node && viewport.contains(next)) {
+        return;
+      }
+      onFocusChangeRef.current?.(false);
+    };
+    viewport.addEventListener("focusin", reportFocus);
+    viewport.addEventListener("focusout", reportBlur);
+
     let disposed = false;
     const unlisteners: Array<() => void> = [];
     void runtime
@@ -183,7 +202,10 @@ export default function TerminalSlot({
           terminal.write(new Uint8Array(event.data));
         } else if (phaseRef.current === "starting") {
           pendingOutputRef.current.push(event);
+        } else {
+          return;
         }
+        onOutputRef.current?.();
       })
       .then((unlisten) => {
         if (disposed) {
@@ -209,6 +231,8 @@ export default function TerminalSlot({
     return () => {
       disposed = true;
       resizeObserver?.disconnect();
+      viewport.removeEventListener("focusin", reportFocus);
+      viewport.removeEventListener("focusout", reportBlur);
       inputDisposable.dispose();
       for (const unlisten of unlisteners) {
         unlisten();

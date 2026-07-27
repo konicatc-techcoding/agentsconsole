@@ -1,4 +1,11 @@
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { RuntimeAdapter } from "./runtime/types";
@@ -359,5 +366,31 @@ describe("TerminalSlot", () => {
       }),
     );
     expect(onExit).toHaveBeenCalledOnce();
+  });
+
+  it("reports rendered output and terminal focus changes to its owner", async () => {
+    const { runtime, emitOutput } = terminalRuntime();
+    const onOutput = vi.fn();
+    const onFocusChange = vi.fn();
+    renderTerminal(runtime, { onOutput, onFocusChange });
+    await waitFor(() => expect(runtime.onPtyOutput).toHaveBeenCalledOnce());
+    const viewport = screen.getByLabelText("Slot 1 terminal");
+
+    act(() => {
+      emitOutput({ slotId: "slot-2", sessionId: "session-1", data: [65] });
+      emitOutput({ slotId: "slot-1", sessionId: "stale-session", data: [66] });
+    });
+    expect(onOutput).not.toHaveBeenCalled();
+
+    act(() =>
+      emitOutput({ slotId: "slot-1", sessionId: "session-1", data: [67] }),
+    );
+    expect(onOutput).toHaveBeenCalledOnce();
+
+    fireEvent.focusIn(viewport);
+    expect(onFocusChange).toHaveBeenLastCalledWith(true);
+    fireEvent.focusOut(viewport);
+    expect(onFocusChange).toHaveBeenLastCalledWith(false);
+    expect(onFocusChange).toHaveBeenCalledTimes(2);
   });
 });
