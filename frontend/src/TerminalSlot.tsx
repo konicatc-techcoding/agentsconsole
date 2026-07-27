@@ -29,6 +29,7 @@ interface TerminalSlotProps {
   exitEvent: PtyExitEvent | null;
   error: string | null;
   resetToken: number;
+  displayName?: string | null;
   visible?: boolean;
   startDisabled: boolean;
   runtime: RuntimeAdapter;
@@ -60,6 +61,7 @@ export default function TerminalSlot({
   exitEvent,
   error,
   resetToken,
+  displayName = null,
   visible = true,
   startDisabled,
   runtime,
@@ -259,7 +261,9 @@ export default function TerminalSlot({
       <div
         className={`terminal-viewport ${hasTerminal ? "" : "terminal-hidden"}`}
         ref={viewportRef}
-        aria-label={`${slotId.replace("slot-", "Slot ")} terminal`}
+        aria-label={`${slotId.replace("slot-", "Slot ")}${
+          displayName ? ` · ${displayName}` : ""
+        } terminal`}
       />
       {!hasTerminal && (
         <div className="terminal-empty">

@@ -139,6 +139,22 @@ afterEach(() => {
 });
 
 describe("TerminalSlot", () => {
+  it("exposes the session name without remounting the terminal", () => {
+    const { runtime } = terminalRuntime();
+    const view = renderTerminal(runtime, { displayName: "Research lead" });
+
+    expect(
+      screen.getByLabelText("Slot 1 · Research lead terminal"),
+    ).toBeInTheDocument();
+    view.rerender(
+      <TerminalSlot {...view.props} displayName="Review lead" />,
+    );
+    expect(
+      screen.getByLabelText("Slot 1 · Review lead terminal"),
+    ).toBeInTheDocument();
+    expect(xterm.FakeTerminal.instances).toHaveLength(1);
+  });
+
   it("routes input, output, and exit events only for its assigned slot", async () => {
     const { runtime, emitOutput, emitExit } = terminalRuntime();
     const onExit = vi.fn();
