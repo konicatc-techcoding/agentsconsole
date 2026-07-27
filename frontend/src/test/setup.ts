@@ -9,8 +9,18 @@ vi.mock("@xterm/addon-fit", () => ({
 
 vi.mock("@xterm/xterm", () => ({
   Terminal: class {
+    static instances: Array<{ options: Record<string, unknown> }> = [];
     rows = 24;
     cols = 80;
+    options: Record<string, unknown>;
+
+    constructor(options: Record<string, unknown> = {}) {
+      this.options = { ...options };
+      (this.constructor as unknown as {
+        instances: Array<{ options: Record<string, unknown> }>;
+      }).instances.push(this);
+    }
+
     loadAddon() {}
     open() {}
     onData() {

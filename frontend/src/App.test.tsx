@@ -7,6 +7,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { Terminal } from "@xterm/xterm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
@@ -235,6 +236,18 @@ async function startSlotSession(
   await user.click(
     screen.getByRole("button", { name: `Start in Slot ${slotNumber}` }),
   );
+}
+
+function terminalInstances(): Array<{ options: Record<string, unknown> }> {
+  return (
+    Terminal as unknown as {
+      instances: Array<{ options: Record<string, unknown> }>;
+    }
+  ).instances;
+}
+
+function terminalFontSizes(): unknown[] {
+  return terminalInstances().map((terminal) => terminal.options.fontSize);
 }
 
 function slotArticle(
@@ -2115,6 +2128,58 @@ describe("AgentOS Console", () => {
     );
     expect(stopPty).toHaveBeenCalledTimes(3);
     expect(screen.getByText("Sessions · 0 active")).toBeInTheDocument();
+  });
+
+  it("scales every Slot terminal from the Header font control", async () => {
+    const runtime = mockRuntime({ kind: "tauri" });
+    const user = userEvent.setup();
+    terminalInstances().length = 0;
+    const view = render(<App runtime={runtime} />);
+    await screen.findByText("Saved");
+
+    expect(screen.getByText("12px")).toBeInTheDocument();
+    expect(terminalFontSizes()).toEqual([12, 12, 12, 12]);
+
+    await user.click(screen.getByRole("button", { name: "Slot 1 — Idle" }));
+    const increase = screen.getByRole("button", {
+      name: "Increase terminal font size",
+    });
+    const decrease = screen.getByRole("button", {
+      name: "Decrease terminal font size",
+    });
+    await user.click(increase);
+    await user.click(increase);
+
+    expect(screen.getByText("14px")).toBeInTheDocument();
+    expect(terminalFontSizes()).toEqual([14, 14, 14, 14]);
+    expect(terminalInstances()).toHaveLength(4);
+
+    for (let step = 0; step < 4; step += 1) {
+      await user.click(decrease);
+    }
+    expect(screen.getByText("10px")).toBeInTheDocument();
+    expect(decrease).toBeDisabled();
+    expect(increase).toBeEnabled();
+
+    for (let step = 0; step < 10; step += 1) {
+      await user.click(increase);
+    }
+    expect(screen.getByText("20px")).toBeInTheDocument();
+    expect(increase).toBeDisabled();
+    expect(terminalFontSizes()).toEqual([20, 20, 20, 20]);
+    expect(terminalInstances()).toHaveLength(4);
+
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    await waitFor(() =>
+      expect(runtime.fetchProviders).toHaveBeenCalledTimes(2),
+    );
+    expect(screen.getByText("20px")).toBeInTheDocument();
+
+    view.unmount();
+    terminalInstances().length = 0;
+    render(<App runtime={runtime} />);
+    expect(await screen.findByText("12px")).toBeInTheDocument();
+    expect(terminalFontSizes()).toEqual([12, 12, 12, 12]);
   });
 
   it("tags each Slot header with its provider, including unsaved drafts", async () => {

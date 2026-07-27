@@ -593,6 +593,37 @@ details code {
   cursor: not-allowed;
 }
 
+.terminal-font-controls {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 5px;
+  border: 1px solid #303b4e;
+  border-radius: 9px;
+  color: #95a3b8;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.66rem;
+  background: #0d141e;
+}
+
+.terminal-font-controls button {
+  min-width: 26px;
+  padding: 4px 7px;
+  border: 1px solid #3a4659;
+  border-radius: 7px;
+  color: #dce3ee;
+  background: #111823;
+  cursor: pointer;
+}
+
+.terminal-font-controls button:disabled {
+  border-color: #303847;
+  color: #687487;
+  background: #151a22;
+  cursor: not-allowed;
+}
+
 .tauri-header h1 {
   position: relative;
   isolation: isolate;
