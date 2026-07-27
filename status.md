@@ -23,8 +23,14 @@ LOO-16 加入全域 active session 計數、可處理 Starting／Running／Stopp
 
 ## Source of truth
 
-- Workspace：`/Volumes/1TBM2/AI_Drive/Codex_Projects/agentsconsole`
-- Git branch：`main`
+- Workspace（Codex 原始開發區）：
+  `/Volumes/1TBM2/AI_Drive/Codex_Projects/agentsconsole`，branch `main`
+- Workspace（Claude Code 工作區）：
+  `/Volumes/1TBM2/AI_Drive/ClaudeCode_Projects/agentsconsole`，branch
+  `claude/agentsconsole-continuation`
+- 兩個 workspace 是同一個 repo 的 git worktree，目前都停在 `dffeebf`；
+  兩邊都可以繼續開發，但 `status.md` 為共用追蹤檔案，任一邊的修改都會
+  同時影響另一邊。
 - 最新合併基線：`54a88cd feat: add global session controls (#12)`
 - 目前 Linear issue：無；下一步使用 `$finn-spec` 建立新規格
 - 最近完成的 Linear issue：`LOO-16 新增全域 Stop All、Session 顯示名稱與 status handoff`
@@ -535,17 +541,20 @@ LOO-16 已完成並透過 PR #12 合併：
 
 ## 本機預覽方式
 
+以下指令在目前使用的 worktree 根目錄執行，路徑見上方兩個 Workspace。
+每個 worktree 各自需要自己的 `.venv` 與 `frontend/node_modules`，兩邊
+不共用。目前只有 Codex worktree 已安裝，Claude Code worktree 尚未建立。
+
 Terminal 1：
 
 ```bash
-cd /Volumes/1TBM2/AI_Drive/Codex_Projects/agentsconsole
 .venv/bin/uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
 ```
 
 Terminal 2：
 
 ```bash
-cd /Volumes/1TBM2/AI_Drive/Codex_Projects/agentsconsole/frontend
+cd frontend
 npm run dev
 ```
 
@@ -555,8 +564,11 @@ npm run dev
 
 ## 接續流程
 
-1. 先確認本次 README／status 文件 diff，取得使用者確認後依序 commit、
-   push，確保 `main` 與 `origin/main` 同步且工作樹乾淨。
+1. 先確認本次 README／status 文件 diff，取得使用者確認後 commit。若目前
+   不在 `main`（例如 Claude Code worktree 的 `claude/*` 分支），文件改動
+   同樣要 push 分支並開 PR，待 required check `smoke` 通過後才合併，不可
+   直接推 `main`。合併後在另一個 worktree `git pull`，確保兩個 worktree
+   都與 `origin/main` 同步且工作樹乾淨。
 2. 執行 `$finn-spec` 訪談並建立下一個 `agent-ready` issue。
 3. 規格完成後再執行 `$finn-build`；完成後建立 PR，不得直接合併。
 4. 若要在目前外接硬碟工作區執行本機 backend 或既有 Rust build cache，
