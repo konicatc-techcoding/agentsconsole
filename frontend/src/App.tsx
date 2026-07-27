@@ -12,6 +12,7 @@ import TerminalSlot, { type TerminalPhase } from "./TerminalSlot";
 import type {
   ConsoleLayout,
   ConsoleProviderId,
+  ConsoleSlotId,
   Provider,
   PtyExitEvent,
   PtySession,
@@ -27,8 +28,10 @@ interface AppProps {
   runtime?: RuntimeAdapter;
 }
 
-type LaunchDestination = "external" | "slot-1";
+type EmbeddedSlotId = "slot-1" | "slot-2";
+type LaunchDestination = "external" | EmbeddedSlotId;
 type WindowAction = "close" | "reload";
+const EMBEDDED_SLOT_IDS: EmbeddedSlotId[] = ["slot-1", "slot-2"];
 
 interface TerminalState {
   phase: TerminalPhase;
@@ -44,10 +47,39 @@ const IDLE_TERMINAL: TerminalState = {
   error: null,
 };
 
+function initialTerminalStates(): Record<EmbeddedSlotId, TerminalState> {
+  return {
+    "slot-1": { ...IDLE_TERMINAL },
+    "slot-2": { ...IDLE_TERMINAL },
+  };
+}
+
+function initialTerminalSizes() {
+  return {
+    "slot-1": { rows: 24, columns: 80 },
+    "slot-2": { rows: 24, columns: 80 },
+  };
+}
+
+function isEmbeddedSlot(
+  slotId: ConsoleSlotId | LaunchDestination,
+): slotId is EmbeddedSlotId {
+  return slotId === "slot-1" || slotId === "slot-2";
+}
+
+function isActiveTerminal(state: TerminalState): boolean {
+  return (
+    state.phase === "starting" ||
+    state.phase === "running" ||
+    state.phase === "stopping"
+  );
+}
+
 function readPendingExit(
-  ref: React.MutableRefObject<PtyExitEvent | null>,
+  pending: Record<EmbeddedSlotId, PtyExitEvent | null>,
+  slotId: EmbeddedSlotId,
 ): PtyExitEvent | null {
-  return ref.current;
+  return pending[slotId];
 }
 
 export default function App({ runtime = defaultRuntime }: AppProps) {
@@ -79,25 +111,36 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
   const [layoutReady, setLayoutReady] = useState(!isTauri);
   const [layoutError, setLayoutError] = useState<string | null>(null);
   const [savingLayout, setSavingLayout] = useState(false);
-  const [terminalState, setTerminalState] =
-    useState<TerminalState>(IDLE_TERMINAL);
-  const [terminalResetToken, setTerminalResetToken] = useState(0);
-  const [terminalSize, setTerminalSize] = useState({
-    rows: 24,
-    columns: 80,
+  const [terminalStates, setTerminalStates] = useState(initialTerminalStates);
+  const [terminalResetTokens, setTerminalResetTokens] = useState({
+    "slot-1": 0,
+    "slot-2": 0,
   });
+  const [terminalSizes, setTerminalSizes] = useState(initialTerminalSizes);
   const [windowAction, setWindowAction] = useState<WindowAction | null>(null);
   const [windowActionError, setWindowActionError] = useState<string | null>(
     null,
   );
-  const terminalStateRef = useRef(terminalState);
-  const pendingExitRef = useRef<PtyExitEvent | null>(null);
-  const pendingStartRef = useRef<Promise<PtySession> | null>(null);
+  const terminalStatesRef = useRef(terminalStates);
+  const pendingExitRefs = useRef<Record<EmbeddedSlotId, PtyExitEvent | null>>({
+    "slot-1": null,
+    "slot-2": null,
+  });
+  const pendingStartRefs = useRef<
+    Record<EmbeddedSlotId, Promise<PtySession> | null>
+  >({
+    "slot-1": null,
+    "slot-2": null,
+  });
 
-  const updateTerminalState = useCallback((next: TerminalState) => {
-    terminalStateRef.current = next;
-    setTerminalState(next);
-  }, []);
+  const updateTerminalState = useCallback(
+    (slotId: EmbeddedSlotId, next: TerminalState) => {
+      const updated = { ...terminalStatesRef.current, [slotId]: next };
+      terminalStatesRef.current = updated;
+      setTerminalStates(updated);
+    },
+    [],
+  );
 
   const layoutDirty =
     isTauri && layoutReady
@@ -224,15 +267,21 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
     slotId: ConsoleLayout["slots"][number]["slotId"],
     providerId: ConsoleProviderId,
   ) => {
-    if (
-      slotId === "slot-1" &&
-      terminalState.phase !== "starting" &&
-      terminalState.phase !== "running" &&
-      terminalState.phase !== "stopping" &&
-      consoleLayout.slots[0]?.providerId !== providerId
-    ) {
-      updateTerminalState(IDLE_TERMINAL);
-      setTerminalResetToken((value) => value + 1);
+    const currentProvider = consoleLayout.slots.find(
+      (slot) => slot.slotId === slotId,
+    )?.providerId;
+    if (isEmbeddedSlot(slotId)) {
+      const terminalState = terminalStatesRef.current[slotId];
+      if (
+        !isActiveTerminal(terminalState) &&
+        currentProvider !== providerId
+      ) {
+        updateTerminalState(slotId, { ...IDLE_TERMINAL });
+        setTerminalResetTokens((current) => ({
+          ...current,
+          [slotId]: current[slotId] + 1,
+        }));
+      }
     }
     setConsoleLayout((current) => ({
       ...current,
@@ -334,8 +383,11 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
     if (!launchTarget || launching || savingDefault || !workspacePath) {
       return;
     }
+    const embeddedSlot = isEmbeddedSlot(launchDestination)
+      ? launchDestination
+      : null;
     if (
-      launchDestination === "slot-1" &&
+      embeddedSlot &&
       slotStartDisabled(
         providers.find((provider) => provider.id === launchTarget.id),
       )
@@ -348,30 +400,33 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
     setLaunchNotice(null);
     setLaunchWarning(null);
     try {
-      if (launchDestination === "slot-1" && runtime.startPtySession) {
-        pendingExitRef.current = null;
-        updateTerminalState({
+      if (embeddedSlot && runtime.startPtySession) {
+        pendingExitRefs.current[embeddedSlot] = null;
+        updateTerminalState(embeddedSlot, {
           phase: "starting",
           session: null,
           exitEvent: null,
           error: null,
         });
         const startPromise = runtime.startPtySession({
-          slotId: "slot-1",
+          slotId: embeddedSlot,
           providerId: launchTarget.id as ConsoleProviderId,
           workspacePath,
           sessionMode,
           ...(sessionMode === "new" && newFolder ? { newFolder } : {}),
-          rows: terminalSize.rows,
-          columns: terminalSize.columns,
+          rows: terminalSizes[embeddedSlot].rows,
+          columns: terminalSizes[embeddedSlot].columns,
         });
-        pendingStartRef.current = startPromise;
+        pendingStartRefs.current[embeddedSlot] = startPromise;
         const session = await startPromise;
-        pendingStartRef.current = null;
-        const observedExit = readPendingExit(pendingExitRef);
+        pendingStartRefs.current[embeddedSlot] = null;
+        const observedExit = readPendingExit(
+          pendingExitRefs.current,
+          embeddedSlot,
+        );
         const earlyExit =
           observedExit?.sessionId === session.sessionId ? observedExit : null;
-        updateTerminalState({
+        updateTerminalState(embeddedSlot, {
           phase: earlyExit ? "exited" : "running",
           session,
           exitEvent: earlyExit,
@@ -395,9 +450,9 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
         );
       }
     } catch (error) {
-      pendingStartRef.current = null;
-      if (launchDestination === "slot-1") {
-        updateTerminalState({
+      if (embeddedSlot) {
+        pendingStartRefs.current[embeddedSlot] = null;
+        updateTerminalState(embeddedSlot, {
           phase: "error",
           session: null,
           exitEvent: null,
@@ -407,7 +462,7 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
       setLaunchError(
         error instanceof Error
           ? error.message
-          : launchDestination === "slot-1"
+          : embeddedSlot
             ? "PTY start failed"
             : "CLI launch failed",
       );
@@ -418,15 +473,18 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
 
   const handleTerminalExit = useCallback(
     (event: PtyExitEvent) => {
-      const current = terminalStateRef.current;
+      if (!isEmbeddedSlot(event.slotId)) {
+        return;
+      }
+      const current = terminalStatesRef.current[event.slotId];
       if (current.phase === "starting") {
-        pendingExitRef.current = event;
+        pendingExitRefs.current[event.slotId] = event;
         return;
       }
       if (current.session?.sessionId !== event.sessionId) {
         return;
       }
-      updateTerminalState({
+      updateTerminalState(event.slotId, {
         phase:
           current.phase === "stopping" || event.reason === "stopped"
             ? "stopped"
@@ -439,41 +497,51 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
     [updateTerminalState],
   );
 
-  const stopTerminal = useCallback(async () => {
-    const current = terminalStateRef.current;
-    if (!current.session || !runtime.stopPtySession) {
-      return;
-    }
-    updateTerminalState({ ...current, phase: "stopping", error: null });
-    try {
-      await runtime.stopPtySession({
-        slotId: "slot-1",
-        sessionId: current.session.sessionId,
-      });
-      const latest = terminalStateRef.current;
-      updateTerminalState({
-        phase: "stopped",
-        session: current.session,
-        exitEvent: latest.exitEvent,
+  const stopTerminal = useCallback(
+    async (slotId: EmbeddedSlotId) => {
+      const current = terminalStatesRef.current[slotId];
+      if (!current.session || !runtime.stopPtySession) {
+        return;
+      }
+      updateTerminalState(slotId, {
+        ...current,
+        phase: "stopping",
         error: null,
       });
-    } catch (error) {
-      updateTerminalState({
-        ...current,
-        phase: "running",
-        error:
-          error instanceof Error
-            ? error.message
-            : "PTY process tree could not be terminated",
-      });
-      throw error;
-    }
-  }, [runtime, updateTerminalState]);
+      try {
+        await runtime.stopPtySession({
+          slotId,
+          sessionId: current.session.sessionId,
+        });
+        const latest = terminalStatesRef.current[slotId];
+        updateTerminalState(slotId, {
+          phase: "stopped",
+          session: current.session,
+          exitEvent: latest.exitEvent,
+          error: null,
+        });
+      } catch (error) {
+        updateTerminalState(slotId, {
+          ...current,
+          phase: "running",
+          error:
+            error instanceof Error
+              ? error.message
+              : "PTY process tree could not be terminated",
+        });
+        throw error;
+      }
+    },
+    [runtime, updateTerminalState],
+  );
 
-  const terminalIsActive = useCallback(() => {
-    const phase = terminalStateRef.current.phase;
-    return phase === "starting" || phase === "running" || phase === "stopping";
-  }, []);
+  const terminalIsActive = useCallback(
+    () =>
+      EMBEDDED_SLOT_IDS.some((slotId) =>
+        isActiveTerminal(terminalStatesRef.current[slotId]),
+      ),
+    [],
+  );
 
   const requestWindowAction = useCallback(
     (action: WindowAction): boolean => {
@@ -527,16 +595,18 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
 
   useEffect(
     () => () => {
-      const current = terminalStateRef.current;
-      if (
-        current.session &&
-        (current.phase === "running" || current.phase === "stopping") &&
-        runtime.stopPtySession
-      ) {
-        void runtime.stopPtySession({
-          slotId: "slot-1",
-          sessionId: current.session.sessionId,
-        });
+      for (const slotId of EMBEDDED_SLOT_IDS) {
+        const current = terminalStatesRef.current[slotId];
+        if (
+          current.session &&
+          (current.phase === "running" || current.phase === "stopping") &&
+          runtime.stopPtySession
+        ) {
+          void runtime.stopPtySession({
+            slotId,
+            sessionId: current.session.sessionId,
+          });
+        }
       }
     },
     [runtime],
@@ -548,19 +618,26 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
       return;
     }
     setWindowActionError(null);
+    const pendingStarts = EMBEDDED_SLOT_IDS.map(
+      (slotId) => pendingStartRefs.current[slotId],
+    ).filter((pending): pending is Promise<PtySession> => pending !== null);
+    await Promise.allSettled(pendingStarts);
+    const activeSlots = EMBEDDED_SLOT_IDS.filter((slotId) =>
+      isActiveTerminal(terminalStatesRef.current[slotId]),
+    );
+    const stopResults = await Promise.allSettled(
+      activeSlots.map((slotId) => stopTerminal(slotId)),
+    );
+    const failedSlots = activeSlots.filter(
+      (_, index) => stopResults[index].status === "rejected",
+    );
+    if (failedSlots.length > 0) {
+      setWindowActionError(
+        `${failedSlots.map((slotId) => slotId.replace("slot-", "Slot ")).join(", ")} could not be stopped`,
+      );
+      return;
+    }
     try {
-      if (
-        terminalStateRef.current.phase === "starting" &&
-        pendingStartRef.current
-      ) {
-        await pendingStartRef.current;
-      }
-      if (
-        terminalStateRef.current.phase === "running" ||
-        terminalStateRef.current.phase === "stopping"
-      ) {
-        await stopTerminal();
-      }
       if (action === "close") {
         await runtime.closeWindow?.();
       } else {
@@ -571,7 +648,7 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
       setWindowActionError(
         error instanceof Error
           ? error.message
-          : "Slot 1 could not be stopped",
+          : "The App window action could not be completed",
       );
     }
   };
@@ -586,10 +663,13 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
       : [];
   const modalBusy = launching || savingDefault;
   const embeddedLaunchDisabled =
-    launchDestination === "slot-1" &&
+    isEmbeddedSlot(launchDestination) &&
     slotStartDisabled(
       providers.find((provider) => provider.id === launchTarget?.id),
     );
+  const activeTerminalSlots = EMBEDDED_SLOT_IDS.filter((slotId) =>
+    isActiveTerminal(terminalStates[slotId]),
+  );
   const providersById = new Map(
     providers.map((provider) => [provider.id, provider]),
   );
@@ -748,6 +828,9 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                 {consoleLayout.slots.map((slot, index) => {
                   const provider = providerForConsole(slot.providerId);
                   const available = isAvailable(provider);
+                  const embeddedSlotId = isEmbeddedSlot(slot.slotId)
+                    ? slot.slotId
+                    : null;
                   return (
                     <article className="console-slot" key={slot.slotId}>
                       <header className="console-slot-header">
@@ -762,10 +845,8 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                             disabled={
                               !layoutReady ||
                               savingLayout ||
-                              (slot.slotId === "slot-1" &&
-                                (terminalState.phase === "starting" ||
-                                  terminalState.phase === "running" ||
-                                  terminalState.phase === "stopping"))
+                              (isEmbeddedSlot(slot.slotId) &&
+                                isActiveTerminal(terminalStates[slot.slotId]))
                             }
                             onChange={(event) =>
                               updateConsoleSlot(
@@ -782,26 +863,30 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                           </select>
                         </label>
                       </header>
-                      {slot.slotId === "slot-1" ? (
+                      {embeddedSlotId ? (
                         <TerminalSlot
+                          slotId={embeddedSlotId}
                           provider={provider}
-                          phase={terminalState.phase}
-                          session={terminalState.session}
-                          exitEvent={terminalState.exitEvent}
-                          error={terminalState.error}
-                          resetToken={terminalResetToken}
+                          phase={terminalStates[embeddedSlotId].phase}
+                          session={terminalStates[embeddedSlotId].session}
+                          exitEvent={terminalStates[embeddedSlotId].exitEvent}
+                          error={terminalStates[embeddedSlotId].error}
+                          resetToken={terminalResetTokens[embeddedSlotId]}
                           startDisabled={
                             slotStartDisabled(provider)
                           }
                           runtime={runtime}
-                          onStart={() => openLaunch(provider, "slot-1")}
+                          onStart={() => openLaunch(provider, embeddedSlotId)}
                           onStop={() => {
-                            void stopTerminal().catch(() => {});
+                            void stopTerminal(embeddedSlotId).catch(() => {});
                           }}
                           onExit={handleTerminalExit}
-                          onSize={(rows, columns) =>
-                            setTerminalSize({ rows, columns })
-                          }
+                          onSize={(rows, columns) => {
+                            setTerminalSizes((current) => ({
+                              ...current,
+                              [embeddedSlotId]: { rows, columns },
+                            }));
+                          }}
                         />
                       ) : (
                         <div className="console-placeholder">
@@ -959,7 +1044,7 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
             aria-labelledby="launch-heading"
           >
             <p className="section-label">
-              {launchDestination === "slot-1"
+              {isEmbeddedSlot(launchDestination)
                 ? "EMBEDDED TERMINAL"
                 : "LAUNCH CLI"}
             </p>
@@ -1104,8 +1189,8 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                 >
                   {launching
                     ? "Starting…"
-                    : launchDestination === "slot-1"
-                      ? "Start in Slot 1"
+                    : isEmbeddedSlot(launchDestination)
+                      ? `Start in ${launchDestination.replace("slot-", "Slot ")}`
                       : "Start"}
                 </button>
               </div>
@@ -1122,10 +1207,15 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
             aria-modal="true"
             aria-labelledby="close-confirmation-heading"
           >
-            <p className="section-label">ACTIVE TERMINAL</p>
-            <h2 id="close-confirmation-heading">Slot 1 is running</h2>
+            <p className="section-label">ACTIVE TERMINALS</p>
+            <h2 id="close-confirmation-heading">
+              {activeTerminalSlots
+                .map((slotId) => slotId.replace("slot-", "Slot "))
+                .join(", ")}{" "}
+              {activeTerminalSlots.length === 1 ? "is" : "are"} running
+            </h2>
             <p className="modal-copy">
-              Stop the active process tree before{" "}
+              Stop all active process trees before{" "}
               {windowAction === "close" ? "closing" : "reloading"} the App.
             </p>
             {windowActionError && (

@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 
 import type { RuntimeAdapter } from "./runtime/types";
 import type {
+  ConsoleSlotId,
   Provider,
   PtyExitEvent,
   PtyOutputEvent,
@@ -21,6 +22,7 @@ export type TerminalPhase =
   | "error";
 
 interface TerminalSlotProps {
+  slotId: ConsoleSlotId;
   provider: Provider;
   phase: TerminalPhase;
   session: PtySession | null;
@@ -50,6 +52,7 @@ function terminalStatus(
 }
 
 export default function TerminalSlot({
+  slotId,
   provider,
   phase,
   session,
@@ -109,7 +112,7 @@ export default function TerminalSlot({
         return;
       }
       void runtime.writePtyInput({
-        slotId: "slot-1",
+        slotId,
         sessionId: active.sessionId,
         data: Array.from(encoder.encode(value)),
       });
@@ -143,7 +146,7 @@ export default function TerminalSlot({
         const active = sessionRef.current;
         if (active && runtime.resizePty) {
           void runtime.resizePty({
-            slotId: "slot-1",
+            slotId,
             sessionId: active.sessionId,
             rows: terminal.rows,
             columns: terminal.cols,
@@ -162,7 +165,7 @@ export default function TerminalSlot({
     const unlisteners: Array<() => void> = [];
     void runtime
       .onPtyOutput((event) => {
-        if (event.slotId !== "slot-1") {
+        if (event.slotId !== slotId) {
           return;
         }
         const active = sessionRef.current;
@@ -181,7 +184,7 @@ export default function TerminalSlot({
       });
     void runtime
       .onPtyExit((event) => {
-        if (event.slotId === "slot-1") {
+        if (event.slotId === slotId) {
           onExitRef.current(event);
         }
       })
@@ -204,7 +207,7 @@ export default function TerminalSlot({
       terminalRef.current = null;
       fitRef.current = null;
     };
-  }, [runtime]);
+  }, [runtime, slotId]);
 
   useEffect(() => {
     const terminal = terminalRef.current;
@@ -231,7 +234,7 @@ export default function TerminalSlot({
         onSizeRef.current(terminal.rows, terminal.cols);
         if (runtime.resizePty) {
           void runtime.resizePty({
-            slotId: "slot-1",
+            slotId,
             sessionId,
             rows: terminal.rows,
             columns: terminal.cols,
@@ -239,7 +242,7 @@ export default function TerminalSlot({
         }
       }
     }
-  }, [runtime, session]);
+  }, [runtime, session, slotId]);
 
   useEffect(() => {
     if (phase === "idle") {
@@ -257,7 +260,7 @@ export default function TerminalSlot({
       <div
         className={`terminal-viewport ${hasTerminal ? "" : "terminal-hidden"}`}
         ref={viewportRef}
-        aria-label="Slot 1 terminal"
+        aria-label={`${slotId.replace("slot-", "Slot ")} terminal`}
       />
       {!hasTerminal && (
         <div className="terminal-empty">
@@ -272,6 +275,11 @@ export default function TerminalSlot({
             <button
               className="terminal-start-button"
               type="button"
+              aria-label={
+                phase === "error"
+                  ? `Retry ${slotId.replace("slot-", "Slot ")}`
+                  : `Configure ${slotId.replace("slot-", "Slot ")} session`
+              }
               disabled={startDisabled}
               onClick={onStart}
             >
@@ -300,6 +308,7 @@ export default function TerminalSlot({
           <button
             className="terminal-stop-button"
             type="button"
+            aria-label={`Stop ${slotId.replace("slot-", "Slot ")}`}
             disabled={phase === "stopping"}
             onClick={onStop}
           >
@@ -310,6 +319,7 @@ export default function TerminalSlot({
           <button
             className="terminal-start-again-button"
             type="button"
+            aria-label={`Start again in ${slotId.replace("slot-", "Slot ")}`}
             disabled={startDisabled}
             onClick={onStart}
           >
