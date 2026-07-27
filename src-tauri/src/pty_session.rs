@@ -4,6 +4,7 @@ use crate::launcher::{
 use crate::providers::resolve_executable;
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -14,7 +15,7 @@ use tauri::{AppHandle, Emitter};
 
 pub const PTY_OUTPUT_EVENT: &str = "pty-output";
 pub const PTY_EXIT_EVENT: &str = "pty-exit";
-const SLOT_ID: &str = "slot-1";
+const SLOT_IDS: [&str; 4] = ["slot-1", "slot-2", "slot-3", "slot-4"];
 const STOP_GRACE_PERIOD: Duration = Duration::from_millis(500);
 static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -353,7 +354,7 @@ struct ActiveSession {
 }
 
 struct EngineInner {
-    active: Mutex<Option<Arc<ActiveSession>>>,
+    active: Mutex<HashMap<String, Arc<ActiveSession>>>,
     adapter: Arc<dyn PtyAdapter>,
     resolver: Arc<dyn ExecutableResolver>,
 }
@@ -376,7 +377,7 @@ impl PtySessionEngine {
     fn new(adapter: Arc<dyn PtyAdapter>, resolver: Arc<dyn ExecutableResolver>) -> Self {
         Self {
             inner: Arc::new(EngineInner {
-                active: Mutex::new(None),
+                active: Mutex::new(HashMap::new()),
                 adapter,
                 resolver,
             }),
@@ -407,10 +408,10 @@ impl PtySessionEngine {
         validate_size(request.rows, request.columns)?;
 
         let mut active_guard = self.active()?;
-        if active_guard.is_some() {
+        if active_guard.contains_key(&request.slot_id) {
             return Err(CommandError::new(
                 "session_already_running",
-                "Slot 1 already has an active PTY session",
+                format!("{} already has an active PTY session", request.slot_id),
                 409,
             ));
         }
@@ -456,7 +457,7 @@ impl PtySessionEngine {
         };
 
         let session = PtySession {
-            slot_id: SLOT_ID.to_string(),
+            slot_id: request.slot_id,
             session_id: next_session_id(),
             provider_id: request.provider_id,
             workspace_path: workspace.to_string_lossy().into_owned(),
@@ -469,7 +470,7 @@ impl PtySessionEngine {
             stopping: AtomicBool::new(false),
             reader_thread: Mutex::new(None),
         });
-        *active_guard = Some(active.clone());
+        active_guard.insert(session.slot_id.clone(), active.clone());
         drop(active_guard);
 
         let engine = self.clone();
@@ -528,30 +529,57 @@ impl PtySessionEngine {
                 CommandError::new("pty_stop_failed", "PTY reader could not be released", 502)
             })?;
         }
-        self.clear_if_current(&active.session.session_id);
+        self.clear_if_current(&active.session.slot_id, &active.session.session_id);
         Ok(())
     }
 
     pub fn cleanup(&self) -> Result<(), CommandError> {
-        let active = match self.active()?.clone() {
-            Some(active) => active,
-            None => return Ok(()),
-        };
-        self.stop(PtySessionRequest {
-            slot_id: active.session.slot_id.clone(),
-            session_id: active.session.session_id.clone(),
-        })
+        let requests = self
+            .active()?
+            .values()
+            .map(|active| PtySessionRequest {
+                slot_id: active.session.slot_id.clone(),
+                session_id: active.session.session_id.clone(),
+            })
+            .collect::<Vec<_>>();
+        let mut first_error = None;
+        for request in requests {
+            if let Err(error) = self.stop(request) {
+                if first_error.is_none() {
+                    first_error = Some(error);
+                }
+            }
+        }
+        first_error.map_or(Ok(()), Err)
     }
 
-    fn active(&self) -> Result<MutexGuard<'_, Option<Arc<ActiveSession>>>, CommandError> {
+    fn active(&self) -> Result<MutexGuard<'_, HashMap<String, Arc<ActiveSession>>>, CommandError> {
         lock(&self.inner.active).map_err(internal_error)
     }
 
     fn session_for(&self, request: &PtySessionRequest) -> Result<Arc<ActiveSession>, CommandError> {
         validate_slot(&request.slot_id)?;
-        let active = self.active()?.clone().ok_or_else(|| {
-            CommandError::new("no_active_session", "Slot 1 has no active PTY session", 404)
-        })?;
+        let active_guard = self.active()?;
+        let active = match active_guard.get(&request.slot_id).cloned() {
+            Some(active) => active,
+            None if active_guard
+                .values()
+                .any(|active| active.session.session_id == request.session_id) =>
+            {
+                return Err(CommandError::new(
+                    "stale_session",
+                    "The PTY session ID is not active in the requested slot",
+                    409,
+                ));
+            }
+            None => {
+                return Err(CommandError::new(
+                    "no_active_session",
+                    format!("{} has no active PTY session", request.slot_id),
+                    404,
+                ));
+            }
+        };
         if active.session.session_id != request.session_id {
             return Err(CommandError::new(
                 "stale_session",
@@ -562,13 +590,13 @@ impl PtySessionEngine {
         Ok(active)
     }
 
-    fn clear_if_current(&self, session_id: &str) {
+    fn clear_if_current(&self, slot_id: &str, session_id: &str) {
         if let Ok(mut guard) = self.inner.active.lock() {
             if guard
-                .as_ref()
+                .get(slot_id)
                 .is_some_and(|active| active.session.session_id == session_id)
             {
-                *guard = None;
+                guard.remove(slot_id);
             }
         }
     }
@@ -617,7 +645,7 @@ fn stream_output(
     } else {
         exit.reason
     };
-    engine.clear_if_current(&active.session.session_id);
+    engine.clear_if_current(&active.session.slot_id, &active.session.session_id);
     sink.exit(&PtyExitEvent {
         slot_id: active.session.slot_id.clone(),
         session_id: active.session.session_id.clone(),
@@ -627,10 +655,10 @@ fn stream_output(
 }
 
 fn validate_slot(slot_id: &str) -> Result<(), CommandError> {
-    if slot_id != SLOT_ID {
+    if !SLOT_IDS.contains(&slot_id) {
         return Err(CommandError::new(
             "invalid_slot",
-            "Only slot-1 supports an embedded PTY session",
+            "Embedded PTY sessions require slot-1 through slot-4",
             400,
         ));
     }
@@ -678,6 +706,8 @@ mod tests {
     use std::io;
     use std::sync::mpsc::{self, Receiver, Sender};
     use std::sync::Condvar;
+
+    const SLOT_ID: &str = "slot-1";
 
     #[cfg(unix)]
     struct FakeUnixProcessGroup {
@@ -956,8 +986,17 @@ mod tests {
     }
 
     fn request(provider_id: &str, workspace: &Path, session_mode: SessionMode) -> PtyStartRequest {
+        request_for_slot(SLOT_ID, provider_id, workspace, session_mode)
+    }
+
+    fn request_for_slot(
+        slot_id: &str,
+        provider_id: &str,
+        workspace: &Path,
+        session_mode: SessionMode,
+    ) -> PtyStartRequest {
         PtyStartRequest {
-            slot_id: SLOT_ID.to_string(),
+            slot_id: slot_id.to_string(),
             provider_id: provider_id.to_string(),
             workspace_path: workspace.to_string_lossy().into_owned(),
             session_mode,
@@ -1073,7 +1112,7 @@ mod tests {
         let sink = Arc::new(FakeSink::default());
 
         let mut invalid_slot = request("codex", &workspace, SessionMode::New);
-        invalid_slot.slot_id = "slot-2".to_string();
+        invalid_slot.slot_id = "slot-5".to_string();
         assert_eq!(
             engine
                 .start_with_sink(invalid_slot, sink.clone())
@@ -1129,7 +1168,45 @@ mod tests {
     }
 
     #[test]
-    fn enforces_one_active_session_and_rejects_stale_session_ids() {
+    fn supports_four_independent_slots_and_rejects_duplicate_slot_sessions() {
+        let workspace = temp_workspace();
+        let adapter = Arc::new(FakeAdapter::new());
+        let engine = engine(adapter.clone());
+        let sink = Arc::new(FakeSink::default());
+        let sessions = SLOT_IDS
+            .iter()
+            .map(|slot_id| {
+                engine
+                    .start_with_sink(
+                        request_for_slot(slot_id, "codex", &workspace, SessionMode::New),
+                        sink.clone(),
+                    )
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            engine
+                .start_with_sink(
+                    request_for_slot("slot-2", "claude", &workspace, SessionMode::New),
+                    sink.clone(),
+                )
+                .unwrap_err()
+                .code,
+            "session_already_running"
+        );
+        assert_eq!(lock(&adapter.processes).unwrap().len(), 4);
+        for session in &sessions {
+            assert_eq!(engine.query(session_request(session)).unwrap(), *session);
+        }
+        for session in sessions {
+            engine.stop(session_request(&session)).unwrap();
+        }
+        std::fs::remove_dir_all(workspace).unwrap();
+    }
+
+    #[test]
+    fn rejects_stale_and_cross_slot_session_ids_without_touching_other_sessions() {
         let workspace = temp_workspace();
         let adapter = Arc::new(FakeAdapter::new());
         let engine = engine(adapter);
@@ -1137,21 +1214,12 @@ mod tests {
         let first = engine
             .start_with_sink(request("codex", &workspace, SessionMode::New), sink.clone())
             .unwrap();
-
-        assert_eq!(
-            engine
-                .start_with_sink(
-                    request("claude", &workspace, SessionMode::New),
-                    sink.clone(),
-                )
-                .unwrap_err()
-                .code,
-            "session_already_running"
-        );
         engine.stop(session_request(&first)).unwrap();
-
         let second = engine
-            .start_with_sink(request("claude", &workspace, SessionMode::New), sink)
+            .start_with_sink(
+                request_for_slot("slot-1", "claude", &workspace, SessionMode::New),
+                sink,
+            )
             .unwrap();
         for code in [
             engine.query(session_request(&first)).unwrap_err().code,
@@ -1173,9 +1241,17 @@ mod tests {
                 .unwrap_err()
                 .code,
             engine.stop(session_request(&first)).unwrap_err().code,
+            engine
+                .query(PtySessionRequest {
+                    slot_id: "slot-2".to_string(),
+                    session_id: second.session_id.clone(),
+                })
+                .unwrap_err()
+                .code,
         ] {
             assert_eq!(code, "stale_session");
         }
+        assert_eq!(engine.query(session_request(&second)).unwrap(), second);
         engine.stop(session_request(&second)).unwrap();
         std::fs::remove_dir_all(workspace).unwrap();
     }
@@ -1304,6 +1380,39 @@ mod tests {
         process.terminate_error.store(false, Ordering::SeqCst);
         engine.cleanup().unwrap();
         assert!(process.terminated.load(Ordering::SeqCst));
+        std::fs::remove_dir_all(workspace).unwrap();
+    }
+
+    #[test]
+    fn cleanup_attempts_every_active_slot_when_one_stop_fails() {
+        let workspace = temp_workspace();
+        let adapter = Arc::new(FakeAdapter::new());
+        let engine = engine(adapter.clone());
+        let first = engine
+            .start_with_sink(
+                request_for_slot("slot-1", "codex", &workspace, SessionMode::New),
+                Arc::new(FakeSink::default()),
+            )
+            .unwrap();
+        let second = engine
+            .start_with_sink(
+                request_for_slot("slot-2", "codex", &workspace, SessionMode::New),
+                Arc::new(FakeSink::default()),
+            )
+            .unwrap();
+        let processes = lock(&adapter.processes).unwrap().clone();
+        processes[0].terminate_error.store(true, Ordering::SeqCst);
+
+        assert_eq!(engine.cleanup().unwrap_err().code, "pty_stop_failed");
+        assert_eq!(engine.query(session_request(&first)).unwrap(), first);
+        assert!(processes[1].terminated.load(Ordering::SeqCst));
+        assert_eq!(
+            engine.query(session_request(&second)).unwrap_err().code,
+            "no_active_session"
+        );
+
+        processes[0].terminate_error.store(false, Ordering::SeqCst);
+        engine.cleanup().unwrap();
         std::fs::remove_dir_all(workspace).unwrap();
     }
 

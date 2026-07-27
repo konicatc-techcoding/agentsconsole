@@ -61,7 +61,7 @@ export interface ConsoleLayout {
 }
 
 export interface PtyStartRequest {
-  slotId: "slot-1";
+  slotId: ConsoleSlotId;
   providerId: ConsoleProviderId;
   workspacePath: string;
   sessionMode: SessionMode;
@@ -71,7 +71,7 @@ export interface PtyStartRequest {
 }
 
 export interface PtySessionRequest {
-  slotId: "slot-1";
+  slotId: ConsoleSlotId;
   sessionId: string;
 }
 
@@ -85,7 +85,7 @@ export interface PtyResizeRequest extends PtySessionRequest {
 }
 
 export interface PtySession {
-  slotId: "slot-1";
+  slotId: ConsoleSlotId;
   sessionId: string;
   providerId: ConsoleProviderId;
   workspacePath: string;
@@ -93,13 +93,13 @@ export interface PtySession {
 }
 
 export interface PtyOutputEvent {
-  slotId: "slot-1";
+  slotId: ConsoleSlotId;
   sessionId: string;
   data: number[];
 }
 
 export interface PtyExitEvent {
-  slotId: "slot-1";
+  slotId: ConsoleSlotId;
   sessionId: string;
   exitCode: number | null;
   reason: string;

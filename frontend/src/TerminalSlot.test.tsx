@@ -115,6 +115,7 @@ function renderTerminal(
   overrides: Partial<React.ComponentProps<typeof TerminalSlot>> = {},
 ) {
   const props: React.ComponentProps<typeof TerminalSlot> = {
+    slotId: "slot-1",
     provider,
     phase: "running",
     session,
@@ -138,6 +139,55 @@ afterEach(() => {
 });
 
 describe("TerminalSlot", () => {
+  it("routes input, output, and exit events only for its assigned slot", async () => {
+    const { runtime, emitOutput, emitExit } = terminalRuntime();
+    const onExit = vi.fn();
+    renderTerminal(runtime, {
+      slotId: "slot-2",
+      session: { ...session, slotId: "slot-2" },
+      onExit,
+    });
+    const terminal = xterm.FakeTerminal.instances[0];
+
+    act(() => terminal.dataHandler?.("slot-two"));
+    expect(runtime.writePtyInput).toHaveBeenCalledWith({
+      slotId: "slot-2",
+      sessionId: session.sessionId,
+      data: Array.from(new TextEncoder().encode("slot-two")),
+    });
+
+    act(() => {
+      emitOutput({
+        slotId: "slot-1",
+        sessionId: session.sessionId,
+        data: [49],
+      });
+      emitOutput({
+        slotId: "slot-2",
+        sessionId: session.sessionId,
+        data: [50],
+      });
+      emitExit({
+        slotId: "slot-1",
+        sessionId: session.sessionId,
+        exitCode: 0,
+        reason: "exited",
+      });
+      emitExit({
+        slotId: "slot-2",
+        sessionId: session.sessionId,
+        exitCode: 0,
+        reason: "exited",
+      });
+    });
+
+    expect(terminal.writes.map((value) => Array.from(value))).toEqual([[50]]);
+    expect(onExit).toHaveBeenCalledOnce();
+    expect(onExit).toHaveBeenCalledWith(
+      expect.objectContaining({ slotId: "slot-2" }),
+    );
+  });
+
   it("uses 5,000-line scrollback and forwards raw terminal input bytes", async () => {
     const { runtime, emitOutput } = terminalRuntime();
     renderTerminal(runtime);
@@ -248,7 +298,9 @@ describe("TerminalSlot", () => {
     await waitFor(() => expect(runtime.onPtyExit).toHaveBeenCalledOnce());
 
     expect(screen.getByText("Exited (2)")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start again" })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Start again in Slot 1" }),
+    ).toBeEnabled();
     act(() =>
       emitExit({
         slotId: "slot-1",

@@ -1,4 +1,11 @@
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -184,8 +191,8 @@ function mockRuntime(options?: {
       options?.startPty ??
       vi.fn<NonNullable<RuntimeAdapter["startPtySession"]>>(
         async (request) => ({
-          slotId: "slot-1",
-          sessionId: "session-1",
+          slotId: request.slotId,
+          sessionId: `session-${request.slotId}`,
           providerId: request.providerId,
           workspacePath: request.workspacePath,
           sessionMode: request.sessionMode,
@@ -750,9 +757,10 @@ describe("AgentOS Console", () => {
     expect(screen.queryByText("CLI PROVIDERS")).not.toBeInTheDocument();
     expect(screen.getByLabelText("CLI providers")).toBeInTheDocument();
     expect(await screen.findAllByText("Embedded terminal coming next")).toHaveLength(
-      3,
+      2,
     );
     expect(screen.getByLabelText("Slot 1 terminal")).toBeInTheDocument();
+    expect(screen.getByLabelText("Slot 2 terminal")).toBeInTheDocument();
     expect(screen.getByLabelText("Slot 1 provider")).toHaveValue("hermes");
     expect(screen.getByLabelText("Slot 2 provider")).toHaveValue("codex");
     expect(screen.getByLabelText("Slot 3 provider")).toHaveValue("claude");
@@ -992,7 +1000,7 @@ describe("AgentOS Console", () => {
     expect(
       await screen.findByText("Codex CLI launched in /workspace"),
     ).toBeInTheDocument();
-    expect(screen.getAllByText("Embedded terminal coming next")).toHaveLength(3);
+    expect(screen.getAllByText("Embedded terminal coming next")).toHaveLength(2);
     expect(screen.queryByText("Running")).not.toBeInTheDocument();
     expect(screen.queryByText("Launched")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Slot 2 provider")).toHaveValue("codex");
@@ -1015,7 +1023,9 @@ describe("AgentOS Console", () => {
     const slotOne = await screen.findByLabelText("Slot 1 provider");
     await user.selectOptions(slotOne, "codex");
     expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Start" }));
+    await user.click(
+      screen.getByRole("button", { name: "Configure Slot 1 session" }),
+    );
 
     expect(
       screen.getByRole("button", { name: "Start in Slot 1" }),
@@ -1069,7 +1079,11 @@ describe("AgentOS Console", () => {
     const user = userEvent.setup();
     render(<App runtime={runtime} />);
 
-    await user.click(await screen.findByRole("button", { name: "Start" }));
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Configure Slot 1 session",
+      }),
+    );
     await user.type(
       screen.getByRole("textbox", { name: "Default workspace path" }),
       "/workspace",
@@ -1086,7 +1100,7 @@ describe("AgentOS Console", () => {
     expect(screen.getAllByText("Provider could not start").length).toBeGreaterThan(
       0,
     );
-    expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Retry Slot 1" })).toBeEnabled();
     expect(screen.getByLabelText("Slot 1 provider")).toBeEnabled();
   });
 
@@ -1095,7 +1109,11 @@ describe("AgentOS Console", () => {
     const user = userEvent.setup();
     render(<App runtime={runtime} />);
 
-    await user.click(await screen.findByRole("button", { name: "Start" }));
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Configure Slot 1 session",
+      }),
+    );
     await user.type(
       screen.getByRole("textbox", { name: "Default workspace path" }),
       "/workspace",
@@ -1126,7 +1144,11 @@ describe("AgentOS Console", () => {
     const user = userEvent.setup();
     render(<App runtime={runtime} />);
 
-    await user.click(await screen.findByRole("button", { name: "Start" }));
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Configure Slot 1 session",
+      }),
+    );
     await user.type(
       screen.getByRole("textbox", { name: "Default workspace path" }),
       "/workspace",
@@ -1134,32 +1156,42 @@ describe("AgentOS Console", () => {
     await user.click(
       screen.getByRole("button", { name: "Start in Slot 1" }),
     );
-    await user.click(await screen.findByRole("button", { name: "Stop" }));
+    await user.click(
+      await screen.findByRole("button", { name: "Stop Slot 1" }),
+    );
 
     expect(await screen.findByText("Stopped")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start again" })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Start again in Slot 1" }),
+    ).toBeEnabled();
     expect(runtime.stopPtySession).toHaveBeenCalledWith({
       slotId: "slot-1",
-      sessionId: "session-1",
+      sessionId: "session-slot-1",
     });
     await user.selectOptions(screen.getByLabelText("Slot 1 provider"), "codex");
-    expect(screen.getByText("Idle")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start" })).toBeEnabled();
+    expect(screen.getAllByText("Idle")).toHaveLength(2);
+    expect(
+      screen.getByRole("button", { name: "Configure Slot 1 session" }),
+    ).toBeEnabled();
   });
 
   it("shows natural exit state and ignores stale exit events", async () => {
-    let exitHandler: ((event: PtyExitEvent) => void) | undefined;
+    const exitHandlers: Array<(event: PtyExitEvent) => void> = [];
     const runtime = mockRuntime({
       kind: "tauri",
       onPtyExit: async (handler) => {
-        exitHandler = handler;
+        exitHandlers.push(handler);
         return () => {};
       },
     });
     const user = userEvent.setup();
     render(<App runtime={runtime} />);
 
-    await user.click(await screen.findByRole("button", { name: "Start" }));
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Configure Slot 1 session",
+      }),
+    );
     await user.type(
       screen.getByRole("textbox", { name: "Default workspace path" }),
       "/workspace",
@@ -1169,33 +1201,35 @@ describe("AgentOS Console", () => {
     );
     await screen.findByText("Running");
 
-    act(() =>
-      exitHandler?.({
+    act(() => {
+      for (const handler of exitHandlers) handler({
         slotId: "slot-1",
         sessionId: "stale-session",
         exitCode: 1,
         reason: "exited",
-      }),
-    );
+      });
+    });
     expect(screen.getByText("Running")).toBeInTheDocument();
-    act(() =>
-      exitHandler?.({
+    act(() => {
+      for (const handler of exitHandlers) handler({
         slotId: "slot-1",
-        sessionId: "session-1",
+        sessionId: "session-slot-1",
         exitCode: 0,
         reason: "exited",
-      }),
-    );
+      });
+    });
     expect(await screen.findByText("Exited (0)")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start again" })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Start again in Slot 1" }),
+    ).toBeEnabled();
   });
 
   it("disables retry when Refresh makes the ended Provider unavailable", async () => {
-    let exitHandler: ((event: PtyExitEvent) => void) | undefined;
+    const exitHandlers: Array<(event: PtyExitEvent) => void> = [];
     const runtime = mockRuntime({
       kind: "tauri",
       onPtyExit: async (handler) => {
-        exitHandler = handler;
+        exitHandlers.push(handler);
         return () => {};
       },
     });
@@ -1218,7 +1252,11 @@ describe("AgentOS Console", () => {
     const user = userEvent.setup();
     render(<App runtime={runtime} />);
 
-    await user.click(await screen.findByRole("button", { name: "Start" }));
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Configure Slot 1 session",
+      }),
+    );
     await user.type(
       screen.getByRole("textbox", { name: "Default workspace path" }),
       "/workspace",
@@ -1227,21 +1265,25 @@ describe("AgentOS Console", () => {
       screen.getByRole("button", { name: "Start in Slot 1" }),
     );
     await screen.findByText("Running");
-    act(() =>
-      exitHandler?.({
+    act(() => {
+      for (const handler of exitHandlers) handler({
         slotId: "slot-1",
-        sessionId: "session-1",
+        sessionId: "session-slot-1",
         exitCode: 0,
         reason: "exited",
-      }),
-    );
+      });
+    });
     expect(await screen.findByText("Exited (0)")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start again" })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Start again in Slot 1" }),
+    ).toBeEnabled();
 
     await user.click(screen.getByRole("button", { name: "Refresh" }));
 
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Start again" })).toBeDisabled(),
+      expect(
+        screen.getByRole("button", { name: "Start again in Slot 1" }),
+      ).toBeDisabled(),
     );
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
@@ -1265,7 +1307,11 @@ describe("AgentOS Console", () => {
     const user = userEvent.setup();
     render(<App runtime={runtime} />);
 
-    await user.click(await screen.findByRole("button", { name: "Start" }));
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Configure Slot 1 session",
+      }),
+    );
     await user.type(
       screen.getByRole("textbox", { name: "Default workspace path" }),
       "/workspace",
@@ -1284,7 +1330,7 @@ describe("AgentOS Console", () => {
     await waitFor(() =>
       expect(
         screen
-          .getAllByText("PTY process tree could not be terminated")
+          .getAllByText("Slot 1 could not be stopped")
           .some((element) => element.classList.contains("modal-error")),
       ).toBe(true),
     );
@@ -1292,5 +1338,188 @@ describe("AgentOS Console", () => {
 
     await user.click(screen.getByRole("button", { name: "Stop and Close" }));
     await waitFor(() => expect(closeWindow).toHaveBeenCalledOnce());
+  });
+
+  it("runs the same Provider independently in Slot 1 and Slot 2", async () => {
+    const startPty = vi.fn<
+      NonNullable<RuntimeAdapter["startPtySession"]>
+    >(async (request) => ({
+      slotId: request.slotId,
+      sessionId: `session-${request.slotId}`,
+      providerId: request.providerId,
+      workspacePath: request.workspacePath,
+      sessionMode: request.sessionMode,
+    }));
+    const runtime = mockRuntime({ kind: "tauri", startPty });
+    const user = userEvent.setup();
+    render(<App runtime={runtime} />);
+
+    await user.selectOptions(
+      await screen.findByLabelText("Slot 1 provider"),
+      "codex",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Configure Slot 1 session" }),
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Default workspace path" }),
+      "/workspace-one",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Start in Slot 1" }),
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Configure Slot 2 session" }),
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Default workspace path" }),
+      "/workspace-two",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Start in Slot 2" }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getAllByText("Running")).toHaveLength(2),
+    );
+    expect(startPty).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        slotId: "slot-1",
+        providerId: "codex",
+        workspacePath: "/workspace-one",
+      }),
+    );
+    expect(startPty).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        slotId: "slot-2",
+        providerId: "codex",
+        workspacePath: "/workspace-two",
+      }),
+    );
+    expect(runtime.saveWorkspacePreferences).toHaveBeenLastCalledWith(
+      {
+        codex: {
+          defaultWorkspace: "",
+          recentWorkspaces: ["/workspace-two", "/workspace-one"],
+        },
+      },
+      "history",
+    );
+    expect(screen.getByLabelText("Slot 1 provider")).toBeDisabled();
+    expect(screen.getByLabelText("Slot 2 provider")).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Stop Slot 1" }));
+    expect(await screen.findByText("Stopped")).toBeInTheDocument();
+    expect(screen.getByText("Running")).toBeInTheDocument();
+    expect(screen.getByLabelText("Slot 1 provider")).toBeEnabled();
+    expect(screen.getByLabelText("Slot 2 provider")).toBeDisabled();
+
+    await user.selectOptions(screen.getByLabelText("Slot 1 provider"), "hermes");
+    expect(screen.getByText("Idle")).toBeInTheDocument();
+    expect(screen.getByText("Running")).toBeInTheDocument();
+  });
+
+  it("stops every active Slot and blocks closing when one Slot fails", async () => {
+    let closeHandler: (() => boolean) | undefined;
+    let slotTwoAttempts = 0;
+    const stopPty = vi.fn<NonNullable<RuntimeAdapter["stopPtySession"]>>(
+      async (request) => {
+        if (request.slotId === "slot-2" && slotTwoAttempts++ === 0) {
+          throw new Error("Slot 2 cleanup failed");
+        }
+      },
+    );
+    const closeWindow = vi.fn().mockResolvedValue(undefined);
+    const runtime = mockRuntime({
+      kind: "tauri",
+      stopPty,
+      closeWindow,
+      onCloseRequested: async (handler) => {
+        closeHandler = handler;
+        return () => {};
+      },
+    });
+    const user = userEvent.setup();
+    render(<App runtime={runtime} />);
+
+    for (const slotNumber of [1, 2]) {
+      await user.click(
+        await screen.findByRole("button", {
+          name: `Configure Slot ${slotNumber} session`,
+        }),
+      );
+      await user.type(
+        screen.getByRole("textbox", { name: "Default workspace path" }),
+        `/workspace-${slotNumber}`,
+      );
+      await user.click(
+        screen.getByRole("button", {
+          name: `Start in Slot ${slotNumber}`,
+        }),
+      );
+    }
+    await waitFor(() =>
+      expect(screen.getAllByText("Running")).toHaveLength(2),
+    );
+    await waitFor(() => expect(closeHandler).toBeDefined());
+
+    act(() => expect(closeHandler?.()).toBe(true));
+    expect(
+      screen.getByRole("heading", { name: "Slot 1, Slot 2 are running" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Stop and Close" }));
+    expect(
+      await screen.findByText("Slot 2 could not be stopped"),
+    ).toBeInTheDocument();
+    expect(closeWindow).not.toHaveBeenCalled();
+    expect(screen.getByText("Stopped")).toBeInTheDocument();
+    expect(screen.getByText("Running")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Stop and Close" }));
+    await waitFor(() => expect(closeWindow).toHaveBeenCalledOnce());
+    expect(stopPty).toHaveBeenCalledWith({
+      slotId: "slot-1",
+      sessionId: "session-slot-1",
+    });
+    expect(stopPty).toHaveBeenCalledWith({
+      slotId: "slot-2",
+      sessionId: "session-slot-2",
+    });
+  });
+
+  it("stops the active Slot before Command+R reloads the App", async () => {
+    const reloadWindow = vi.fn().mockResolvedValue(undefined);
+    const runtime = mockRuntime({ kind: "tauri", reloadWindow });
+    const user = userEvent.setup();
+    render(<App runtime={runtime} />);
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Configure Slot 2 session",
+      }),
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Default workspace path" }),
+      "/workspace-two",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Start in Slot 2" }),
+    );
+    await screen.findByText("Running");
+
+    fireEvent.keyDown(window, { key: "r", metaKey: true });
+    expect(
+      screen.getByRole("heading", { name: "Slot 2 is running" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Stop and Reload" }));
+
+    await waitFor(() => expect(reloadWindow).toHaveBeenCalledOnce());
+    expect(runtime.stopPtySession).toHaveBeenCalledWith({
+      slotId: "slot-2",
+      sessionId: "session-slot-2",
+    });
   });
 });
