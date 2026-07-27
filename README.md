@@ -252,3 +252,8 @@ the real tools installed on the machine. Manual Tauri verification should be
 performed without FastAPI running and should cover real discovery, valid and
 invalid Save, one New and Continue launch, a named embedded session, selective
 status handoff delivery, and Stop All with the App remaining open.
+
+Continuous integration runs two required checks on every pull request. `smoke`
+runs the backend and frontend tests plus the frontend build on Linux, and
+`rust` runs `cargo fmt --all --check` and `cargo test` on macOS. Neither the
+unsigned `.app` build nor manual Tauri verification runs in CI.
