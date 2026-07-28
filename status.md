@@ -5,17 +5,30 @@
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md。LOO-12 至 LOO-25 已依序合併，最新基線為 2d0fe24，
-工作樹乾淨、Linear 的 agent-ready 佇列為空、無未完成事項。搜尋功能有兩項
-已知的 xterm 上游限制且決定不修，見「搜尋的兩項實機限制」。下一步執行
-/finn-spec 建立新規格；候選項目與排序理由見「後續候選」。
+請先讀取 status.md。LOO-12 至 LOO-27 已依序合併，最新基線為 8f126e2，
+工作樹乾淨、Linear 的 agent-ready 佇列為空。終端搜尋與連結開啟均已完成並
+實機驗證。有一項已確認根因但尚未建立 issue 的缺陷：App 會把呼叫者的
+CLAUDE_CODE_* session 標記傳給子 CLI，見「未完成事項」。搜尋另有兩項已知
+的 xterm 上游限制且決定不修。下一步執行 /finn-spec；候選見「後續候選」。
 ```
 
 ## 未完成事項
 
-目前無。LOO-23、LOO-24、LOO-25 的實機驗證均已完成，兩項發現的 xterm 上游限制
-已決定維持現狀，見「搜尋的兩項實機限制」。先前記錄的 `finn-review`
-documentation-only 例外修改已於 2026-07-28 還原（未進版控）。
+1. **App 會把呼叫者的 `CLAUDE_CODE_*` session 標記傳給子 CLI。根因已確認，
+   尚未建立 Linear issue。** `portable-pty` 的 `CommandBuilder::new()` 以
+   `std::env::vars_os()` 完整繼承父程序環境，因此當 App 由某個 Claude Code
+   session 啟動時，`CLAUDE_CODE_CHILD_SESSION=1` 會一路傳到 Slot 內的
+   `claude` CLI。Claude Code 判定自己是子 session 便關閉 transcript 儲存
+   （終端底部顯示「Transcript saving is off — inherited
+   CLAUDE_CODE_CHILD_SESSION marker」），對話不留歷史，後續 `--continue`
+   自然回報 No conversation found。詳見「Continue session 的除錯記錄」。
+   修法方向是 spawn 前以 `CommandBuilder::env_remove` 清除這類標記，但
+   「清哪些」仍是未決的產品問題：全部 `CLAUDE_CODE_*` 一律清可能拿掉使用者
+   刻意設定的組態，且其他三家 CLI 是否有類似標記尚未調查。
+
+LOO-23 至 LOO-27 的實機驗證均已完成。搜尋的兩項 xterm 上游限制已決定維持
+現狀，見「搜尋的兩項實機限制」。先前記錄的 `finn-review` documentation-only
+例外修改已於 2026-07-28 還原（未進版控）。
 
 ## 目前功能狀態
 
@@ -66,7 +79,7 @@ LOO-23 加入每格終端的 scrollback 搜尋，但合併後即發現完全失�
   `status.md` 為共用追蹤檔案，任一邊的修改合併後都會影響另一邊；同一個
   分支無法同時在兩個 worktree checkout，切換開發環境時先合併回 `main`，
   再於另一個 worktree `git pull`。
-- 最新合併基線：`2d0fe24 fix: separate the active search match and refocus an open search bar (#30)`
+- 最新合併基線：`8f126e2 fix: route OSC 8 links through the same Command+Click opener (#33)`
 - Finn-loop：`.claude/skills` 已安裝 finn-spec／finn-build／finn-review，
   綁定 Linear team `LOO`；GitHub labels `loop-approved`、
   `loop-changes-requested`、`needs-human-review` 均已建立
@@ -74,7 +87,15 @@ LOO-23 加入每格終端的 scrollback 搜尋，但合併後即發現完全失�
   與 `rust`（macos-latest，`cargo fmt --all --check` 與 `cargo test`），
   `strict` 為 true，即合併前分支必須為最新
 - 目前 Linear issue：無；下一步使用 `/finn-spec` 建立新規格
-- 最近完成的 Linear issue：`LOO-25 改善搜尋標示對比並修正搜尋列已開時的焦點陷阱`
+- 最近完成的 Linear issue：`LOO-27 支援 OSC 8 超連結，讓 Codex 這類 CLI 的連結也能 Command+Click 開啟`
+- LOO-27 URL：<https://linear.app/loopent/issue/LOO-27/支援-osc-8-超連結讓-codex-這類-cli-的連結也能-commandclick-開啟>
+- LOO-27 狀態：`Done`；PR <https://github.com/konicatc-techcoding/agentsconsole/pull/33>，
+  merge commit `8f126e2`，review `loop-approved`，`smoke` 與 `rust` 皆 `SUCCESS`
+- 前一個：`LOO-26 終端內的 http／https 網址可用 Command+Click 以系統瀏覽器開啟`
+- LOO-26 URL：<https://linear.app/loopent/issue/LOO-26/終端內的-httphttps-網址可用-commandclick-以系統瀏覽器開啟>
+- LOO-26 狀態：`Done`；PR <https://github.com/konicatc-techcoding/agentsconsole/pull/32>，
+  merge commit `6092c73`，review `loop-approved`，`smoke` 與 `rust` 皆 `SUCCESS`
+- 前一個完成的 Linear issue：`LOO-25 改善搜尋標示對比並修正搜尋列已開時的焦點陷阱`
 - LOO-25 URL：<https://linear.app/loopent/issue/LOO-25/改善搜尋標示對比並修正搜尋列已開時的焦點陷阱>
 - LOO-25 狀態：`Done`；PR <https://github.com/konicatc-techcoding/agentsconsole/pull/30>，
   merge commit `2d0fe24`，review `loop-approved`，`smoke` 與 `rust` 皆 `SUCCESS`
@@ -934,6 +955,95 @@ LOO-22 已完成並透過 PR #26 合併：
 - 教訓：對於「只有真實環境才成立」的整合，mock 會讓測試看似有覆蓋而實際為零。
   這類功能的實機驗證不是收尾的可選步驟，而是唯一的防線
 
+## LOO-26／27 終端連結開啟
+
+兩個 issue 構成同一條線：純文字網址與 OSC 8 超連結是 xterm 裡兩條完全獨立的
+路徑，第一次只涵蓋了其中一條。
+
+**LOO-26（PR #32）** 安裝 `@xterm/addon-web-links`，以 `LINK_URL_REGEX` 只
+linkify `http`／`https`，自訂 handler 檢查 `event.metaKey` 後透過
+`runtime.openExternalUrl` 開啟。Command+Click 而非單擊，是為了不搶走終端原本的
+游標定位與拖曳選取。
+
+這是本專案**首次跨出 `core:default`**。新增 `tauri-plugin-opener`，capability
+的權限寫得比規格要求更嚴：
+
+```json
+{ "identifier": "opener:allow-open-url",
+  "allow": [{ "url": "http://*" }, { "url": "https://*" }] }
+```
+
+只取 `opener:allow-open-url` 一項（未用 `opener:default`，未授予開啟本機路徑或
+reveal in dir），並用 `allow` 清單把可開啟的 URL 限制在兩種 scheme。加上應用層的
+`isOpenableUrl()`，共三層防護。
+
+**LOO-27（PR #33）** 補上遺漏的另一條路徑。Codex CLI 以 OSC 8 轉義序列宣告
+超連結，那由 xterm 的 `linkHandler` 處理，與 addon 無關；未設定時 xterm 會退回
+瀏覽器 `confirm`，在 WKWebView 中通不到 opener，表現為 Command+Click 毫無反應。
+修正後設定 `linkHandler`，`allowNonHttpProtocols: false` 明確寫死，並抽出
+`openLinkOnCommandClick()` 讓兩條路徑共用同一份判斷，避免日後 drift。
+
+診斷關鍵是實機的視覺特徵：OSC 8 連結在 hover **之前**就有點狀底線，
+`WebLinksAddon` 建立的連結只在 hover 時才畫底線。
+
+## LOO-26／27 驗證結果
+
+- Linear：LOO-26、LOO-27 均為 `Done`
+- GitHub：PR #32、#33 已合併，`smoke` 與 `rust` 皆 `SUCCESS`，皆取得
+  `loop-approved`
+- Frontend tests：81 passed（4 個檔案）
+- PR #33 提出負面驗證：移除 `linkHandler` 後新增的兩個測試會失敗
+- 實機驗證已完成：Codex 那格的 OSC 8 連結、其他格的純文字網址皆可
+  Command+Click 開啟；一般點擊不觸發，拖曳選取正常
+- 註記：此功能無法由自動化涵蓋兩條路徑是否都接上——jsdom 不處理 OSC 8 轉義
+  序列，LOO-26 的測試驗證的是它實際實作的純文字路徑，並未說謊，只是規格當初
+  沒有想到 OSC 8。這是規格盲點而非測試造假，與 LOO-23 的 mock 問題性質不同
+
+## Continue session 的除錯記錄
+
+2026-07-28 調查「Claude CLI 的 continue 不會帶入先前對話，其餘三家正常」。
+結論是 App 的環境繼承缺陷，記錄於此避免日後重複調查。
+
+**根因**：`portable-pty` 的 `CommandBuilder::new()` 以 `std::env::vars_os()`
+完整繼承父程序環境。當 App 由某個 Claude Code session 啟動時，
+`CLAUDE_CODE_CHILD_SESSION=1` 會傳到 Slot 內的 `claude` CLI，Claude Code 判定
+自己是子 session 便**關閉 transcript 儲存**，終端底部顯示「Transcript saving is
+off — inherited CLAUDE_CODE_CHILD_SESSION marker」。沒有 transcript，
+`--continue` 自然回報 No conversation found。
+
+**受控實驗**：同一個 New Folder 流程，帶標記時專案目錄只有 `memory/`、無
+`.jsonl`；以 `env -u CLAUDE_CODE_CHILD_SESSION …` 重啟 App 後立刻寫出 68 KB
+transcript，Stop 後 Continue 也正確接上。
+
+**過程中被推翻的五個假設**，列出以免重走：旗標傳遞錯誤（Claude 有回
+No conversation found，代表確實在查）；環境未繼承（實為完整繼承）；
+`canonicalize()` 造成路徑偏移（`realpath` 完全相同，無 firmlink 變體）；
+Stop 的 SIGKILL 毀掉檔案（先前的 transcript 完好存活）；New Folder 專屬缺陷
+（清除標記後該路徑正常寫入）。
+
+**各 CLI 的 continue 語意不同**，這是當初誤判方向的原因之一：
+
+| CLI | Continue 語意 | 依據 |
+|---|---|---|
+| claude | 綁 cwd | `--help` 明寫「in the current directory」 |
+| codex | 綁 cwd | 實機觀察（`--help` 未提） |
+| antigravity | 綁 cwd | 實機觀察（`--help` 未提） |
+| hermes | 全域最後一個 | 實機觀察 + `--no-restore-cwd` 佐證 |
+
+四家皆將 session 存於家目錄（`~/.claude/projects/`、`~/.codex/`、`~/.hermes/`），
+沒有任何一家存在 workspace 資料夾內；「跟著 workspace」的正確理解是集中式儲存
+以 workspace 路徑當索引。
+
+**開發者注意**：從 Claude Code session 啟動本 App 供人工驗證時，必須清除標記，
+否則使用者的 Claude session 測試會白做：
+
+```bash
+env -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_CODE_SESSION_ID \
+    -u CLAUDE_CODE_HOST_SESSION_ID -u CLAUDE_CODE_ENTRYPOINT \
+    -u CLAUDE_CODE_EXECPATH \
+    CARGO_TARGET_DIR=/Volumes/AgentOSBuild/target npm run tauri:dev
+```
+
 ## 搜尋的兩項實機限制
 
 以下兩點在實機驗證時才發現，均為 xterm 上游行為，**已決定維持現狀不修改**，
@@ -959,12 +1069,9 @@ LOO-22 已完成並透過 PR #26 合併：
 
 依價值密度排序，尚未建立 issue：
 
-1. **終端內網址可點擊** — 搜尋已由 LOO-23／24／25 完成。剩下 `web-links`：CLI
-   輸出的 PR 連結、localhost 位址目前無法點擊。**這會是本專案首次跨出
-   `core:default`**：`@xterm/addon-web-links` 預設以 `window.open` 開啟，在 Tauri
-   WebView 裡要嘛被擋、要嘛把整個 Console 導航走；要用系統瀏覽器開啟必須新增
-   `tauri-plugin-opener` 與對應 capability。建議規格限定只允許 `http` 與 `https`
-   scheme，避免終端輸出裡的其他協定被點開。
+1. **清除傳給子 CLI 的 `CLAUDE_CODE_*` session 標記** — 根因已確認，見
+   「未完成事項」與「Continue session 的除錯記錄」。這是目前唯一已知且未處理
+   的缺陷。
 2. **持久化** — Session 名稱、Sidebar 收合、Slot view 選擇與終端字級目前都只
    在記憶體。要做就一次把四項納入同一次 `console-layout.json` schema v2 升級；
    Rust struct 有 `deny_unknown_fields`，需處理舊檔遷移。

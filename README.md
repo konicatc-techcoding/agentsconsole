@@ -222,6 +222,15 @@ bar and hands focus back to the terminal. Search works on stopped and exited
 terminals as long as their output is still there, each Slot searches
 independently, and the bar's state is in-memory only.
 
+`http` and `https` addresses in terminal output open in the system browser on
+Command+Click. A plain click never opens anything, so placing the cursor and
+dragging a selection keep working as before. Both kinds of terminal link are
+covered: the plain-text addresses a CLI prints, and the OSC 8 hyperlinks a CLI
+declares through escape sequences. Nothing else is treated as a link — other
+schemes and bare domains stay plain text — and the scheme is checked again
+before anything is opened, so a link can never navigate the Console away from
+itself.
+
 Each terminal renders ordered ANSI output, sends raw keyboard input and control
 sequences, supports Command+C/Command+V, fits to window resizes, and keeps 5,000
 lines of scrollback. Each Slot independently reports Idle, Starting, Running,
