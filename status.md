@@ -5,17 +5,17 @@
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md。LOO-12 至 LOO-22 已依序合併，最新基線為 e1afde2，
-工作樹乾淨、Linear 的 agent-ready 佇列為空、無未完成事項。下一步執行
+請先讀取 status.md。LOO-12 至 LOO-25 已依序合併，最新基線為 2d0fe24，
+工作樹乾淨、Linear 的 agent-ready 佇列為空、無未完成事項。搜尋功能有兩項
+已知的 xterm 上游限制且決定不修，見「搜尋的兩項實機限制」。下一步執行
 /finn-spec 建立新規格；候選項目與排序理由見「後續候選」。
 ```
 
 ## 未完成事項
 
-目前無。2026-07-27 記錄的三項均已結束：`finn-review` 的 documentation-only
-例外修改已於 2026-07-28 還原（未進版控，patch 備份在該次 session 的暫存
-區），`finn-build` 的 preflight 不再受阻；LOO-22 已完成並合併；README 的
-字級描述已補上。字級功能的實機驗證亦已完成，見 LOO-22 驗證結果。
+目前無。LOO-23、LOO-24、LOO-25 的實機驗證均已完成，兩項發現的 xterm 上游限制
+已決定維持現狀，見「搜尋的兩項實機限制」。先前記錄的 `finn-review`
+documentation-only 例外修改已於 2026-07-28 還原（未進版控）。
 
 ## 目前功能狀態
 
@@ -49,6 +49,9 @@ LOO-20 修正該 job 的兩項缺陷：快取 key 與 restore-keys 納入 rustc 
 components。
 LOO-21 新增 Header 的全域終端字級控制，範圍 10 至 20px、每次加減 1，四格
 同步套用且不重建 Terminal 物件；LOO-22 接著把預設值由 12px 改為 16px。
+LOO-23 加入每格終端的 scrollback 搜尋，但合併後即發現完全失效；LOO-24 找出
+並修正根因（缺 `allowProposedApi`）並補上真實模組的回歸測試；LOO-25 再修正
+標示對比與焦點陷阱。三者的完整經過見下方章節。
 
 ## Source of truth
 
@@ -63,7 +66,7 @@ LOO-21 新增 Header 的全域終端字級控制，範圍 10 至 20px、每次�
   `status.md` 為共用追蹤檔案，任一邊的修改合併後都會影響另一邊；同一個
   分支無法同時在兩個 worktree checkout，切換開發環境時先合併回 `main`，
   再於另一個 worktree `git pull`。
-- 最新合併基線：`e1afde2 feat: default terminals to 16px (#26)`
+- 最新合併基線：`2d0fe24 fix: separate the active search match and refocus an open search bar (#30)`
 - Finn-loop：`.claude/skills` 已安裝 finn-spec／finn-build／finn-review，
   綁定 Linear team `LOO`；GitHub labels `loop-approved`、
   `loop-changes-requested`、`needs-human-review` 均已建立
@@ -71,7 +74,20 @@ LOO-21 新增 Header 的全域終端字級控制，範圍 10 至 20px、每次�
   與 `rust`（macos-latest，`cargo fmt --all --check` 與 `cargo test`），
   `strict` 為 true，即合併前分支必須為最新
 - 目前 Linear issue：無；下一步使用 `/finn-spec` 建立新規格
-- 最近完成的 Linear issue：`LOO-22 將終端預設字級由 12px 改為 16px`
+- 最近完成的 Linear issue：`LOO-25 改善搜尋標示對比並修正搜尋列已開時的焦點陷阱`
+- LOO-25 URL：<https://linear.app/loopent/issue/LOO-25/改善搜尋標示對比並修正搜尋列已開時的焦點陷阱>
+- LOO-25 狀態：`Done`；PR <https://github.com/konicatc-techcoding/agentsconsole/pull/30>，
+  merge commit `2d0fe24`，review `loop-approved`，`smoke` 與 `rust` 皆 `SUCCESS`
+- 前一個：`LOO-24 修正終端搜尋完全失效並補上真實模組的回歸測試`（priority `High`）
+- LOO-24 URL：<https://linear.app/loopent/issue/LOO-24/修正終端搜尋完全失效並補上真實模組的回歸測試>
+- LOO-24 狀態：`Done`；PR <https://github.com/konicatc-techcoding/agentsconsole/pull/29>，
+  merge commit `d55d9b8`，review `loop-approved`，`smoke` 與 `rust` 皆 `SUCCESS`
+- 前一個：`LOO-23 為每格終端新增 scrollback 搜尋`
+- LOO-23 URL：<https://linear.app/loopent/issue/LOO-23/為每格終端新增-scrollback-搜尋>
+- LOO-23 狀態：`Done`；PR <https://github.com/konicatc-techcoding/agentsconsole/pull/28>，
+  merge commit `81c883a`，review `loop-approved`，`smoke` 與 `rust` 皆 `SUCCESS`。
+  **注意：該 PR 合併時功能實際上完全不能用**，詳見下方章節
+- 前一個完成的 Linear issue：`LOO-22 將終端預設字級由 12px 改為 16px`
 - LOO-22 URL：<https://linear.app/loopent/issue/LOO-22/將終端預設字級由-12px-改為-16px>
 - LOO-22 狀態：`Done`
 - LOO-22 label：`agent-ready`
@@ -855,13 +871,100 @@ LOO-22 已完成並透過 PR #26 合併：
   自動化涵蓋的驗收——jsdom 不排版 xterm，測試只能斷言 `options.fontSize`
   的設定與 `resizePty` 呼叫
 
+## LOO-23／24／25 終端搜尋
+
+三個 issue 構成同一條線：功能上線、發現完全失效、修正並補上防護、再修使用性。
+完整經過值得留存，因為它揭露了自動化流程的一個真實盲點。
+
+**LOO-23（PR #28）** 加入 `@xterm/addon-search`，每格一個 `SearchAddon`，
+`Command+F` 開啟浮層搜尋列，`Enter`／`Shift+Enter` 上下循環，`Escape` 關閉。
+搜尋列採 `position: absolute` 浮層，開關不改變終端可用區域、不觸發
+`fitAndReport()` 與 `resizePty`。
+
+**但它從合併起就完全不能用。** `Terminal` 建構時未設 `allowProposedApi: true`，
+而 `findNext` 帶著 `decorations` 呼叫；xterm 的 `registerDecoration` 有
+`_checkProposedApi()` 守衛會拋出例外，且 `findNext` 內部的
+`_highlightAllMatches` 執行於 `_findNextAndSelect` **之前**，因此每次搜尋都在
+標示階段中斷、從未實際搜尋。例外被 React 事件系統吞掉，畫面毫無反應也不崩潰。
+
+**為什麼沒被攔下**：`src/test/setup.ts` 把 `@xterm/addon-search` 與
+`@xterm/xterm` 完整 mock，假的 `findNext()` **永遠回傳 `true`**。72 個測試全綠、
+`finn-review` 給 `loop-approved`、`smoke` 與 `rust` 兩個 required check 皆通過，
+但沒有任何一環碰得到真實整合。唯一發現它的是人工實機操作。
+
+**LOO-24（PR #29）** 修正根因並補上防護：
+
+- `Terminal` 選項抽為匯出的 `createTerminalOptions(fontSize)`，含
+  `allowProposedApi: true`，成為元件與測試的單一來源。若測試自行另寫一份選項，
+  元件漏掉該選項仍會全綠，防護等於零——這是刻意的結構要求。
+- 新增 `TerminalSlot.search.test.ts`，以 `vi.importActual` 取得未被 mock 的真實
+  模組驗證 `findNext` 不拋例外。該測試不呼叫 `terminal.open()`，因為 jsdom 缺
+  canvas 與 `matchMedia` 會失敗。
+- 加入輸入法組字閘門：`compositionstart` 至 `compositionend` 期間不執行搜尋。
+
+**LOO-25（PR #30）** 修正實機才看得出的兩個問題：
+
+- 標示對比。原本 `matchBackground` 與 `activeMatchBackground` 同屬藍色系，且
+  `matchBackground` 與終端 `selectionBackground` 是同一色值 `#334a78`，搜尋結果
+  與一般選取範圍無法區分。現為 `matchBackground: #16305c`、作用中
+  `activeMatchBackground: #6b4f00` 加 `activeMatchBorder: #ffd54a`。採深底色加亮
+  邊框而非亮黃底色，是因為 xterm 的 `ISearchDecorationOptions` **無法設定文字
+  顏色**，亮黃底配淺色前景 `#d9e1ee` 會使該段文字難以辨讀。
+- 焦點陷阱。`Command+F` 原本只呼叫 `setSearchOpen(true)`，而 focus 的 effect
+  依賴 `[searchOpen]`；搜尋列已開時狀態不變、effect 不重跑，焦點無法取回，
+  此時 `Escape` 被送進 CLI，使用者無法關閉搜尋列。修正後於處理器內直接
+  `focus()`，且不呼叫 `select()`，保留既有關鍵字與游標位置。
+
+**一條被實機推翻的 review 意見**：`finn-review` 對 PR #29 提出 Should fix，
+認為組字閘門假設 `compositionend` 後不再有 `change`，各引擎不一致。但本專案
+只有 WKWebView 一個引擎，實機確認中文送出後正確停在**第一個**符合處，該情況
+不成立。且該建議若照字面實作（相同字串就跳過）會使 `Enter` 無法前進，因為
+循環使用的正是同一個字串。已寫入 LOO-25 的 NG-1。
+
+## LOO-23／24／25 驗證結果
+
+- Linear：LOO-23、LOO-24、LOO-25 均為 `Done`
+- GitHub：PR #28、#29、#30 均已合併，三者的 `smoke` 與 `rust` 皆為 `SUCCESS`，
+  且均取得 `loop-approved`
+- Frontend tests：76 passed（四個測試檔，含新增的
+  `TerminalSlot.search.test.ts`）
+- 實機驗證：三者皆已完成（2026-07-28）。搜尋在 LOO-24 修正後確實可用、多個
+  符合處會被標示、中文送出後停在第一個符合處；LOO-25 的焦點修正完全成立——
+  搜尋列已開時 `Command+F` 取回焦點、關鍵字未被全選、`Escape` 可關閉
+- 教訓：對於「只有真實環境才成立」的整合，mock 會讓測試看似有覆蓋而實際為零。
+  這類功能的實機驗證不是收尾的可選步驟，而是唯一的防線
+
+## 搜尋的兩項實機限制
+
+以下兩點在實機驗證時才發現，均為 xterm 上游行為，**已決定維持現狀不修改**，
+記錄於此避免日後重複調查。
+
+**一、`activeMatchBackground` 是不會顯示的死設定。** `SEARCH_DECORATIONS` 裡的
+`activeMatchBackground: "#6b4f00"` 實際上永遠看不到。addon-search 跳到作用中
+符合處時會**選取**它，而 xterm 的選取層繪製在 decoration 之上，
+`selectionBackground: "#334a78"` 因此蓋掉了該底色。邊框不受選取層覆蓋，所以
+`activeMatchBorder: "#ffd54a"` 的亮黃邊框正常顯示。LOO-25 的目標（作用中符合處
+一眼可辨）仍然達成，只是靠邊框而非底色。看到該色值卻在畫面上找不到它時，
+不必再次調查。
+
+**二、替代緩衝區的 CLI 沒有 decoration，也沒有 scrollback。** Claude Code 這類
+全螢幕 TUI 跑在 alternate screen buffer；xterm 的 `registerDecoration` 在該模式
+下直接回傳 `undefined`（型別文件明載 "undefined if the alt buffer is active"），
+因此那些格子完全沒有搜尋標示，畫面上只看得到 `findNext` 造成的選取效果。
+連帶地，替代緩衝區沒有 scrollback，該格的搜尋範圍實際上只有目前可見畫面，
+而非 5,000 行歷史。Codex 這類走一般緩衝區的 CLI 則完全符合設計。這是兩種格子
+表現不同的原因。
+
 ## 後續候選
 
 依價值密度排序，尚未建立 issue：
 
-1. **終端搜尋與可點連結** — 目前只裝了 `@xterm/addon-fit`。5,000 行 scrollback
-   沒有搜尋功能；CLI 輸出的 PR 連結、localhost 位址無法點擊。加裝
-   `@xterm/addon-search` 與 `@xterm/addon-web-links`，成本低且每天都會用到。
+1. **終端內網址可點擊** — 搜尋已由 LOO-23／24／25 完成。剩下 `web-links`：CLI
+   輸出的 PR 連結、localhost 位址目前無法點擊。**這會是本專案首次跨出
+   `core:default`**：`@xterm/addon-web-links` 預設以 `window.open` 開啟，在 Tauri
+   WebView 裡要嘛被擋、要嘛把整個 Console 導航走；要用系統瀏覽器開啟必須新增
+   `tauri-plugin-opener` 與對應 capability。建議規格限定只允許 `http` 與 `https`
+   scheme，避免終端輸出裡的其他協定被點開。
 2. **持久化** — Session 名稱、Sidebar 收合、Slot view 選擇與終端字級目前都只
    在記憶體。要做就一次把四項納入同一次 `console-layout.json` schema v2 升級；
    Rust struct 有 `deny_unknown_fields`，需處理舊檔遷移。
