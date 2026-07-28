@@ -1,5 +1,6 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Terminal } from "@xterm/xterm";
 import type { ITerminalOptions } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
@@ -62,6 +63,23 @@ export const SEARCH_DECORATIONS = {
     activeMatchColorOverviewRuler: "#ffd54a",
   },
 };
+
+// Only http and https are turned into links. Passing the pattern explicitly
+// rather than relying on the addon's default keeps the rule visible and
+// testable here instead of inside a dependency.
+export const LINK_URL_REGEX =
+  /(https?|HTTPS?):[/]{2}[^\s"'!*(){}|\\^<>`]*[^\s"':,.!?{}|\\^~[\]`()<>]/;
+
+// Second gate, independent of what the linkifier matched: nothing but http and
+// https ever reaches the opener.
+export function isOpenableUrl(uri: string): boolean {
+  try {
+    const { protocol } = new URL(uri);
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 
 // Single source of truth for the Terminal options: the component and the
 // real-module search test must build the terminal exactly the same way, or the
@@ -220,8 +238,21 @@ export default function TerminalSlot({
     const terminal = new Terminal(createTerminalOptions(fontSizeRef.current));
     const fit = new FitAddon();
     const search = new SearchAddon();
+    // Command+Click only, and never the addon's default window.open: a plain
+    // click has to keep placing the cursor and starting a drag selection, and
+    // the WebView must not navigate away from the Console.
+    const webLinks = new WebLinksAddon(
+      (event, uri) => {
+        if (!event.metaKey || !isOpenableUrl(uri)) {
+          return;
+        }
+        void runtime.openExternalUrl?.(uri)?.catch(() => {});
+      },
+      { urlRegex: LINK_URL_REGEX },
+    );
     terminal.loadAddon(fit);
     terminal.loadAddon(search);
+    terminal.loadAddon(webLinks);
     terminal.open(viewport);
     terminalRef.current = terminal;
     fitRef.current = fit;
