@@ -7,6 +7,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { IBufferRange, ILinkHandler } from "@xterm/xterm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { RuntimeAdapter } from "./runtime/types";
@@ -525,6 +526,69 @@ describe("TerminalSlot", () => {
     handleLink({ metaKey: true } as MouseEvent, "file:///etc/hosts");
     handleLink({ metaKey: true } as MouseEvent, "ssh://git@example.com/repo");
     expect(runtime.openExternalUrl).toHaveBeenCalledOnce();
+  });
+
+  it("opens an OSC 8 link only on Command+Click and only for http or https", async () => {
+    const { runtime } = terminalRuntime();
+    renderTerminal(runtime);
+    await waitFor(() => expect(runtime.onPtyOutput).toHaveBeenCalledOnce());
+    const terminal = xterm.FakeTerminal.instances[0];
+    const linkHandler = terminal.options.linkHandler as ILinkHandler;
+    const range = {} as IBufferRange;
+
+    expect(linkHandler.allowNonHttpProtocols).toBe(false);
+
+    linkHandler.activate(
+      { metaKey: false } as MouseEvent,
+      "https://example.com/a",
+      range,
+    );
+    expect(runtime.openExternalUrl).not.toHaveBeenCalled();
+
+    linkHandler.activate(
+      { metaKey: true } as MouseEvent,
+      "https://example.com/a",
+      range,
+    );
+    expect(runtime.openExternalUrl).toHaveBeenCalledOnce();
+    expect(runtime.openExternalUrl).toHaveBeenCalledWith(
+      "https://example.com/a",
+    );
+
+    linkHandler.activate(
+      { metaKey: true } as MouseEvent,
+      "javascript:alert(1)",
+      range,
+    );
+    linkHandler.activate(
+      { metaKey: true } as MouseEvent,
+      "file:///etc/hosts",
+      range,
+    );
+    expect(runtime.openExternalUrl).toHaveBeenCalledOnce();
+  });
+
+  it("keeps working when an OSC 8 link fails to open", async () => {
+    const { runtime } = terminalRuntime();
+    vi.mocked(runtime.openExternalUrl!).mockRejectedValue(
+      new Error("Link could not be opened"),
+    );
+    renderTerminal(runtime);
+    await waitFor(() => expect(runtime.onPtyOutput).toHaveBeenCalledOnce());
+    const linkHandler = xterm.FakeTerminal.instances[0].options
+      .linkHandler as ILinkHandler;
+
+    expect(() =>
+      linkHandler.activate(
+        { metaKey: true } as MouseEvent,
+        "https://example.com/a",
+        {} as IBufferRange,
+      ),
+    ).not.toThrow();
+    await Promise.resolve();
+
+    expect(runtime.openExternalUrl).toHaveBeenCalledOnce();
+    expect(screen.getByLabelText("Slot 1 terminal")).toBeInTheDocument();
   });
 
   it("keeps working when the opener rejects", async () => {

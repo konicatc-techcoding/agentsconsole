@@ -2,7 +2,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Terminal } from "@xterm/xterm";
-import type { ITerminalOptions } from "@xterm/xterm";
+import type { ILinkHandler, ITerminalOptions } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -81,14 +81,32 @@ export function isOpenableUrl(uri: string): boolean {
   }
 }
 
+// Plain-text links (WebLinksAddon) and OSC 8 links (linkHandler) are two
+// separate xterm paths that must behave identically, so both call this. Keeping
+// one function is the point: a second copy is how the two paths would drift.
+export function openLinkOnCommandClick(
+  runtime: RuntimeAdapter,
+  event: MouseEvent,
+  uri: string,
+): void {
+  if (!event.metaKey || !isOpenableUrl(uri)) {
+    return;
+  }
+  void runtime.openExternalUrl?.(uri)?.catch(() => {});
+}
+
 // Single source of truth for the Terminal options: the component and the
 // real-module search test must build the terminal exactly the same way, or the
 // test stops protecting the option it exists to protect. `allowProposedApi`
 // is required because SearchAddon draws matches with the proposed decoration
 // API; without it every findNext call throws before it ever searches.
-export function createTerminalOptions(fontSize: number): ITerminalOptions {
+export function createTerminalOptions(
+  fontSize: number,
+  linkHandler?: ILinkHandler,
+): ITerminalOptions {
   return {
     allowProposedApi: true,
+    linkHandler,
     convertEol: false,
     cursorBlink: true,
     fontFamily: 'ui-monospace, "SFMono-Regular", Consolas, monospace',
@@ -235,19 +253,24 @@ export default function TerminalSlot({
       return;
     }
 
-    const terminal = new Terminal(createTerminalOptions(fontSizeRef.current));
+    // OSC 8 hyperlinks (Codex CLI emits these) never reach WebLinksAddon; they
+    // go through the terminal's own linkHandler. Left unset, xterm falls back
+    // to a `confirm` dialog that leads nowhere inside the WKWebView, which is
+    // why Command+Click on a Codex link did nothing at all.
+    const linkHandler: ILinkHandler = {
+      allowNonHttpProtocols: false,
+      activate: (event, text) => openLinkOnCommandClick(runtime, event, text),
+    };
+    const terminal = new Terminal(
+      createTerminalOptions(fontSizeRef.current, linkHandler),
+    );
     const fit = new FitAddon();
     const search = new SearchAddon();
     // Command+Click only, and never the addon's default window.open: a plain
     // click has to keep placing the cursor and starting a drag selection, and
     // the WebView must not navigate away from the Console.
     const webLinks = new WebLinksAddon(
-      (event, uri) => {
-        if (!event.metaKey || !isOpenableUrl(uri)) {
-          return;
-        }
-        void runtime.openExternalUrl?.(uri)?.catch(() => {});
-      },
+      (event, uri) => openLinkOnCommandClick(runtime, event, uri),
       { urlRegex: LINK_URL_REGEX },
     );
     terminal.loadAddon(fit);
