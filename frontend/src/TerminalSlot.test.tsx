@@ -460,6 +460,35 @@ describe("TerminalSlot", () => {
     expect(vi.mocked(runtime.resizePty!).mock.calls.length).toBe(resizeCalls);
   });
 
+  it("waits for the input method to commit before searching", async () => {
+    const { runtime } = terminalRuntime();
+    renderTerminal(runtime);
+    await waitFor(() => expect(runtime.onPtyOutput).toHaveBeenCalledOnce());
+    const terminal = xterm.FakeTerminal.instances[0];
+    const search = xterm.FakeSearchAddon.instances[0];
+
+    act(() => {
+      terminal.keyHandler?.({
+        type: "keydown",
+        metaKey: true,
+        key: "f",
+      } as KeyboardEvent);
+    });
+    const input = screen.getByRole("textbox", { name: "Search Slot 1 output" });
+
+    fireEvent.compositionStart(input);
+    fireEvent.change(input, { target: { value: "ㄕ" } });
+    fireEvent.change(input, { target: { value: "失敗" } });
+    expect(search.nextTerms).toEqual([]);
+    expect(input).toHaveValue("失敗");
+
+    fireEvent.compositionEnd(input, { data: "失敗" });
+    expect(search.nextTerms).toEqual(["失敗"]);
+
+    fireEvent.change(input, { target: { value: "失敗率" } });
+    expect(search.nextTerms).toEqual(["失敗", "失敗率"]);
+  });
+
   it("keeps the search bar available for an ended session", async () => {
     const { runtime } = terminalRuntime();
     renderTerminal(runtime, { phase: "exited", session: null });
