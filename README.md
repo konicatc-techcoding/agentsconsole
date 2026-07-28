@@ -211,6 +211,17 @@ each terminal keeps its existing output and scrollback across the change while
 its running session is resized to the new rows and columns. The size is
 in-memory: `Refresh` preserves it and an App reload returns to 16px.
 
+Command+F searches that Slot's own output. The search bar floats over the
+terminal, so opening or closing it never resizes the terminal or the running
+session. Typing highlights every match and moves to the first one; Enter and
+Shift+Enter cycle forward and backward, and the current match is marked
+distinctly from the others so it stays findable on a crowded screen. A term with
+no match is shown as such. Command+F while the bar is already open returns the
+keyboard to the input without altering the existing term, and Escape closes the
+bar and hands focus back to the terminal. Search works on stopped and exited
+terminals as long as their output is still there, each Slot searches
+independently, and the bar's state is in-memory only.
+
 Each terminal renders ordered ANSI output, sends raw keyboard input and control
 sequences, supports Command+C/Command+V, fits to window resizes, and keeps 5,000
 lines of scrollback. Each Slot independently reports Idle, Starting, Running,
