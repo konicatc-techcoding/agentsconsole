@@ -204,6 +204,13 @@ be retried. A shared-workspace warning is informational and does not block
 sending. `Sent` confirms terminal input delivery only: the App does not inspect
 `STATUS_READY`, edit `status.md`, or perform Git actions.
 
+The header also carries a global terminal font size control. It starts at 16px
+and steps by 1px between 10px and 20px, with the matching button disabled at
+each end. A change applies to all four Slots at once, including hidden ones, and
+each terminal keeps its existing output and scrollback across the change while
+its running session is resized to the new rows and columns. The size is
+in-memory: `Refresh` preserves it and an App reload returns to 16px.
+
 Each terminal renders ordered ANSI output, sends raw keyboard input and control
 sequences, supports Command+C/Command+V, fits to window resizes, and keeps 5,000
 lines of scrollback. Each Slot independently reports Idle, Starting, Running,

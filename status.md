@@ -5,27 +5,17 @@
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md，特別是「未完成事項」一節。LOO-12 至 LOO-21 已依序
-合併，最新基線為 fee0c70。動工前必須先處理工作樹裡未 commit 的
-.claude/skills/finn-review/SKILL.md，否則 finn-build 的 preflight 會因
-工作樹不乾淨而中止。LOO-22 已建立但尚未掛 agent-ready。
+請先讀取 status.md。LOO-12 至 LOO-22 已依序合併，最新基線為 e1afde2，
+工作樹乾淨、Linear 的 agent-ready 佇列為空、無未完成事項。下一步執行
+/finn-spec 建立新規格；候選項目與排序理由見「後續候選」。
 ```
 
 ## 未完成事項
 
-以下三項在 2026-07-27 收工時仍未完成，接手前先確認：
-
-1. **`.claude/skills/finn-review/SKILL.md` 已修改但未 commit。** 內容是為
-   `finn-review` 加入 documentation-only PR 的例外規則：以
-   `gh pr diff --name-only` 從 diff 判定（不採信 PR 描述），所有變更路徑
-   皆為 `.md` 時才適用；文件 PR 缺少 linked issue 不再是 must-fix，改為
-   查核文字是否與 repo 現況相符。**已知缺口**：`.claude/skills/*/SKILL.md`
-   本身也是 `.md`，會被判定為 documentation-only，但改 skill 等於改變
-   agent 行為，不該套用寬鬆審查。建議在條件加上排除 `.claude/` 路徑。
-   此變更會擋住 `finn-build` 的 preflight，需先 commit 並開 PR 或丟棄。
-2. **LOO-22 已建立，尚未掛 `agent-ready`**，也尚未動工。
-3. **README 尚未記錄 LOO-21 的字級控制。** 刻意延後：LOO-22 會把預設值由
-   12px 改為 16px，等它落地再一次寫入，避免文件立刻過時。
+目前無。2026-07-27 記錄的三項均已結束：`finn-review` 的 documentation-only
+例外修改已於 2026-07-28 還原（未進版控，patch 備份在該次 session 的暫存
+區），`finn-build` 的 preflight 不再受阻；LOO-22 已完成並合併；README 的
+字級描述已補上。字級功能的實機驗證亦已完成，見 LOO-22 驗證結果。
 
 ## 目前功能狀態
 
@@ -57,8 +47,8 @@ LOO-19 在 CI 新增 `rust` job，補上 `src-tauri` 一直沒有的自動化覆
 LOO-20 修正該 job 的兩項缺陷：快取 key 與 restore-keys 納入 rustc 版本，
 `cargo test` 加上 `--locked`，並把 `rustfmt` 寫進 `rust-toolchain.toml` 的
 components。
-LOO-21 新增 Header 的全域終端字級控制，範圍 10 至 20px、每次加減 1、預設
-12px，四格同步套用且不重建 Terminal 物件。
+LOO-21 新增 Header 的全域終端字級控制，範圍 10 至 20px、每次加減 1，四格
+同步套用且不重建 Terminal 物件；LOO-22 接著把預設值由 12px 改為 16px。
 
 ## Source of truth
 
@@ -73,18 +63,25 @@ LOO-21 新增 Header 的全域終端字級控制，範圍 10 至 20px、每次�
   `status.md` 為共用追蹤檔案，任一邊的修改合併後都會影響另一邊；同一個
   分支無法同時在兩個 worktree checkout，切換開發環境時先合併回 `main`，
   再於另一個 worktree `git pull`。
-- 最新合併基線：`fee0c70 feat: add global terminal font size control (#24)`
+- 最新合併基線：`e1afde2 feat: default terminals to 16px (#26)`
 - Finn-loop：`.claude/skills` 已安裝 finn-spec／finn-build／finn-review，
   綁定 Linear team `LOO`；GitHub labels `loop-approved`、
   `loop-changes-requested`、`needs-human-review` 均已建立
 - `main` required status checks：`smoke`（ubuntu-latest，backend 與 frontend）
   與 `rust`（macos-latest，`cargo fmt --all --check` 與 `cargo test`），
   `strict` 為 true，即合併前分支必須為最新
-- 目前 Linear issue：`LOO-22 將終端預設字級由 12px 改為 16px`（`Backlog`，
-  未指派、未掛 `agent-ready`、尚未動工）
+- 目前 Linear issue：無；下一步使用 `/finn-spec` 建立新規格
+- 最近完成的 Linear issue：`LOO-22 將終端預設字級由 12px 改為 16px`
 - LOO-22 URL：<https://linear.app/loopent/issue/LOO-22/將終端預設字級由-12px-改為-16px>
+- LOO-22 狀態：`Done`
+- LOO-22 label：`agent-ready`
 - LOO-22 relation：`related to LOO-21`
-- 最近完成的 Linear issue：`LOO-21 新增全域終端字體大小控制`
+- LOO-22 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/26>
+- PR #26 狀態：Merged
+- PR #26 merge commit：`e1afde2`
+- PR #26 review：`loop-approved`（由 `finn-review` 產生）
+- PR #26 required check：`smoke` — `SUCCESS`；`rust` — `SUCCESS`
+- 前一個完成的 Linear issue：`LOO-21 新增全域終端字體大小控制`
 - LOO-21 URL：<https://linear.app/loopent/issue/LOO-21/新增全域終端字體大小控制>
 - LOO-21 狀態：`Done`
 - LOO-21 label：`agent-ready`
@@ -830,6 +827,49 @@ LOO-21 已完成並透過 PR #24 合併，由 `/finn-spec` → `/finn-build` →
   確認。jsdom 不排版 xterm，自動化測試只能斷言 `options.fontSize` 的設定與
   `resizePty` 呼叫，實際呈現必須實機驗證。LOO-22 的 How to verify 第 6 步
   涵蓋同樣的檢查，可於該 issue 驗收時一併完成
+
+## LOO-22 預設字級改為 16px
+
+LOO-22 已完成並透過 PR #26 合併：
+
+- `TerminalSlot.tsx` 的 `DEFAULT_FONT_SIZE` 由 `12` 改為 `16`，仍是 `App.tsx`
+  引用的唯一預設值來源。字級範圍、步進與控制項行為皆未變。
+- `App.test.tsx` 的字級測試同步更新，且**維持原本的覆蓋意圖**：遞減次數由 4
+  改為 8，測試路徑仍實際觸及下限 10px 與上限 20px 並確認按鈕 disabled。
+  單純把 12 換成 16 會讓遞減碰不到下限，`toBeDisabled()` 那條斷言將永遠不被
+  真正驗證，但測試仍全綠——這是 issue AC-5 明文要求避免的靜默退化。
+
+## LOO-22 驗證結果
+
+- Linear：LOO-22 為 `Done`
+- GitHub：PR #26 已合併，`smoke`（41 秒）與 `rust`（21 秒）皆為 `SUCCESS`
+- Frontend tests：70 passed，總數不變
+- Frontend production build：passed（既有 xterm chunk-size warning 不阻擋）
+- `git diff --check`：clean
+- 變更範圍：`frontend/src/TerminalSlot.tsx` 一行與 `frontend/src/App.test.tsx`
+  十四行，未觸及其他檔案
+- **實機驗證已完成**（2026-07-28）：Tauri App 啟動後 Header 顯示 `16px`，
+  四格終端皆為該字級；在 Slot 3（Antigravity）與 Slot 4（Hermes）各有一個
+  Running session、且已累積 scrollback 的狀態下調整字級，確認既有輸出未被
+  清空、CLI 畫面隨新行列數正確重繪。這三項是 LOO-21 與 LOO-22 唯一無法由
+  自動化涵蓋的驗收——jsdom 不排版 xterm，測試只能斷言 `options.fontSize`
+  的設定與 `resizePty` 呼叫
+
+## 後續候選
+
+依價值密度排序，尚未建立 issue：
+
+1. **終端搜尋與可點連結** — 目前只裝了 `@xterm/addon-fit`。5,000 行 scrollback
+   沒有搜尋功能；CLI 輸出的 PR 連結、localhost 位址無法點擊。加裝
+   `@xterm/addon-search` 與 `@xterm/addon-web-links`，成本低且每天都會用到。
+2. **持久化** — Session 名稱、Sidebar 收合、Slot view 選擇與終端字級目前都只
+   在記憶體。要做就一次把四項納入同一次 `console-layout.json` schema v2 升級；
+   Rust struct 有 `deny_unknown_fields`，需處理舊檔遷移。
+3. **`App.tsx` 拆分** — 已超過 2000 行。**不建議當成獨立 issue**：純重構寫不出
+   可觀察的 AC，而 `finn-review` 需要對照完整 diff 判斷是否越界，大型搬移正是
+   自動審查最不可靠的場景。建議在後續功能開發時以小塊順手切出。
+4. **遠端分支清理** — 已累積十個以上合併完的分支。屬雜務，不需佔用 Finn-loop
+   排程。
 
 ## 本機預覽方式
 
