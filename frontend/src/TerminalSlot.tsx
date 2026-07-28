@@ -1,6 +1,7 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { Terminal } from "@xterm/xterm";
+import type { ITerminalOptions } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -47,7 +48,7 @@ const encoder = new TextEncoder();
 
 export const DEFAULT_FONT_SIZE = 16;
 
-const SEARCH_DECORATIONS = {
+export const SEARCH_DECORATIONS = {
   decorations: {
     matchBackground: "#334a78",
     activeMatchBackground: "#8ca4ff",
@@ -55,6 +56,28 @@ const SEARCH_DECORATIONS = {
     activeMatchColorOverviewRuler: "#8ca4ff",
   },
 };
+
+// Single source of truth for the Terminal options: the component and the
+// real-module search test must build the terminal exactly the same way, or the
+// test stops protecting the option it exists to protect. `allowProposedApi`
+// is required because SearchAddon draws matches with the proposed decoration
+// API; without it every findNext call throws before it ever searches.
+export function createTerminalOptions(fontSize: number): ITerminalOptions {
+  return {
+    allowProposedApi: true,
+    convertEol: false,
+    cursorBlink: true,
+    fontFamily: 'ui-monospace, "SFMono-Regular", Consolas, monospace',
+    fontSize,
+    scrollback: 5000,
+    theme: {
+      background: "#080c12",
+      foreground: "#d9e1ee",
+      cursor: "#8ca4ff",
+      selectionBackground: "#334a78",
+    },
+  };
+}
 
 function terminalStatus(
   phase: TerminalPhase,
@@ -93,6 +116,7 @@ export default function TerminalSlot({
   const [searchMissing, setSearchMissing] = useState(false);
   const viewportRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const composingRef = useRef(false);
   const terminalRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const searchRef = useRef<SearchAddon | null>(null);
@@ -181,19 +205,7 @@ export default function TerminalSlot({
       return;
     }
 
-    const terminal = new Terminal({
-      convertEol: false,
-      cursorBlink: true,
-      fontFamily: 'ui-monospace, "SFMono-Regular", Consolas, monospace',
-      fontSize: fontSizeRef.current,
-      scrollback: 5000,
-      theme: {
-        background: "#080c12",
-        foreground: "#d9e1ee",
-        cursor: "#8ca4ff",
-        selectionBackground: "#334a78",
-      },
-    });
+    const terminal = new Terminal(createTerminalOptions(fontSizeRef.current));
     const fit = new FitAddon();
     const search = new SearchAddon();
     terminal.loadAddon(fit);
@@ -375,6 +387,20 @@ export default function TerminalSlot({
             value={searchTerm}
             onChange={(event) => {
               const term = event.target.value;
+              setSearchTerm(term);
+              // Intermediate IME states are not terms the user is looking for;
+              // searching them only flashes the no-match state while composing.
+              if (composingRef.current) {
+                return;
+              }
+              runSearch(term, "next");
+            }}
+            onCompositionStart={() => {
+              composingRef.current = true;
+            }}
+            onCompositionEnd={(event) => {
+              composingRef.current = false;
+              const term = event.currentTarget.value;
               setSearchTerm(term);
               runSearch(term, "next");
             }}
