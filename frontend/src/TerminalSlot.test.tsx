@@ -10,7 +10,11 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { RuntimeAdapter } from "./runtime/types";
-import TerminalSlot from "./TerminalSlot";
+import TerminalSlot, {
+  DEFAULT_FONT_SIZE,
+  SEARCH_DECORATIONS,
+  createTerminalOptions,
+} from "./TerminalSlot";
 import type { Provider, PtyExitEvent, PtyOutputEvent, PtySession } from "./types";
 
 const xterm = vi.hoisted(() => {
@@ -458,6 +462,60 @@ describe("TerminalSlot", () => {
     expect(terminal.focused).toBeGreaterThan(focusedBefore);
     expect(vi.mocked(view.props.onSize).mock.calls.length).toBe(sizeReports);
     expect(vi.mocked(runtime.resizePty!).mock.calls.length).toBe(resizeCalls);
+  });
+
+  it("keeps the active match apart from plain matches and from selection", () => {
+    const { decorations } = SEARCH_DECORATIONS;
+    const { theme } = createTerminalOptions(DEFAULT_FONT_SIZE);
+
+    expect(decorations.activeMatchBackground).toBe("#6b4f00");
+    expect(decorations.activeMatchBorder).toBe("#ffd54a");
+    expect(decorations.activeMatchColorOverviewRuler).toBe("#ffd54a");
+    expect(decorations.matchOverviewRuler).toBe(decorations.matchBackground);
+    expect(decorations.matchBackground).not.toBe(theme?.selectionBackground);
+    expect(decorations.matchBackground).not.toBe(
+      decorations.activeMatchBackground,
+    );
+  });
+
+  it("takes focus back into an already-open search bar and closes on Escape", async () => {
+    const { runtime } = terminalRuntime();
+    renderTerminal(runtime);
+    await waitFor(() => expect(runtime.onPtyOutput).toHaveBeenCalledOnce());
+    const terminal = xterm.FakeTerminal.instances[0];
+
+    act(() => {
+      terminal.keyHandler?.({
+        type: "keydown",
+        metaKey: true,
+        key: "f",
+      } as KeyboardEvent);
+    });
+    const input = screen.getByRole("textbox", {
+      name: "Search Slot 1 output",
+    }) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "boot" } });
+    act(() => input.blur());
+    expect(input).not.toHaveFocus();
+
+    let handled: boolean | undefined;
+    act(() => {
+      handled = terminal.keyHandler?.({
+        type: "keydown",
+        metaKey: true,
+        key: "f",
+      } as KeyboardEvent);
+    });
+
+    expect(handled).toBe(false);
+    expect(input).toHaveFocus();
+    expect(input).toHaveValue("boot");
+    expect(input.selectionStart).toBe(input.selectionEnd);
+
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(
+      screen.queryByRole("textbox", { name: "Search Slot 1 output" }),
+    ).not.toBeInTheDocument();
   });
 
   it("waits for the input method to commit before searching", async () => {
