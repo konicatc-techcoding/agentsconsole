@@ -6,6 +6,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { RuntimeAdapter } from "./runtime/types";
@@ -58,7 +59,34 @@ const xterm = vi.hoisted(() => {
     }
     dispose() {}
   }
-  return { FakeTerminal };
+
+  class FakeSearchAddon {
+    static instances: FakeSearchAddon[] = [];
+    nextTerms: string[] = [];
+    previousTerms: string[] = [];
+    clears = 0;
+
+    constructor() {
+      FakeSearchAddon.instances.push(this);
+    }
+
+    findNext(term: string) {
+      this.nextTerms.push(term);
+      return term !== "nothing-here";
+    }
+
+    findPrevious(term: string) {
+      this.previousTerms.push(term);
+      return term !== "nothing-here";
+    }
+
+    clearDecorations() {
+      this.clears += 1;
+    }
+
+    dispose() {}
+  }
+  return { FakeTerminal, FakeSearchAddon };
 });
 
 vi.mock("@xterm/xterm", () => ({
@@ -69,6 +97,10 @@ vi.mock("@xterm/addon-fit", () => ({
   FitAddon: class {
     fit() {}
   },
+}));
+
+vi.mock("@xterm/addon-search", () => ({
+  SearchAddon: xterm.FakeSearchAddon,
 }));
 
 const provider: Provider = {
@@ -143,6 +175,7 @@ function renderTerminal(
 afterEach(() => {
   cleanup();
   xterm.FakeTerminal.instances.length = 0;
+  xterm.FakeSearchAddon.instances.length = 0;
 });
 
 describe("TerminalSlot", () => {
@@ -366,6 +399,90 @@ describe("TerminalSlot", () => {
       }),
     );
     expect(onExit).toHaveBeenCalledOnce();
+  });
+
+  it("searches its own scrollback without resizing the terminal", async () => {
+    const { runtime } = terminalRuntime();
+    const view = renderTerminal(runtime);
+    await waitFor(() => expect(runtime.onPtyOutput).toHaveBeenCalledOnce());
+    const terminal = xterm.FakeTerminal.instances[0];
+    const search = xterm.FakeSearchAddon.instances[0];
+    const sizeReports = vi.mocked(view.props.onSize).mock.calls.length;
+    const resizeCalls = vi.mocked(runtime.resizePty!).mock.calls.length;
+
+    expect(
+      screen.queryByRole("textbox", { name: "Search Slot 1 output" }),
+    ).not.toBeInTheDocument();
+    let handled: boolean | undefined;
+    act(() => {
+      handled = terminal.keyHandler?.({
+        type: "keydown",
+        metaKey: true,
+        key: "f",
+      } as KeyboardEvent);
+    });
+    expect(handled).toBe(false);
+
+    const input = screen.getByRole("textbox", { name: "Search Slot 1 output" });
+    expect(input).toHaveFocus();
+    expect(vi.mocked(view.props.onSize).mock.calls.length).toBe(sizeReports);
+    expect(vi.mocked(runtime.resizePty!).mock.calls.length).toBe(resizeCalls);
+
+    fireEvent.change(input, { target: { value: "boot" } });
+    expect(search.nextTerms).toEqual(["boot"]);
+    expect(input).not.toHaveClass("terminal-search-missing");
+
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(search.nextTerms).toEqual(["boot", "boot"]);
+    fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
+    expect(search.previousTerms).toEqual(["boot"]);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Previous match in Slot 1" }),
+    );
+    expect(search.previousTerms).toEqual(["boot", "boot"]);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Next match in Slot 1" }),
+    );
+    expect(search.nextTerms).toEqual(["boot", "boot", "boot"]);
+
+    fireEvent.change(input, { target: { value: "nothing-here" } });
+    expect(input).toHaveClass("terminal-search-missing");
+
+    const focusedBefore = terminal.focused;
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(
+      screen.queryByRole("textbox", { name: "Search Slot 1 output" }),
+    ).not.toBeInTheDocument();
+    expect(search.clears).toBeGreaterThan(0);
+    expect(terminal.focused).toBeGreaterThan(focusedBefore);
+    expect(vi.mocked(view.props.onSize).mock.calls.length).toBe(sizeReports);
+    expect(vi.mocked(runtime.resizePty!).mock.calls.length).toBe(resizeCalls);
+  });
+
+  it("keeps the search bar available for an ended session", async () => {
+    const { runtime } = terminalRuntime();
+    renderTerminal(runtime, { phase: "exited", session: null });
+    await waitFor(() => expect(runtime.onPtyOutput).toHaveBeenCalledOnce());
+    const terminal = xterm.FakeTerminal.instances[0];
+
+    act(() => {
+      terminal.keyHandler?.({
+        type: "keydown",
+        metaKey: true,
+        key: "f",
+      } as KeyboardEvent);
+    });
+
+    expect(
+      screen.getByRole("textbox", { name: "Search Slot 1 output" }),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Close search in Slot 1" }),
+    );
+    expect(
+      screen.queryByRole("textbox", { name: "Search Slot 1 output" }),
+    ).not.toBeInTheDocument();
   });
 
   it("applies a new font size in place and refits the live session", async () => {

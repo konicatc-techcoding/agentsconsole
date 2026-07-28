@@ -1079,6 +1079,53 @@ details code {
   visibility: hidden;
 }
 
+.terminal-search {
+  position: absolute;
+  z-index: 5;
+  top: 8px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border: 1px solid #303b4e;
+  border-radius: 9px;
+  background: rgb(13 20 30 / 96%);
+}
+
+.terminal-search input {
+  width: 150px;
+  padding: 4px 7px;
+  border: 1px solid #3a4659;
+  border-radius: 7px;
+  color: #dce3ee;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.7rem;
+  background: #111823;
+}
+
+.terminal-search input.terminal-search-missing {
+  border-color: #a2465a;
+  color: #ffd5db;
+  background: #2a1620;
+}
+
+.terminal-search button {
+  min-width: 24px;
+  padding: 3px 6px;
+  border: 1px solid #3a4659;
+  border-radius: 7px;
+  color: #dce3ee;
+  font-size: 0.7rem;
+  background: #111823;
+  cursor: pointer;
+}
+
+.terminal-search button:hover {
+  border-color: #5c72a0;
+  color: #e5eaff;
+}
+
 .terminal-empty {
   position: absolute;
   z-index: 1;

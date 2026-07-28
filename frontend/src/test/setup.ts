@@ -7,6 +7,19 @@ vi.mock("@xterm/addon-fit", () => ({
   },
 }));
 
+vi.mock("@xterm/addon-search", () => ({
+  SearchAddon: class {
+    findNext() {
+      return true;
+    }
+    findPrevious() {
+      return true;
+    }
+    clearDecorations() {}
+    dispose() {}
+  },
+}));
+
 vi.mock("@xterm/xterm", () => ({
   Terminal: class {
     static instances: Array<{ options: Record<string, unknown> }> = [];
