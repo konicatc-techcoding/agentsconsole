@@ -12,8 +12,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RuntimeAdapter } from "./runtime/types";
 import TerminalSlot, {
   DEFAULT_FONT_SIZE,
+  LINK_URL_REGEX,
   SEARCH_DECORATIONS,
   createTerminalOptions,
+  isOpenableUrl,
 } from "./TerminalSlot";
 import type { Provider, PtyExitEvent, PtyOutputEvent, PtySession } from "./types";
 
@@ -90,7 +92,24 @@ const xterm = vi.hoisted(() => {
 
     dispose() {}
   }
-  return { FakeTerminal, FakeSearchAddon };
+  class FakeWebLinksAddon {
+    static instances: FakeWebLinksAddon[] = [];
+    handler: ((event: MouseEvent, uri: string) => void) | undefined;
+    options: { urlRegex?: RegExp } | undefined;
+
+    constructor(
+      handler?: (event: MouseEvent, uri: string) => void,
+      options?: { urlRegex?: RegExp },
+    ) {
+      this.handler = handler;
+      this.options = options;
+      FakeWebLinksAddon.instances.push(this);
+    }
+
+    dispose() {}
+  }
+
+  return { FakeTerminal, FakeSearchAddon, FakeWebLinksAddon };
 });
 
 vi.mock("@xterm/xterm", () => ({
@@ -105,6 +124,10 @@ vi.mock("@xterm/addon-fit", () => ({
 
 vi.mock("@xterm/addon-search", () => ({
   SearchAddon: xterm.FakeSearchAddon,
+}));
+
+vi.mock("@xterm/addon-web-links", () => ({
+  WebLinksAddon: xterm.FakeWebLinksAddon,
 }));
 
 const provider: Provider = {
@@ -145,6 +168,7 @@ function terminalRuntime() {
       exitHandler = handler;
       return () => {};
     }),
+    openExternalUrl: vi.fn().mockResolvedValue(undefined),
   };
   return {
     runtime,
@@ -180,6 +204,7 @@ afterEach(() => {
   cleanup();
   xterm.FakeTerminal.instances.length = 0;
   xterm.FakeSearchAddon.instances.length = 0;
+  xterm.FakeWebLinksAddon.instances.length = 0;
 });
 
 describe("TerminalSlot", () => {
@@ -462,6 +487,64 @@ describe("TerminalSlot", () => {
     expect(terminal.focused).toBeGreaterThan(focusedBefore);
     expect(vi.mocked(view.props.onSize).mock.calls.length).toBe(sizeReports);
     expect(vi.mocked(runtime.resizePty!).mock.calls.length).toBe(resizeCalls);
+  });
+
+  it("linkifies http and https only, and gates the opener on the scheme", () => {
+    expect(LINK_URL_REGEX.test("https://github.com/konicatc/agentsconsole")).toBe(
+      true,
+    );
+    expect(LINK_URL_REGEX.test("http://127.0.0.1:5173")).toBe(true);
+    expect(LINK_URL_REGEX.test("file:///etc/hosts")).toBe(false);
+    expect(LINK_URL_REGEX.test("ssh://git@github.com/konicatc/repo")).toBe(false);
+    expect(LINK_URL_REGEX.test("example.com")).toBe(false);
+
+    expect(isOpenableUrl("https://example.com/a")).toBe(true);
+    expect(isOpenableUrl("http://example.com/a")).toBe(true);
+    expect(isOpenableUrl("file:///etc/hosts")).toBe(false);
+    expect(isOpenableUrl("example.com")).toBe(false);
+  });
+
+  it("opens a link only on Command+Click and only for http or https", async () => {
+    const { runtime } = terminalRuntime();
+    renderTerminal(runtime);
+    await waitFor(() => expect(runtime.onPtyOutput).toHaveBeenCalledOnce());
+    const links = xterm.FakeWebLinksAddon.instances[0];
+    const handleLink = links.handler!;
+
+    expect(links.options?.urlRegex).toBe(LINK_URL_REGEX);
+
+    handleLink({ metaKey: false } as MouseEvent, "https://example.com/a");
+    expect(runtime.openExternalUrl).not.toHaveBeenCalled();
+
+    handleLink({ metaKey: true } as MouseEvent, "https://example.com/a");
+    expect(runtime.openExternalUrl).toHaveBeenCalledOnce();
+    expect(runtime.openExternalUrl).toHaveBeenCalledWith(
+      "https://example.com/a",
+    );
+
+    handleLink({ metaKey: true } as MouseEvent, "file:///etc/hosts");
+    handleLink({ metaKey: true } as MouseEvent, "ssh://git@example.com/repo");
+    expect(runtime.openExternalUrl).toHaveBeenCalledOnce();
+  });
+
+  it("keeps working when the opener rejects", async () => {
+    const { runtime } = terminalRuntime();
+    vi.mocked(runtime.openExternalUrl!).mockRejectedValue(
+      new Error("Link could not be opened"),
+    );
+    renderTerminal(runtime);
+    await waitFor(() => expect(runtime.onPtyOutput).toHaveBeenCalledOnce());
+    const handleLink = xterm.FakeWebLinksAddon.instances[0].handler!;
+
+    expect(() =>
+      handleLink({ metaKey: true } as MouseEvent, "https://example.com/a"),
+    ).not.toThrow();
+    await Promise.resolve();
+
+    expect(runtime.openExternalUrl).toHaveBeenCalledOnce();
+    expect(
+      screen.getByLabelText("Slot 1 terminal"),
+    ).toBeInTheDocument();
   });
 
   it("keeps the active match apart from plain matches and from selection", () => {

@@ -46,4 +46,5 @@ export interface RuntimeAdapter {
   ): Promise<RuntimeUnlisten>;
   closeWindow?(): Promise<void>;
   reloadWindow?(): Promise<void>;
+  openExternalUrl?(url: string): Promise<void>;
 }

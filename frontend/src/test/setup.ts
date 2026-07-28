@@ -20,6 +20,12 @@ vi.mock("@xterm/addon-search", () => ({
   },
 }));
 
+vi.mock("@xterm/addon-web-links", () => ({
+  WebLinksAddon: class {
+    dispose() {}
+  },
+}));
+
 vi.mock("@xterm/xterm", () => ({
   Terminal: class {
     static instances: Array<{ options: Record<string, unknown> }> = [];

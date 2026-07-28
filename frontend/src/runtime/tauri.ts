@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 import type {
   ConsoleLayout,
@@ -208,5 +209,13 @@ export const tauriRuntime: RuntimeAdapter = {
 
   async reloadWindow(): Promise<void> {
     window.location.reload();
+  },
+
+  async openExternalUrl(url: string): Promise<void> {
+    try {
+      await openUrl(url);
+    } catch (error) {
+      throw commandError(error, "Link could not be opened");
+    }
   },
 };
