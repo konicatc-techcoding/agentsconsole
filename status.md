@@ -5,13 +5,35 @@
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md。LOO-12 至 LOO-20 已依序合併；四個 Slot 已完成
-embedded terminal rollout、自適應版面、Session 顯示名稱、全域 Stop All、
-status.md handoff、Slot 注意力指示與 provider 專屬色標題列，CI 已補上
-Rust 測試並修正快取與 lockfile 檢查。Finn-loop 三個 skill 已安裝於
-.claude/skills，綁定 Linear team LOO。下一步完成 README／status 文件
-commit、push 後，執行 /finn-spec 建立下一個規格。
+請先讀取 status.md，特別是「未完成事項」一節。LOO-12 至 LOO-21 已依序
+合併，最新基線為 fee0c70。動工前必須先處理工作樹裡未 commit 的
+.claude/skills/finn-review/SKILL.md，否則 finn-build 的 preflight 會因
+工作樹不乾淨而中止。LOO-22 已建立但尚未掛 agent-ready。
 ```
+
+## 未完成事項
+
+以下三項在 2026-07-27 收工時仍未完成，接手前先確認：
+
+1. **`.claude/skills/finn-review/SKILL.md` 已修改但未 commit。** 內容是為
+   `finn-review` 加入 documentation-only PR 的例外規則：以
+   `gh pr diff --name-only` 從 diff 判定（不採信 PR 描述），所有變更路徑
+   皆為 `.md` 時才適用；文件 PR 缺少 linked issue 不再是 must-fix，改為
+   查核文字是否與 repo 現況相符。**已知缺口**：`.claude/skills/*/SKILL.md`
+   本身也是 `.md`，會被判定為 documentation-only，但改 skill 等於改變
+   agent 行為，不該套用寬鬆審查。建議在條件加上排除 `.claude/` 路徑。
+   此變更會擋住 `finn-build` 的 preflight，需先 commit 並開 PR 或丟棄。
+2. **LOO-22 已建立，尚未掛 `agent-ready`**，也尚未動工。
+3. **README 尚未記錄 LOO-21 的字級控制。** 刻意延後：LOO-22 會把預設值由
+   12px 改為 16px，等它落地再一次寫入，避免文件立刻過時。
+
+## 目前功能狀態
+
+四個 Slot 已完成 embedded terminal rollout、自適應版面、Session 顯示名稱、
+全域 Stop All、status.md handoff、Slot 注意力指示、provider 專屬色標題列與
+全域字級控制。CI 有 `smoke` 與 `rust` 兩個 required check，快取已納入 rustc
+版本，`cargo test` 帶 `--locked`。Finn-loop 三個 skill 安裝於
+`.claude/skills`，綁定 Linear team `LOO`。
 
 LOO-12 將 PTY engine 擴展為最多四個獨立 session 並啟用 Slot 2；
 LOO-13、LOO-14 接續啟用 Slot 3、4。Tauri 目前四格皆支援完整
@@ -35,6 +57,8 @@ LOO-19 在 CI 新增 `rust` job，補上 `src-tauri` 一直沒有的自動化覆
 LOO-20 修正該 job 的兩項缺陷：快取 key 與 restore-keys 納入 rustc 版本，
 `cargo test` 加上 `--locked`，並把 `rustfmt` 寫進 `rust-toolchain.toml` 的
 components。
+LOO-21 新增 Header 的全域終端字級控制，範圍 10 至 20px、每次加減 1、預設
+12px，四格同步套用且不重建 Terminal 物件。
 
 ## Source of truth
 
@@ -49,15 +73,29 @@ components。
   `status.md` 為共用追蹤檔案，任一邊的修改合併後都會影響另一邊；同一個
   分支無法同時在兩個 worktree checkout，切換開發環境時先合併回 `main`，
   再於另一個 worktree `git pull`。
-- 最新合併基線：`4d3871f ci: key rust cache by rustc version (#22)`
+- 最新合併基線：`fee0c70 feat: add global terminal font size control (#24)`
 - Finn-loop：`.claude/skills` 已安裝 finn-spec／finn-build／finn-review，
   綁定 Linear team `LOO`；GitHub labels `loop-approved`、
   `loop-changes-requested`、`needs-human-review` 均已建立
 - `main` required status checks：`smoke`（ubuntu-latest，backend 與 frontend）
   與 `rust`（macos-latest，`cargo fmt --all --check` 與 `cargo test`），
   `strict` 為 true，即合併前分支必須為最新
-- 目前 Linear issue：無；下一步使用 `/finn-spec` 建立新規格
-- 最近完成的 Linear issue：`LOO-20 修正 rust CI job 的快取失效與 lockfile 檢查`
+- 目前 Linear issue：`LOO-22 將終端預設字級由 12px 改為 16px`（`Backlog`，
+  未指派、未掛 `agent-ready`、尚未動工）
+- LOO-22 URL：<https://linear.app/loopent/issue/LOO-22/將終端預設字級由-12px-改為-16px>
+- LOO-22 relation：`related to LOO-21`
+- 最近完成的 Linear issue：`LOO-21 新增全域終端字體大小控制`
+- LOO-21 URL：<https://linear.app/loopent/issue/LOO-21/新增全域終端字體大小控制>
+- LOO-21 狀態：`Done`
+- LOO-21 label：`agent-ready`
+- LOO-21 assignee：Zack Chiu
+- LOO-21 blocker：無
+- LOO-21 GitHub PR：<https://github.com/konicatc-techcoding/agentsconsole/pull/24>
+- PR #24 狀態：Merged
+- PR #24 merge commit：`fee0c70`
+- PR #24 review：`loop-approved`（由 `finn-review` 產生）
+- PR #24 required check：`smoke` — `SUCCESS`；`rust` — `SUCCESS`
+- 前一個完成的 Linear issue：`LOO-20 修正 rust CI job 的快取失效與 lockfile 檢查`
 - LOO-20 URL：<https://linear.app/loopent/issue/LOO-20/修正-rust-ci-job-的快取失效與-lockfile-檢查>
 - LOO-20 狀態：`Done`
 - LOO-20 label：`agent-ready`
@@ -759,6 +797,39 @@ Should fix：
 - 變更範圍：`.github/workflows/finn-loop-smoke.yml` 與
   `src-tauri/rust-toolchain.toml` 兩個檔案，未觸及任何原始碼或 `Cargo.lock`
 - 本 PR 未經 `finn-review` 審查即合併，詳見 Source of truth 的 PR #22 記錄
+
+## LOO-21 全域終端字級控制
+
+LOO-21 已完成並透過 PR #24 合併，由 `/finn-spec` → `/finn-build` →
+`/finn-review` 全程產出：
+
+- Header 新增全域字級控制，顯示目前字級並提供縮小與放大按鈕，與
+  `Sessions · N active` 及 Slot 顯示控制並列。範圍 10 至 20px、每次加減 1、
+  預設 12px，達到邊界時對應按鈕 disabled。
+- `TerminalSlot` 新增選填的 `fontSize` prop 與匯出的 `DEFAULT_FONT_SIZE`；
+  App 以單一 state 傳給四格，隱藏中的 Slot 同樣套用。
+- **關鍵實作**：Terminal 建構子讀取 `fontSizeRef.current` 而非 `fontSize`
+  本身，使建立 Terminal 的 effect 不因字級變動而重跑；字級變更改由獨立
+  effect 寫入 `terminal.options.fontSize` 後呼叫 `fitAndReport()`。這是
+  AC-4 的要求——若改為重建 Terminal，該 Slot 的 5,000 行 scrollback 會被
+  清空，而該災難在 jsdom 測試中抓不到。
+- 字級只存在 React 記憶體：`Refresh` 保留，App 重新載入回復預設。
+- 未新增 storage schema、未修改 `src-tauri/` 或 Web runtime。
+
+## LOO-21 驗證結果
+
+- Linear：LOO-21 為 `Done`
+- GitHub：PR #24 已合併，`smoke` 與 `rust` 兩個 required check 皆為
+  `SUCCESS`（各 38 秒）
+- Frontend tests：70 passed（既有 68 加新增 2）
+- Frontend production build：passed（既有 xterm chunk-size warning 不阻擋）
+- `git diff --check`：clean
+- 新增的 2 個測試已在移除實作後確認會失敗，非空測試
+- **真實 Tauri App 手動 smoke：未完成。** App 曾於 2026-07-27 啟動，但
+  scrollback 是否保留、CLI 畫面是否隨新行列數正確重繪這兩項核心驗收未逐項
+  確認。jsdom 不排版 xterm，自動化測試只能斷言 `options.fontSize` 的設定與
+  `resizePty` 呼叫，實際呈現必須實機驗證。LOO-22 的 How to verify 第 6 步
+  涵蓋同樣的檢查，可於該 issue 驗收時一併完成
 
 ## 本機預覽方式
 
