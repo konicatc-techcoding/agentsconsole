@@ -48,12 +48,18 @@ const encoder = new TextEncoder();
 
 export const DEFAULT_FONT_SIZE = 16;
 
+// `ISearchDecorationOptions` cannot set the text colour, so the active match
+// is a dark amber fill with a bright border rather than a bright fill: the
+// terminal's light foreground stays readable on top of it, and that text is
+// the whole point of searching. Plain matches stay blue but must not reuse the
+// theme's `selectionBackground`, or a match looks like an ordinary selection.
 export const SEARCH_DECORATIONS = {
   decorations: {
-    matchBackground: "#334a78",
-    activeMatchBackground: "#8ca4ff",
-    matchOverviewRuler: "#334a78",
-    activeMatchColorOverviewRuler: "#8ca4ff",
+    matchBackground: "#16305c",
+    activeMatchBackground: "#6b4f00",
+    activeMatchBorder: "#ffd54a",
+    matchOverviewRuler: "#16305c",
+    activeMatchColorOverviewRuler: "#ffd54a",
   },
 };
 
@@ -167,6 +173,12 @@ export default function TerminalSlot({
 
   const openSearchRef = useRef(() => {
     setSearchOpen(true);
+    // When the bar is already open, `searchOpen` does not change and the
+    // effect below never re-runs, so focus has to be taken here. Plain focus,
+    // never select(): the existing term and caret position are kept. On the
+    // first open the input is not mounted yet and this is a no-op — the effect
+    // handles that case.
+    searchInputRef.current?.focus();
   });
 
   useEffect(() => {
