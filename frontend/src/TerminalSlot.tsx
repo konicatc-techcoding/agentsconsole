@@ -44,7 +44,7 @@ interface TerminalSlotProps {
 
 const encoder = new TextEncoder();
 
-export const DEFAULT_FONT_SIZE = 12;
+export const DEFAULT_FONT_SIZE = 16;
 
 function terminalStatus(
   phase: TerminalPhase,

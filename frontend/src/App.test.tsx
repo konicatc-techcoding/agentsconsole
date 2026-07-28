@@ -2137,8 +2137,8 @@ describe("AgentOS Console", () => {
     const view = render(<App runtime={runtime} />);
     await screen.findByText("Saved");
 
-    expect(screen.getByText("12px")).toBeInTheDocument();
-    expect(terminalFontSizes()).toEqual([12, 12, 12, 12]);
+    expect(screen.getByText("16px")).toBeInTheDocument();
+    expect(terminalFontSizes()).toEqual([16, 16, 16, 16]);
 
     await user.click(screen.getByRole("button", { name: "Slot 1 — Idle" }));
     const increase = screen.getByRole("button", {
@@ -2150,11 +2150,11 @@ describe("AgentOS Console", () => {
     await user.click(increase);
     await user.click(increase);
 
-    expect(screen.getByText("14px")).toBeInTheDocument();
-    expect(terminalFontSizes()).toEqual([14, 14, 14, 14]);
+    expect(screen.getByText("18px")).toBeInTheDocument();
+    expect(terminalFontSizes()).toEqual([18, 18, 18, 18]);
     expect(terminalInstances()).toHaveLength(4);
 
-    for (let step = 0; step < 4; step += 1) {
+    for (let step = 0; step < 8; step += 1) {
       await user.click(decrease);
     }
     expect(screen.getByText("10px")).toBeInTheDocument();
@@ -2178,8 +2178,8 @@ describe("AgentOS Console", () => {
     view.unmount();
     terminalInstances().length = 0;
     render(<App runtime={runtime} />);
-    expect(await screen.findByText("12px")).toBeInTheDocument();
-    expect(terminalFontSizes()).toEqual([12, 12, 12, 12]);
+    expect(await screen.findByText("16px")).toBeInTheDocument();
+    expect(terminalFontSizes()).toEqual([16, 16, 16, 16]);
   });
 
   it("tags each Slot header with its provider, including unsaved drafts", async () => {
