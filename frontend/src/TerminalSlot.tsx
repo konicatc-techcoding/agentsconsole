@@ -1,7 +1,8 @@
 import { FitAddon } from "@xterm/addon-fit";
+import { SearchAddon } from "@xterm/addon-search";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { RuntimeAdapter } from "./runtime/types";
 import type {
@@ -46,6 +47,15 @@ const encoder = new TextEncoder();
 
 export const DEFAULT_FONT_SIZE = 16;
 
+const SEARCH_DECORATIONS = {
+  decorations: {
+    matchBackground: "#334a78",
+    activeMatchBackground: "#8ca4ff",
+    matchOverviewRuler: "#334a78",
+    activeMatchColorOverviewRuler: "#8ca4ff",
+  },
+};
+
 function terminalStatus(
   phase: TerminalPhase,
   exitEvent: PtyExitEvent | null,
@@ -78,9 +88,14 @@ export default function TerminalSlot({
   onOutput,
   onFocusChange,
 }: TerminalSlotProps) {
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchMissing, setSearchMissing] = useState(false);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  const searchRef = useRef<SearchAddon | null>(null);
   const sessionRef = useRef(session);
   const phaseRef = useRef(phase);
   const onExitRef = useRef(onExit);
@@ -98,6 +113,43 @@ export default function TerminalSlot({
   onOutputRef.current = onOutput;
   onFocusChangeRef.current = onFocusChange;
   fontSizeRef.current = fontSize;
+
+  const runSearch = useCallback(
+    (term: string, direction: "next" | "previous") => {
+      const search = searchRef.current;
+      if (!search) {
+        return;
+      }
+      if (!term) {
+        search.clearDecorations();
+        setSearchMissing(false);
+        return;
+      }
+      const found =
+        direction === "next"
+          ? search.findNext(term, SEARCH_DECORATIONS)
+          : search.findPrevious(term, SEARCH_DECORATIONS);
+      setSearchMissing(!found);
+    },
+    [],
+  );
+
+  const closeSearch = useCallback(() => {
+    searchRef.current?.clearDecorations();
+    setSearchOpen(false);
+    setSearchMissing(false);
+    terminalRef.current?.focus();
+  }, []);
+
+  const openSearchRef = useRef(() => {
+    setSearchOpen(true);
+  });
+
+  useEffect(() => {
+    if (searchOpen) {
+      searchInputRef.current?.focus();
+    }
+  }, [searchOpen]);
 
   const fitAndReport = useCallback(() => {
     const terminal = terminalRef.current;
@@ -143,10 +195,13 @@ export default function TerminalSlot({
       },
     });
     const fit = new FitAddon();
+    const search = new SearchAddon();
     terminal.loadAddon(fit);
+    terminal.loadAddon(search);
     terminal.open(viewport);
     terminalRef.current = terminal;
     fitRef.current = fit;
+    searchRef.current = search;
 
     const sendInput = (value: string) => {
       const active = sessionRef.current;
@@ -166,6 +221,10 @@ export default function TerminalSlot({
         return true;
       }
       const key = event.key.toLowerCase();
+      if (key === "f") {
+        openSearchRef.current();
+        return false;
+      }
       if (key === "c" && terminal.hasSelection()) {
         void navigator.clipboard?.writeText(terminal.getSelection());
         return false;
@@ -246,6 +305,7 @@ export default function TerminalSlot({
       terminal.dispose();
       terminalRef.current = null;
       fitRef.current = null;
+      searchRef.current = null;
     };
   }, [fitAndReport, runtime, slotId]);
 
@@ -294,6 +354,7 @@ export default function TerminalSlot({
 
   const available = provider.installed && provider.error === null;
   const hasTerminal = session !== null || phase === "stopped" || phase === "exited";
+  const slotLabel = slotId.replace("slot-", "Slot ");
 
   return (
     <div className="terminal-slot">
@@ -304,6 +365,54 @@ export default function TerminalSlot({
           displayName ? ` · ${displayName}` : ""
         } terminal`}
       />
+      {searchOpen && (
+        <div className="terminal-search" role="search">
+          <input
+            ref={searchInputRef}
+            className={searchMissing ? "terminal-search-missing" : ""}
+            type="text"
+            aria-label={`Search ${slotLabel} output`}
+            value={searchTerm}
+            onChange={(event) => {
+              const term = event.target.value;
+              setSearchTerm(term);
+              runSearch(term, "next");
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                runSearch(searchTerm, event.shiftKey ? "previous" : "next");
+                return;
+              }
+              if (event.key === "Escape") {
+                event.preventDefault();
+                closeSearch();
+              }
+            }}
+          />
+          <button
+            type="button"
+            aria-label={`Previous match in ${slotLabel}`}
+            onClick={() => runSearch(searchTerm, "previous")}
+          >
+            <span aria-hidden="true">↑</span>
+          </button>
+          <button
+            type="button"
+            aria-label={`Next match in ${slotLabel}`}
+            onClick={() => runSearch(searchTerm, "next")}
+          >
+            <span aria-hidden="true">↓</span>
+          </button>
+          <button
+            type="button"
+            aria-label={`Close search in ${slotLabel}`}
+            onClick={closeSearch}
+          >
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
+      )}
       {!hasTerminal && (
         <div className="terminal-empty">
           <span className="console-provider-name">{provider.display_name}</span>
