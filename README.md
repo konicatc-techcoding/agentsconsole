@@ -163,6 +163,23 @@ holds keyboard focus, so in the `All` layout only the Slot you click into
 clears. These marks are separate from the existing lifecycle phase dot, are
 in-memory like the Slot view choices, and are never persisted.
 
+Command+1 through Command+4 move keyboard focus between terminals by screen
+position rather than by Slot identity. Command+1 focuses the leftmost visible
+terminal, Command+2 the next, and so on in the same left-to-right, top-to-bottom
+order the layout uses above. In the `All` layout those numbers line up with Slot
+1 through Slot 4, but a custom layout follows the visible order instead, so with
+Slot 3, Slot 1, and Slot 4 selected, Command+2 focuses Slot 1. Each visible
+Slot's title bar carries its current number as a badge that updates with the
+layout. A number beyond the visible count does nothing, and these keys never
+change the layout, so a hidden Slot cannot be reached this way. A Slot with no
+session running can still be focused. Command+0 restores the `All` 2×2 layout
+and leaves keyboard focus where it was. The Console consumes all five
+combinations, so none reaches a CLI and none triggers the WebView's own
+Command+0 zoom reset, and all five do nothing while a dialog is open. The
+terminal currently holding keyboard focus is drawn with an outline, kept
+visually separate from the attention marks above. Focus is in-memory like the
+other view choices.
+
 Each Slot's title bar is tinted with its Provider's own colour and carries a
 matching accent bar on its left edge, so the four Slots stay distinguishable at
 a glance. The colour follows whichever Provider is currently selected in that
