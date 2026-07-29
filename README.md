@@ -155,13 +155,23 @@ They are not written to Console layout or workspace preference storage.
 
 Each Slot also reports whether it needs attention. A Slot whose terminal does
 not hold keyboard focus is marked when it receives new output, and marked
-differently when its session exits or fails. A visible Slot shows this as a
-glow around its terminal frame, and the header's Slot controls carry a matching
-mark that is the only indication for a hidden Slot. Stopping a session yourself
-does not mark it. A mark clears once that Slot is both visible and its terminal
-holds keyboard focus, so in the `All` layout only the Slot you click into
-clears. These marks are separate from the existing lifecycle phase dot, are
+differently when its session exits or fails. The header's Slot controls carry
+both marks, and are the only indication for a hidden Slot. Stopping a session
+yourself does not mark it. A mark clears once that Slot is both visible and its
+terminal holds keyboard focus, so in the `All` layout only the Slot you click
+into clears. These marks are separate from the existing lifecycle phase dot, are
 in-memory like the Slot view choices, and are never persisted.
+
+The terminal frame itself answers only the first of those two questions. A
+visible Slot that received output while unfocused is ringed with a glow, bright
+enough to catch from across the window; it pulses three times when it first
+appears, waiting a moment beforehand so that revealing a hidden Slot does not
+pulse while the layout is still moving, and then holds steady. A continuously
+chatty CLI pulses once, not forever, and Reduce Motion keeps the glow while
+dropping the pulse. An ended session deliberately gets no frame glow at all:
+carrying both marks on the frame reads as noise rather than signal. Because the
+end of a session takes precedence over its output, a glowing Slot goes dark the
+moment its session ends — the mark moves to the header rather than disappearing.
 
 Command+1 through Command+4 move keyboard focus between terminals by screen
 position rather than by Slot identity. Command+1 focuses the leftmost visible
