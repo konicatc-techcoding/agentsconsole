@@ -35,6 +35,7 @@ interface TerminalSlotProps {
   displayName?: string | null;
   visible?: boolean;
   fontSize?: number;
+  focusToken?: number;
   startDisabled: boolean;
   runtime: RuntimeAdapter;
   onStart(): void;
@@ -48,6 +49,11 @@ interface TerminalSlotProps {
 const encoder = new TextEncoder();
 
 export const DEFAULT_FONT_SIZE = 16;
+
+// Cmd+0 through Cmd+4 are the Console's slot shortcuts, owned by App at the
+// window level. Both sides read this list: App to decide what the key means,
+// the terminal to make sure xterm never treats one as terminal input.
+export const CONSOLE_SHORTCUT_DIGITS = ["0", "1", "2", "3", "4"];
 
 // `ISearchDecorationOptions` cannot set the text colour, so the active match
 // is a dark amber fill with a bright border rather than a bright fill: the
@@ -144,6 +150,7 @@ export default function TerminalSlot({
   displayName = null,
   visible = true,
   fontSize = DEFAULT_FONT_SIZE,
+  focusToken = 0,
   startDisabled,
   runtime,
   onStart,
@@ -298,6 +305,11 @@ export default function TerminalSlot({
       if (event.type !== "keydown" || !event.metaKey) {
         return true;
       }
+      if (CONSOLE_SHORTCUT_DIGITS.includes(event.key)) {
+        // Returning false only stops xterm from handling the key — the event
+        // still reaches App's window listener, which owns these shortcuts.
+        return false;
+      }
       const key = event.key.toLowerCase();
       if (key === "f") {
         openSearchRef.current();
@@ -412,6 +424,15 @@ export default function TerminalSlot({
       fitAndReport();
     }
   }, [fitAndReport, visible]);
+
+  // App asks for focus by bumping the token, which works whether or not this
+  // Slot already held it. Zero is the initial value, so mounting never steals
+  // focus from wherever the user was.
+  useEffect(() => {
+    if (focusToken > 0) {
+      terminalRef.current?.focus();
+    }
+  }, [focusToken]);
 
   useEffect(() => {
     const terminal = terminalRef.current;

@@ -9,6 +9,7 @@ import {
 import { RECENT_WORKSPACE_LIMIT } from "./runtime/preferences";
 import type { RuntimeAdapter } from "./runtime/types";
 import TerminalSlot, {
+  CONSOLE_SHORTCUT_DIGITS,
   DEFAULT_FONT_SIZE,
   type TerminalPhase,
 } from "./TerminalSlot";
@@ -107,6 +108,26 @@ function initialSlotAttention(): Record<EmbeddedSlotId, SlotAttention> {
     "slot-3": "none",
     "slot-4": "none",
   };
+}
+
+function initialFocusTokens(): Record<EmbeddedSlotId, number> {
+  return {
+    "slot-1": 0,
+    "slot-2": 0,
+    "slot-3": 0,
+    "slot-4": 0,
+  };
+}
+
+// Where each visible Slot sits on screen, left to right and top to bottom:
+// `All` keeps the fixed 2×2 order, any custom layout follows the click queue.
+// The grid and the Cmd+1…4 shortcuts both address Slots by that position, so
+// both read it from here rather than keeping separate orders.
+function displayedSlotOrder(queue: VisibleSlotQueue): EmbeddedSlotId[] {
+  const visible = queue ?? EMBEDDED_SLOT_IDS;
+  return visible.length === EMBEDDED_SLOT_IDS.length
+    ? EMBEDDED_SLOT_IDS
+    : visible;
 }
 
 function initialSlotPhases(): Record<EmbeddedSlotId, TerminalPhase> {
@@ -260,6 +281,7 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
   const [focusedSlotId, setFocusedSlotId] = useState<EmbeddedSlotId | null>(
     null,
   );
+  const [focusTokens, setFocusTokens] = useState(initialFocusTokens);
   const [sessionControlSlots, setSessionControlSlots] = useState<
     EmbeddedSlotId[] | null
   >(null);
@@ -279,6 +301,7 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
   const terminalStatesRef = useRef(terminalStates);
   const focusedSlotIdRef = useRef(focusedSlotId);
   const visibleSlotQueueRef = useRef(visibleSlotQueue);
+  const dialogOpenRef = useRef(false);
   const slotPhasesRef = useRef(initialSlotPhases());
   const pendingExitRefs = useRef<Record<EmbeddedSlotId, PtyExitEvent | null>>({
     "slot-1": null,
@@ -317,6 +340,17 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
 
   focusedSlotIdRef.current = focusedSlotId;
   visibleSlotQueueRef.current = visibleSlotQueue;
+  dialogOpenRef.current =
+    launchTarget !== null ||
+    sessionControlSlots !== null ||
+    windowAction !== null;
+
+  const focusSlot = useCallback((slotId: EmbeddedSlotId) => {
+    setFocusTokens((current) => ({
+      ...current,
+      [slotId]: current[slotId] + 1,
+    }));
+  }, []);
 
   const markSlotAttention = useCallback(
     (slotId: EmbeddedSlotId, attention: Exclude<SlotAttention, "none">) => {
@@ -917,6 +951,42 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
     return () => window.removeEventListener("keydown", interceptReload);
   }, [isTauri, requestWindowAction]);
 
+  // Listening on the window is what makes Cmd+0…4 work from anywhere: a
+  // terminal, a search bar, a Header button. They are swallowed even while a
+  // dialog blocks them, so the WebView never falls back to its own Cmd+0 zoom
+  // reset, and a number past the visible count stays a no-op rather than
+  // leaking through.
+  useEffect(() => {
+    if (!isTauri) {
+      return;
+    }
+    const handleSlotShortcut = (event: KeyboardEvent) => {
+      if (!event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      const position = CONSOLE_SHORTCUT_DIGITS.indexOf(event.key);
+      if (position < 0) {
+        return;
+      }
+      event.preventDefault();
+      if (dialogOpenRef.current) {
+        return;
+      }
+      if (position === 0) {
+        setVisibleSlotQueue(null);
+        return;
+      }
+      const target = displayedSlotOrder(visibleSlotQueueRef.current)[
+        position - 1
+      ];
+      if (target) {
+        focusSlot(target);
+      }
+    };
+    window.addEventListener("keydown", handleSlotShortcut);
+    return () => window.removeEventListener("keydown", handleSlotShortcut);
+  }, [focusSlot, isTauri]);
+
   useEffect(
     () => () => {
       for (const slotId of EMBEDDED_SLOT_IDS) {
@@ -1130,10 +1200,7 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
   ).filter(([, slots]) => slots.length > 1);
   const visibleSlotIds = visibleSlotQueue ?? EMBEDDED_SLOT_IDS;
   const visibleSlotSet = new Set(visibleSlotIds);
-  const displayedSlotIds =
-    visibleSlotIds.length === EMBEDDED_SLOT_IDS.length
-      ? EMBEDDED_SLOT_IDS
-      : visibleSlotIds;
+  const displayedSlotIds = displayedSlotOrder(visibleSlotQueue);
   const orderedSlotIds = [
     ...displayedSlotIds,
     ...EMBEDDED_SLOT_IDS.filter((slotId) => !visibleSlotSet.has(slotId)),
@@ -1455,6 +1522,10 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                         visible && attention !== "none"
                           ? `console-slot-attention console-slot-attention-${attention}`
                           : ""
+                      } ${
+                        visible && focusedSlotId === embeddedSlotId
+                          ? "console-slot-focused"
+                          : ""
                       }`}
                       aria-hidden={!visible}
                       data-slot-id={slot.slotId}
@@ -1464,7 +1535,14 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                         className="console-slot-header"
                         data-provider-id={slot.providerId}
                       >
-                        <span>{label}</span>
+                        <span className="console-slot-title">
+                          <span>{label}</span>
+                          {visible && (
+                            <span className="console-slot-shortcut">
+                              ⌘{visibleIndex + 1}
+                            </span>
+                          )}
+                        </span>
                         <label>
                           <span className="sr-only">
                             {slotOnlyLabel} provider
@@ -1505,6 +1583,7 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                         }
                         visible={visible}
                         fontSize={terminalFontSize}
+                        focusToken={focusTokens[embeddedSlotId]}
                         startDisabled={slotStartDisabled(provider)}
                         runtime={runtime}
                         onStart={() => openLaunch(provider, embeddedSlotId)}

@@ -769,4 +769,44 @@ describe("TerminalSlot", () => {
     expect(onFocusChange).toHaveBeenLastCalledWith(false);
     expect(onFocusChange).toHaveBeenCalledTimes(2);
   });
+
+  it("takes focus when the owner bumps the token, but never on mount", () => {
+    const { runtime } = terminalRuntime();
+    const view = renderTerminal(runtime, { focusToken: 0 });
+    const terminal = xterm.FakeTerminal.instances[0];
+    const focusedOnMount = terminal.focused;
+
+    view.rerender(<TerminalSlot {...view.props} focusToken={0} />);
+    expect(terminal.focused).toBe(focusedOnMount);
+
+    view.rerender(<TerminalSlot {...view.props} focusToken={1} />);
+    expect(terminal.focused).toBe(focusedOnMount + 1);
+    view.rerender(<TerminalSlot {...view.props} focusToken={2} />);
+    expect(terminal.focused).toBe(focusedOnMount + 2);
+  });
+
+  it("keeps the Console's Cmd+digit shortcuts out of the terminal", async () => {
+    const { runtime } = terminalRuntime();
+    renderTerminal(runtime);
+    const terminal = xterm.FakeTerminal.instances[0];
+
+    for (const key of ["0", "1", "2", "3", "4"]) {
+      expect(
+        terminal.keyHandler?.({
+          type: "keydown",
+          key,
+          metaKey: true,
+        } as KeyboardEvent),
+      ).toBe(false);
+    }
+    // Cmd+5 is not a Console shortcut, so xterm keeps handling it.
+    expect(
+      terminal.keyHandler?.({
+        type: "keydown",
+        key: "5",
+        metaKey: true,
+      } as KeyboardEvent),
+    ).toBe(true);
+    expect(runtime.writePtyInput).not.toHaveBeenCalled();
+  });
 });
