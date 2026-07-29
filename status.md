@@ -1,15 +1,16 @@
 # AgentOS Console — 工作交接狀態
 
-最後更新：2026-07-27
+最後更新：2026-07-29
 
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md。LOO-12 至 LOO-27 已依序合併，最新基線為 8f126e2，
+請先讀取 status.md。LOO-12 至 LOO-28 已依序合併，最新基線為 96b77c0，
 工作樹乾淨、Linear 的 agent-ready 佇列為空。終端搜尋與連結開啟均已完成並
-實機驗證。有一項已確認根因但尚未建立 issue 的缺陷：App 會把呼叫者的
-CLAUDE_CODE_* session 標記傳給子 CLI，見「未完成事項」。搜尋另有兩項已知
-的 xterm 上游限制且決定不修。下一步執行 /finn-spec；候選見「後續候選」。
+實機驗證，LOO-28 亦已於 2026-07-29 逐項實機驗證通過。有兩項未完成事項：
+App 會把呼叫者的 CLAUDE_CODE_* session 標記傳給子 CLI（根因已確認），以及
+LOO-17 的注意力光暈實機看太弱，兩者都尚未建立 issue。搜尋另有兩項已知的
+xterm 上游限制且決定不修。下一步執行 /finn-spec；候選見「後續候選」。
 ```
 
 ## 未完成事項
@@ -26,15 +27,28 @@ CLAUDE_CODE_* session 標記傳給子 CLI，見「未完成事項」。搜尋另
    「清哪些」仍是未決的產品問題：全部 `CLAUDE_CODE_*` 一律清可能拿掉使用者
    刻意設定的組態，且其他三家 CLI 是否有類似標記尚未調查。
 
-LOO-23 至 LOO-27 的實機驗證均已完成。搜尋的兩項 xterm 上游限制已決定維持
+2. **LOO-17 的注意力光暈實機看太弱，尚未建立 Linear issue。** 2026-07-29 逐項
+   驗證 LOO-28 時發現：未持有焦點的 Slot 收到新輸出或 session 結束時，光暈
+   確實會亮起也確實會依規則清除，功能面完全正確，但在真實視窗尺寸下**不夠
+   顯眼**，容易錯過。這不是 LOO-28 造成的退化，是 LOO-17 本來就有的視覺強度
+   問題——當時的實機驗證只確認了「有沒有出現」，沒有檢視「夠不夠醒目」。
+   修法方向是加粗或改用更強的效果，實作在 `styles.css` 的
+   `.console-slot-attention-output` 與 `.console-slot-attention-terminated`
+   （約 974、979 行）。須留意兩點：這兩條規則目前用 `border-color` 與
+   `box-shadow`，而 LOO-28 的焦點外框用 `outline`，加強時不要佔用 `outline`
+   通道；`terminated` 的橘色 `#ffa24a` 與 Hermes 的 provider 色 `#E5A93D`
+   色相接近，靠位置區分（見 LOO-18 章節），加強後需重新確認仍可分辨。
+
+LOO-23 至 LOO-28 的實機驗證均已完成。搜尋的兩項 xterm 上游限制已決定維持
 現狀，見「搜尋的兩項實機限制」。先前記錄的 `finn-review` documentation-only
 例外修改已於 2026-07-28 還原（未進版控）。
 
 ## 目前功能狀態
 
 四個 Slot 已完成 embedded terminal rollout、自適應版面、Session 顯示名稱、
-全域 Stop All、status.md handoff、Slot 注意力指示、provider 專屬色標題列與
-全域字級控制。CI 有 `smoke` 與 `rust` 兩個 required check，快取已納入 rustc
+全域 Stop All、status.md handoff、Slot 注意力指示、provider 專屬色標題列、
+全域字級控制、終端搜尋、Command+Click 開啟連結與 Cmd+0 至 Cmd+4 的位置編址
+快捷鍵。CI 有 `smoke` 與 `rust` 兩個 required check，快取已納入 rustc
 版本，`cargo test` 帶 `--locked`。Finn-loop 三個 skill 安裝於
 `.claude/skills`，綁定 Linear team `LOO`。
 
@@ -79,7 +93,7 @@ LOO-23 加入每格終端的 scrollback 搜尋，但合併後即發現完全失�
   `status.md` 為共用追蹤檔案，任一邊的修改合併後都會影響另一邊；同一個
   分支無法同時在兩個 worktree checkout，切換開發環境時先合併回 `main`，
   再於另一個 worktree `git pull`。
-- 最新合併基線：`8f126e2 fix: route OSC 8 links through the same Command+Click opener (#33)`
+- 最新合併基線：`96b77c0 feat: focus terminals by screen position with Cmd+1 through Cmd+4 (#35)`
 - Finn-loop：`.claude/skills` 已安裝 finn-spec／finn-build／finn-review，
   綁定 Linear team `LOO`；GitHub labels `loop-approved`、
   `loop-changes-requested`、`needs-human-review` 均已建立
@@ -87,7 +101,11 @@ LOO-23 加入每格終端的 scrollback 搜尋，但合併後即發現完全失�
   與 `rust`（macos-latest，`cargo fmt --all --check` 與 `cargo test`），
   `strict` 為 true，即合併前分支必須為最新
 - 目前 Linear issue：無；下一步使用 `/finn-spec` 建立新規格
-- 最近完成的 Linear issue：`LOO-27 支援 OSC 8 超連結，讓 Codex 這類 CLI 的連結也能 Command+Click 開啟`
+- 最近完成的 Linear issue：`LOO-28 新增 Cmd+1～4 依畫面位置快速聚焦終端，Cmd+0 回到 All 版面`
+- LOO-28 URL：<https://linear.app/loopent/issue/LOO-28/新增-cmd14-依畫面位置快速聚焦終端cmd0-回到-all-版面>
+- LOO-28 狀態：`Done`；PR <https://github.com/konicatc-techcoding/agentsconsole/pull/35>，
+  merge commit `96b77c0`，review `loop-approved`，`smoke` 與 `rust` 皆 `SUCCESS`
+- 前一個：`LOO-27 支援 OSC 8 超連結，讓 Codex 這類 CLI 的連結也能 Command+Click 開啟`
 - LOO-27 URL：<https://linear.app/loopent/issue/LOO-27/支援-osc-8-超連結讓-codex-這類-cli-的連結也能-commandclick-開啟>
 - LOO-27 狀態：`Done`；PR <https://github.com/konicatc-techcoding/agentsconsole/pull/33>，
   merge commit `8f126e2`，review `loop-approved`，`smoke` 與 `rust` 皆 `SUCCESS`
@@ -999,6 +1017,55 @@ reveal in dir），並用 `allow` 清單把可開啟的 URL 限制在兩種 sche
   序列，LOO-26 的測試驗證的是它實際實作的純文字路徑，並未說謊，只是規格當初
   沒有想到 OSC 8。這是規格盲點而非測試造假，與 LOO-23 的 mock 問題性質不同
 
+## LOO-28 位置編址的終端快捷鍵
+
+LOO-28 已完成並透過 PR #35 合併，由 `/finn-spec` → `/finn-build` →
+`/finn-review` 全程產出：
+
+- Cmd+1 至 Cmd+4 依**畫面位置**移動鍵盤焦點，不是依 Slot 身分。訪談時使用者
+  明確選了位置編址：只顯示兩三格時要能從左邊數過去按。All 版面下兩套編號
+  一致，自訂版面下則跟著顯示佇列，例如佇列為 Slot 3、1、4 時 `⌘2` 是 Slot 1。
+- 位置順序抽成 `displayedSlotOrder(queue)`，grid 排列與快捷鍵**共用同一個
+  函式**。原本這段邏輯內嵌在 render 裡，若快捷鍵另寫一份，兩者日後必然 drift。
+- 超出可見格數的號碼無作用；快捷鍵一律不改變版面，隱藏的 Slot 不在編址範圍
+  內，因此「按了會不會把隱藏的格叫出來」這個問題根本不存在。
+- Cmd+0 回到 All 的 2×2 且不移動焦點。數字鍵管焦點、0 管版面，職責分開。
+- 五個組合鍵在 `dialogOpenRef` 為真時**仍然 preventDefault 但不執行動作**。
+  順序是刻意的：先吞掉再判斷，否則對話框開著時 Cmd+0 會落回 WebView 自己的
+  縮放重設。
+- `TerminalSlot` 新增 `focusToken` prop，App 以遞增 token 要求聚焦，而非傳
+  boolean。這樣連按同一個鍵、或該格已持有焦點時都仍會重新 `focus()`；初始值
+  0 使掛載時不會偷走焦點。
+- 焦點外框用 `outline`，刻意避開 LOO-17 兩種注意力光暈使用的 `border-color`
+  與 `box-shadow`，兩者不會互相覆蓋。
+- `.terminal-hidden` 由 `visibility: hidden` 改為 `opacity: 0`。這是 AC-10
+  的必要條件：`visibility: hidden` 的元素不可聚焦，Idle 格會按不進去。實際
+  遮住空終端的是疊在上層的 `.terminal-empty` 覆蓋層，不是這個屬性。
+- `CONSOLE_SHORTCUT_DIGITS` 由 `TerminalSlot` 匯出、App 引用，xterm 的
+  `attachCustomKeyEventHandler` 用它擋下數字鍵不當成終端輸入；回傳 `false`
+  只阻止 xterm 處理，事件仍會到達 App 的 window 監聽器。
+- 未新增 storage schema、未修改 `src-tauri/`、未註冊 macOS 原生選單或系統層級
+  全域快捷鍵，Web runtime 不受影響。
+
+## LOO-28 驗證結果
+
+- Linear：LOO-28 為 `Done`
+- GitHub：PR #35 已合併，`smoke` 與 `rust` 皆為 `SUCCESS`，取得 `loop-approved`
+- Frontend tests：87 passed（既有 81 加新增 6），4 個檔案
+- 變更範圍：`frontend/src` 六個檔案，345 行新增、9 行刪除，未觸及 `src-tauri/`
+- `test/setup.ts` 的 xterm mock 原本 `focus()` 是空函式、`open()` 什麼都不做，
+  斷言必然全綠而毫無意義——正是 LOO-23 那個 mock 盲點的形狀。本次改為 `open()`
+  真的建立 helper textarea、`focus()` 真的聚焦它，讓 App 的 `focusin` 監聽器
+  在測試中確實被觸發
+- **實機驗證已完成**（2026-07-29）。依 issue 的 How to verify 展開為 17 項
+  逐一執行，全數通過，包含四項自動化完全碰不到的：三格版面下 `⌘2` 正確聚焦
+  右上的 Slot 1 而非 Slot 2（位置編址與身分編址分歧的關鍵一步）；三種對話框
+  開啟時 Cmd+0～4 皆無作用且未落回 WebView 縮放；Cmd+F 搜尋列開著時按快捷鍵
+  可跨格移動焦點且原格關鍵字未被清除；Idle 格可被聚焦。全程沒有任何字元漏進
+  CLI
+- 唯一發現與 LOO-28 無關：LOO-17 的注意力光暈功能正確但視覺上不夠顯眼，
+  已列入「未完成事項」第 2 項
+
 ## Continue session 的除錯記錄
 
 2026-07-28 調查「Claude CLI 的 continue 不會帶入先前對話，其餘三家正常」。
@@ -1069,16 +1136,19 @@ env -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_CODE_SESSION_ID \
 
 依價值密度排序，尚未建立 issue：
 
-1. **清除傳給子 CLI 的 `CLAUDE_CODE_*` session 標記** — 根因已確認，見
-   「未完成事項」與「Continue session 的除錯記錄」。這是目前唯一已知且未處理
-   的缺陷。
-2. **持久化** — Session 名稱、Sidebar 收合、Slot view 選擇與終端字級目前都只
+1. **加強 LOO-17 注意力光暈的視覺強度** — 已實機確認問題存在，見「未完成
+   事項」第 2 項。範圍小、只動 `styles.css`，但驗收完全落在實機，自動化只能
+   確認 class 仍正確套用。
+2. **清除傳給子 CLI 的 `CLAUDE_CODE_*` session 標記** — 根因已確認，見
+   「未完成事項」與「Continue session 的除錯記錄」。這是目前唯一已知的功能性
+   缺陷。
+3. **持久化** — Session 名稱、Sidebar 收合、Slot view 選擇與終端字級目前都只
    在記憶體。要做就一次把四項納入同一次 `console-layout.json` schema v2 升級；
    Rust struct 有 `deny_unknown_fields`，需處理舊檔遷移。
-3. **`App.tsx` 拆分** — 已超過 2000 行。**不建議當成獨立 issue**：純重構寫不出
+4. **`App.tsx` 拆分** — 已超過 2000 行。**不建議當成獨立 issue**：純重構寫不出
    可觀察的 AC，而 `finn-review` 需要對照完整 diff 判斷是否越界，大型搬移正是
    自動審查最不可靠的場景。建議在後續功能開發時以小塊順手切出。
-4. **遠端分支清理** — 已累積十個以上合併完的分支。屬雜務，不需佔用 Finn-loop
+5. **遠端分支清理** — 已累積十個以上合併完的分支。屬雜務，不需佔用 Finn-loop
    排程。
 
 ## 本機預覽方式
