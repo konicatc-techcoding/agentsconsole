@@ -980,17 +980,24 @@ details code {
    which is a different animation name and therefore a fresh pulse. A hidden
    Slot is `display: none`, so showing it again replays the pulse for free.
    Only opacity, blur and spread move: nothing here changes the element's
-   geometry, its border width, or the space the terminal has to render in. */
+   geometry, its border width, or the space the terminal has to render in.
+
+   The 0.4s delay exists for the case where a marked Slot is being shown again:
+   revealing it re-flows the whole grid, and a pulse landing in the middle of
+   that reads as noise rather than as a signal. Waiting lets the layout settle
+   first. CSS cannot tell that case apart from a mark simply arriving, so the
+   delay applies to both; the mark is already at full static strength during
+   it, so nothing is hidden by waiting. */
 .console-slot.console-slot-attention-output {
   border-color: #4a5fd4;
   box-shadow: 0 0 0 1px rgb(108 130 255 / 75%), 0 0 22px 2px rgb(108 130 255 / 65%);
-  animation: slot-attention-output 0.8s ease-in-out 3;
+  animation: slot-attention-output 1.2s ease-in-out 0.4s 3;
 }
 
 .console-slot.console-slot-attention-terminated {
   border-color: #ffa24a;
   box-shadow: 0 0 0 2px rgb(255 162 74 / 85%), 0 0 30px 4px rgb(255 162 74 / 75%);
-  animation: slot-attention-terminated 0.8s ease-in-out 3;
+  animation: slot-attention-terminated 1.2s ease-in-out 0.4s 3;
 }
 
 @keyframes slot-attention-output {
