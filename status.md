@@ -5,12 +5,12 @@
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md。LOO-12 至 LOO-28 已依序合併，最新基線為 96b77c0，
-工作樹乾淨、Linear 的 agent-ready 佇列為空。終端搜尋與連結開啟均已完成並
-實機驗證，LOO-28 亦已於 2026-07-29 逐項實機驗證通過。有兩項未完成事項：
-App 會把呼叫者的 CLAUDE_CODE_* session 標記傳給子 CLI（根因已確認），以及
-LOO-17 的注意力光暈實機看太弱，兩者都尚未建立 issue。搜尋另有兩項已知的
-xterm 上游限制且決定不修。下一步執行 /finn-spec；候選見「後續候選」。
+請先讀取 status.md。LOO-12 至 LOO-29 已依序合併，最新基線為 497d921，
+工作樹乾淨、Linear 的 agent-ready 佇列為空。終端搜尋、連結開啟、Cmd 快捷鍵
+與注意力光暈皆已完成並實機驗證。剩一項未完成事項：App 會把呼叫者的
+CLAUDE_CODE_* session 標記傳給子 CLI，根因已確認但尚未建立 issue。搜尋另有
+兩項已知的 xterm 上游限制且決定不修。下一步執行 /finn-spec；候選見
+「後續候選」。
 ```
 
 ## 未完成事項
@@ -27,28 +27,18 @@ xterm 上游限制且決定不修。下一步執行 /finn-spec；候選見「後
    「清哪些」仍是未決的產品問題：全部 `CLAUDE_CODE_*` 一律清可能拿掉使用者
    刻意設定的組態，且其他三家 CLI 是否有類似標記尚未調查。
 
-2. **LOO-17 的注意力光暈實機看太弱，尚未建立 Linear issue。** 2026-07-29 逐項
-   驗證 LOO-28 時發現：未持有焦點的 Slot 收到新輸出或 session 結束時，光暈
-   確實會亮起也確實會依規則清除，功能面完全正確，但在真實視窗尺寸下**不夠
-   顯眼**，容易錯過。這不是 LOO-28 造成的退化，是 LOO-17 本來就有的視覺強度
-   問題——當時的實機驗證只確認了「有沒有出現」，沒有檢視「夠不夠醒目」。
-   修法方向是加粗或改用更強的效果，實作在 `styles.css` 的
-   `.console-slot-attention-output` 與 `.console-slot-attention-terminated`
-   （約 974、979 行）。須留意兩點：這兩條規則目前用 `border-color` 與
-   `box-shadow`，而 LOO-28 的焦點外框用 `outline`，加強時不要佔用 `outline`
-   通道；`terminated` 的橘色 `#ffa24a` 與 Hermes 的 provider 色 `#E5A93D`
-   色相接近，靠位置區分（見 LOO-18 章節），加強後需重新確認仍可分辨。
-
-LOO-23 至 LOO-28 的實機驗證均已完成。搜尋的兩項 xterm 上游限制已決定維持
-現狀，見「搜尋的兩項實機限制」。先前記錄的 `finn-review` documentation-only
-例外修改已於 2026-07-28 還原（未進版控）。
+LOO-23 至 LOO-29 的實機驗證均已完成；LOO-29 尚有兩項次要驗證未跑，見該章節。
+先前列在此處的「注意力光暈太弱」已由 LOO-29 處理完畢。搜尋的兩項 xterm
+上游限制已決定維持現狀，見「搜尋的兩項實機限制」。先前記錄的 `finn-review`
+documentation-only 例外修改已於 2026-07-28 還原（未進版控）。
 
 ## 目前功能狀態
 
 四個 Slot 已完成 embedded terminal rollout、自適應版面、Session 顯示名稱、
 全域 Stop All、status.md handoff、Slot 注意力指示、provider 專屬色標題列、
 全域字級控制、終端搜尋、Command+Click 開啟連結與 Cmd+0 至 Cmd+4 的位置編址
-快捷鍵。CI 有 `smoke` 與 `rust` 兩個 required check，快取已納入 rustc
+快捷鍵。終端邊框的注意力光暈自 LOO-29 起只標記新輸出，session 結束改由
+Header 標記。CI 有 `smoke` 與 `rust` 兩個 required check，快取已納入 rustc
 版本，`cargo test` 帶 `--locked`。Finn-loop 三個 skill 安裝於
 `.claude/skills`，綁定 Linear team `LOO`。
 
@@ -93,7 +83,7 @@ LOO-23 加入每格終端的 scrollback 搜尋，但合併後即發現完全失�
   `status.md` 為共用追蹤檔案，任一邊的修改合併後都會影響另一邊；同一個
   分支無法同時在兩個 worktree checkout，切換開發環境時先合併回 `main`，
   再於另一個 worktree `git pull`。
-- 最新合併基線：`96b77c0 feat: focus terminals by screen position with Cmd+1 through Cmd+4 (#35)`
+- 最新合併基線：`497d921 feat: strengthen the new-output mark and retire the terminated glow (#37)`
 - Finn-loop：`.claude/skills` 已安裝 finn-spec／finn-build／finn-review，
   綁定 Linear team `LOO`；GitHub labels `loop-approved`、
   `loop-changes-requested`、`needs-human-review` 均已建立
@@ -101,7 +91,13 @@ LOO-23 加入每格終端的 scrollback 搜尋，但合併後即發現完全失�
   與 `rust`（macos-latest，`cargo fmt --all --check` 與 `cargo test`），
   `strict` 為 true，即合併前分支必須為最新
 - 目前 Linear issue：無；下一步使用 `/finn-spec` 建立新規格
-- 最近完成的 Linear issue：`LOO-28 新增 Cmd+1～4 依畫面位置快速聚焦終端，Cmd+0 回到 All 版面`
+- 最近完成的 Linear issue：`LOO-29 加強 Slot 注意力標記的視覺強度，並讓終端邊框只標記新輸出`
+- LOO-29 URL：<https://linear.app/loopent/issue/LOO-29/加強-slot-注意力標記的視覺強度並讓終端邊框只標記新輸出>
+- LOO-29 狀態：`Done`；PR <https://github.com/konicatc-techcoding/agentsconsole/pull/37>，
+  merge commit `497d921`，review `loop-approved`，`smoke` 與 `rust` 皆 `SUCCESS`。
+  **該 issue 在實作期間依實機回饋修訂過兩次**，標題與 AC-2 皆與初版相反，
+  詳見下方章節
+- 前一個：`LOO-28 新增 Cmd+1～4 依畫面位置快速聚焦終端，Cmd+0 回到 All 版面`
 - LOO-28 URL：<https://linear.app/loopent/issue/LOO-28/新增-cmd14-依畫面位置快速聚焦終端cmd0-回到-all-版面>
 - LOO-28 狀態：`Done`；PR <https://github.com/konicatc-techcoding/agentsconsole/pull/35>，
   merge commit `96b77c0`，review `loop-approved`，`smoke` 與 `rust` 皆 `SUCCESS`
@@ -1064,7 +1060,73 @@ LOO-28 已完成並透過 PR #35 合併，由 `/finn-spec` → `/finn-build` →
   可跨格移動焦點且原格關鍵字未被清除；Idle 格可被聚焦。全程沒有任何字元漏進
   CLI
 - 唯一發現與 LOO-28 無關：LOO-17 的注意力光暈功能正確但視覺上不夠顯眼，
-  已列入「未完成事項」第 2 項
+  已由 LOO-29 處理
+
+## LOO-29 注意力光暈：規格被實機推翻兩次
+
+LOO-29 已完成並透過 PR #37 合併。**這是目前為止唯一一個規格在實作期間被實機
+回饋反轉的 issue**，過程比結果值得記。
+
+最終行為：
+
+- 終端邊框只標記 `output`。靜態光暈由 `0 0 10px` @ 35% 提升為
+  `0 0 0 1px` @ 75% ＋ `0 0 22px 2px` @ 65%，出現時延遲 0.4 秒後脈動 3 次、
+  每次 1.2 秒，之後停在靜態強度。
+- **`terminated` 在終端邊框完全沒有樣式**。`styles.css` 裡沒有
+  `.console-slot-attention-terminated` 規則，也沒有 `.console-slot-attention`
+  裸規則，class 掛上去對應到零。session 結束改由 Header 的橘色方點與生命週期
+  圓點負責。
+- `prefers-reduced-motion: reduce` 關閉脈動、保留靜態加強。
+- 全部只動 `styles.css`，`App.tsx` 一行未改。
+
+**三個必須留住的實作理由**：
+
+1. **不能加粗 `border`。** `.console-slot` 的 `border` 是 1px，加粗會縮小終端
+   可用區域並觸發 `fitAndReport()` 與 `resizePty`——標記亮起就重排 CLI 畫面。
+   可用的是 `box-shadow`、`border-color` 與動畫這些不影響 layout 的通道。這與
+   LOO-23 把搜尋列做成浮層是同一個約束。
+2. **不能用 `outline`。** 那個通道被 LOO-28 的焦點外框佔走了。
+3. **0.4 秒延遲是為了隱藏格重新顯示的情境。** 顯示一個被標記的隱藏 Slot 會讓
+   整個 grid 重排，脈動夾在重排中間看起來是雜訊。CSS 無法區分「剛被標記」與
+   「剛被顯示」，所以延遲對兩者同時生效；因為延遲期間標記已是全強度靜態光暈，
+   等待不會遮蔽任何資訊。
+
+**兩次被實機推翻的規格**，兩次都在合併前修訂 Linear 才繼續：
+
+- 初版 AC-3 是 `0.8 秒 × 3`、無延遲。實機看是「急促」而非「呼吸」，且隱藏格
+  切回來時脈動與版面重排同時發生，使用者形容為雜亂。改為 1.2 秒並加延遲。
+- 初版 AC-2 要求 `terminated` **明顯強於** `output`，AC-10 還特地要求確認橘色
+  與 Hermes 琥珀色可分辨。實機結論相反：同一個邊框承載兩種光暈互相競爭，比
+  只有一種更難讀。AC-2 反轉為「不得產生任何視覺效果」，AC-10 改為保護 Header
+  橘方點，原 AC-10 刪除——那個色彩衝突連同橘色一起退場了。
+
+**一個副作用必須知道**：`terminated` 覆寫 `output` 的邏輯沒變，而 `terminated`
+現在沒有樣式，所以**正在發光的 Slot 會在 session 結束的瞬間熄滅**。畫面上看
+起來像「安靜下來、處理完了」，實際是「結束了」。這是刻意的結果不是標記遺失，
+`styles.css` 該規則上方已有註解說明，避免日後被當成缺陷修掉。
+
+**流程上的教訓**：這個 issue 是「PR 開著時直接改比合併後另開 issue 快」的實
+例——三個 commit、兩輪實機回饋，全程沒有重跑 `finn-build`。代價是**規格要自己
+維持誠實**：每次改動都同步修訂 Linear，否則 `finn-review` 拿舊契約對照新 diff
+必然判不通過。第三次審查另外抓到 PR body 仍停在第一版設計（scope ledger 引用
+已被推翻的 AC），合併前已重寫，PR 標題也一併改掉——標題會直接成為 `main` 上
+的 commit message，而原標題的「marks」是複數，與「拿掉一個」的實際結果不符。
+
+## LOO-29 驗證結果
+
+- Linear：LOO-29 為 `Done`
+- GitHub：PR #37 已合併，`smoke` 與 `rust` 皆為 `SUCCESS`，取得 `loop-approved`
+  （共審查三次，最後一次對 head 檔案而非只看 diff 驗證 `terminated` 確實零效果）
+- Frontend tests：87 passed，總數不變。**本 issue 刻意不新增自動化測試**：
+  jsdom 不計算 CSS 也不執行動畫，針對光暈強度或脈動次數的斷言只會驗證到測試
+  自己寫下的字串，那正是 LOO-23 的 mock 盲點形狀
+- 變更範圍：`frontend/src/styles.css` 單一檔案
+- 實機驗證已完成：光暈明顯度、1.2 秒的呼吸感、持續輸出不重複脈動、隱藏格
+  重新顯示不再雜亂、`terminated` 光暈確認消失、焦點外框與標記並存仍可區分、
+  四格同時標記不干擾閱讀
+- **兩項次要驗證未跑**：`prefers-reduced-motion` 的實機行為；以及 session
+  結束時 Header 橘色方點是否照常出現（只確認了邊框光暈消失，未單獨確認方點）。
+  兩者都已寫進 PR #37 的描述，不是無人知曉的缺口
 
 ## Continue session 的除錯記錄
 
@@ -1136,20 +1198,20 @@ env -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_CODE_SESSION_ID \
 
 依價值密度排序，尚未建立 issue：
 
-1. **加強 LOO-17 注意力光暈的視覺強度** — 已實機確認問題存在，見「未完成
-   事項」第 2 項。範圍小、只動 `styles.css`，但驗收完全落在實機，自動化只能
-   確認 class 仍正確套用。
-2. **清除傳給子 CLI 的 `CLAUDE_CODE_*` session 標記** — 根因已確認，見
+1. **清除傳給子 CLI 的 `CLAUDE_CODE_*` session 標記** — 根因已確認，見
    「未完成事項」與「Continue session 的除錯記錄」。這是目前唯一已知的功能性
    缺陷。
-3. **持久化** — Session 名稱、Sidebar 收合、Slot view 選擇與終端字級目前都只
+2. **持久化** — Session 名稱、Sidebar 收合、Slot view 選擇與終端字級目前都只
    在記憶體。要做就一次把四項納入同一次 `console-layout.json` schema v2 升級；
    Rust struct 有 `deny_unknown_fields`，需處理舊檔遷移。
-4. **`App.tsx` 拆分** — 已超過 2000 行。**不建議當成獨立 issue**：純重構寫不出
+3. **`App.tsx` 拆分** — 已超過 2000 行。**不建議當成獨立 issue**：純重構寫不出
    可觀察的 AC，而 `finn-review` 需要對照完整 diff 判斷是否越界，大型搬移正是
    自動審查最不可靠的場景。建議在後續功能開發時以小塊順手切出。
-5. **遠端分支清理** — 已累積十個以上合併完的分支。屬雜務，不需佔用 Finn-loop
-   排程。
+4. **Header 注意力小圓點的視覺強度** — LOO-29 的 NG-1 刻意沒動
+   `.slot-view-attention*`。終端邊框既然已收斂成只標記新輸出，Header 現在是
+   session 結束的唯一提示來源，6px 圓點夠不夠用值得實機再看一次。
+5. **遠端分支清理** — 遠端仍有 36 個分支，本機已於 2026-07-29 清到只剩兩個
+   worktree 各自佔用的。屬雜務，不需佔用 Finn-loop 排程。
 
 ## 本機預覽方式
 
