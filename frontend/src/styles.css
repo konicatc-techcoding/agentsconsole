@@ -971,14 +971,60 @@ details code {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
+/* Both marks pulse three times on arrival, then rest at the static glow below.
+   The animation is deliberately shorthand with no fill mode: once it ends the
+   element falls back to the rule's own box-shadow, so the mark stays lit.
+   A repeat of the same event never restarts it — the class does not change, so
+   the browser leaves the finished animation alone and a chatty CLI cannot
+   blink forever. An `output` mark upgrading to `terminated` swaps the class,
+   which is a different animation name and therefore a fresh pulse. A hidden
+   Slot is `display: none`, so showing it again replays the pulse for free.
+   Only opacity, blur and spread move: nothing here changes the element's
+   geometry, its border width, or the space the terminal has to render in. */
 .console-slot.console-slot-attention-output {
   border-color: #4a5fd4;
-  box-shadow: 0 0 10px rgb(108 130 255 / 35%);
+  box-shadow: 0 0 0 1px rgb(108 130 255 / 75%), 0 0 22px 2px rgb(108 130 255 / 65%);
+  animation: slot-attention-output 0.8s ease-in-out 3;
 }
 
 .console-slot.console-slot-attention-terminated {
   border-color: #ffa24a;
-  box-shadow: 0 0 0 1px rgb(255 162 74 / 55%), 0 0 18px rgb(255 162 74 / 45%);
+  box-shadow: 0 0 0 2px rgb(255 162 74 / 85%), 0 0 30px 4px rgb(255 162 74 / 75%);
+  animation: slot-attention-terminated 0.8s ease-in-out 3;
+}
+
+@keyframes slot-attention-output {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px rgb(108 130 255 / 75%), 0 0 22px 2px rgb(108 130 255 / 65%);
+  }
+
+  50% {
+    box-shadow: 0 0 0 2px rgb(108 130 255 / 95%), 0 0 34px 7px rgb(108 130 255 / 90%);
+  }
+}
+
+/* Kept a clear step above `output` at every point of the cycle: a wider ring,
+   a larger spread and a higher floor, so the priority difference still reads
+   when both marks are on screen at once. */
+@keyframes slot-attention-terminated {
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px rgb(255 162 74 / 85%), 0 0 30px 4px rgb(255 162 74 / 75%);
+  }
+
+  50% {
+    box-shadow: 0 0 0 3px rgb(255 162 74 / 100%), 0 0 46px 11px rgb(255 162 74 / 95%);
+  }
+}
+
+/* Reduced motion drops the pulse only. The stronger static glow is the point
+   of the mark, not decoration, so it stays. */
+@media (prefers-reduced-motion: reduce) {
+  .console-slot.console-slot-attention-output,
+  .console-slot.console-slot-attention-terminated {
+    animation: none;
+  }
 }
 
 /* Keyboard focus takes `outline`, a channel the two attention glows above
