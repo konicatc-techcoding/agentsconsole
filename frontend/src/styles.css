@@ -981,6 +981,14 @@ details code {
   box-shadow: 0 0 0 1px rgb(255 162 74 / 55%), 0 0 18px rgb(255 162 74 / 45%);
 }
 
+/* Keyboard focus takes `outline`, a channel the two attention glows above
+   (border-color and box-shadow) never touch, so neither can overwrite the
+   other. The near-white also reads apart from their blue and amber. */
+.console-slot.console-slot-focused {
+  outline: 2px solid #dce3ee;
+  outline-offset: -1px;
+}
+
 .console-slot-header {
   display: flex;
   min-width: 0;
@@ -996,6 +1004,23 @@ details code {
   font-size: 0.72rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+.console-slot-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.console-slot-shortcut {
+  padding: 1px 5px;
+  border: 1px solid #3a4659;
+  border-radius: 5px;
+  color: #9aa8bd;
+  background: #131a24;
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
 }
 
 .console-slot-header[data-provider-id="hermes"] {
@@ -1075,8 +1100,11 @@ details code {
   height: 100%;
 }
 
+/* Not `visibility: hidden`: a Slot with no session still has to be focusable
+   so Cmd+1…4 can move keyboard focus into it. What actually hides the empty
+   terminal is the opaque `.terminal-empty` overlay stacked on top of it. */
 .terminal-hidden {
-  visibility: hidden;
+  opacity: 0;
 }
 
 .terminal-search {

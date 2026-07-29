@@ -275,6 +275,20 @@ function slotViewport(
   )!;
 }
 
+function slotShortcut(
+  container: HTMLElement,
+  slotId: ConsoleSlotId,
+): string | null {
+  return (
+    slotArticle(container, slotId).querySelector(".console-slot-shortcut")
+      ?.textContent ?? null
+  );
+}
+
+function pressSlotShortcut(key: string) {
+  fireEvent.keyDown(window, { key, metaKey: true });
+}
+
 function emitOutput(
   handlers: Array<(event: PtyOutputEvent) => void>,
   slotId: ConsoleSlotId,
@@ -2234,6 +2248,10 @@ describe("AgentOS Console", () => {
     await startSlotSession(user, 2, "/workspace-two");
     await waitFor(() => expect(screen.getAllByText("Running")).toHaveLength(2));
 
+    // Starting a session focuses that terminal, so Slot 2 holds focus here and
+    // would be exempt from marking. Focus has to leave first for this to be
+    // the unfocused Slot the test is about.
+    fireEvent.focusOut(slotViewport(container, "slot-2"));
     emitOutput(outputHandlers, "slot-2");
     expect(slotArticle(container, "slot-2")).toHaveClass(
       "console-slot-attention-output",
@@ -2369,6 +2387,8 @@ describe("AgentOS Console", () => {
     await startSlotSession(user, 1, "/workspace-one");
     await screen.findByText("Running");
 
+    // The freshly started terminal holds focus; a focused Slot is never marked.
+    fireEvent.focusOut(slotViewport(view.container, "slot-1"));
     emitOutput(outputHandlers, "slot-1");
     expect(
       view.container.querySelector('[data-slot-id="slot-1"]'),
@@ -2392,5 +2412,138 @@ describe("AgentOS Console", () => {
     expect(
       reloaded.container.querySelector('[data-slot-id="slot-1"]'),
     ).not.toHaveClass("console-slot-attention");
+  });
+
+  it("focuses idle Slots by screen position and badges each shortcut", async () => {
+    const runtime = mockRuntime({ kind: "tauri" });
+    const { container } = render(<App runtime={runtime} />);
+    await screen.findByRole("button", { name: "Slot 1 — Idle" });
+
+    expect(slotShortcut(container, "slot-1")).toBe("⌘1");
+    expect(slotShortcut(container, "slot-2")).toBe("⌘2");
+    expect(slotShortcut(container, "slot-3")).toBe("⌘3");
+    expect(slotShortcut(container, "slot-4")).toBe("⌘4");
+
+    pressSlotShortcut("3");
+    await waitFor(() =>
+      expect(slotArticle(container, "slot-3")).toHaveClass(
+        "console-slot-focused",
+      ),
+    );
+    expect(slotArticle(container, "slot-1")).not.toHaveClass(
+      "console-slot-focused",
+    );
+
+    pressSlotShortcut("1");
+    await waitFor(() =>
+      expect(slotArticle(container, "slot-1")).toHaveClass(
+        "console-slot-focused",
+      ),
+    );
+    expect(slotArticle(container, "slot-3")).not.toHaveClass(
+      "console-slot-focused",
+    );
+  });
+
+  it("addresses Slots by position in a custom layout and ignores numbers past it", async () => {
+    const runtime = mockRuntime({ kind: "tauri" });
+    const user = userEvent.setup();
+    const { container } = render(<App runtime={runtime} />);
+    for (const slotNumber of [3, 1, 4]) {
+      await user.click(
+        await screen.findByRole("button", { name: `Slot ${slotNumber} — Idle` }),
+      );
+    }
+
+    // Queue order, not Slot numbering: position 2 is Slot 1 here.
+    expect(slotShortcut(container, "slot-3")).toBe("⌘1");
+    expect(slotShortcut(container, "slot-1")).toBe("⌘2");
+    expect(slotShortcut(container, "slot-4")).toBe("⌘3");
+    expect(slotShortcut(container, "slot-2")).toBeNull();
+
+    pressSlotShortcut("2");
+    await waitFor(() =>
+      expect(slotArticle(container, "slot-1")).toHaveClass(
+        "console-slot-focused",
+      ),
+    );
+
+    pressSlotShortcut("4");
+    expect(slotArticle(container, "slot-1")).toHaveClass(
+      "console-slot-focused",
+    );
+    expect(slotArticle(container, "slot-2")).toHaveClass("console-slot-hidden");
+    expect(slotShortcut(container, "slot-3")).toBe("⌘1");
+  });
+
+  it("returns to the All layout with Cmd+0 without moving focus", async () => {
+    const runtime = mockRuntime({ kind: "tauri" });
+    const user = userEvent.setup();
+    const { container } = render(<App runtime={runtime} />);
+    await user.click(
+      await screen.findByRole("button", { name: "Slot 2 — Idle" }),
+    );
+
+    pressSlotShortcut("1");
+    await waitFor(() =>
+      expect(slotArticle(container, "slot-2")).toHaveClass(
+        "console-slot-focused",
+      ),
+    );
+    const focused = document.activeElement;
+
+    pressSlotShortcut("0");
+    expect(screen.getByRole("button", { name: "All" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(slotArticle(container, "slot-1")).not.toHaveClass(
+      "console-slot-hidden",
+    );
+    expect(document.activeElement).toBe(focused);
+    expect(slotArticle(container, "slot-2")).toHaveClass(
+      "console-slot-focused",
+    );
+    expect(slotShortcut(container, "slot-2")).toBe("⌘2");
+  });
+
+  it("ignores the Slot shortcuts while a dialog is open", async () => {
+    const runtime = mockRuntime({ kind: "tauri" });
+    const user = userEvent.setup();
+    const { container } = render(<App runtime={runtime} />);
+    await user.click(
+      await screen.findByRole("button", { name: "Slot 2 — Idle" }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Configure Slot 2 session" }),
+    );
+    await screen.findByRole("heading", { name: "Codex CLI" });
+
+    pressSlotShortcut("1");
+    pressSlotShortcut("0");
+    expect(slotArticle(container, "slot-2")).not.toHaveClass(
+      "console-slot-focused",
+    );
+    expect(slotArticle(container, "slot-1")).toHaveClass("console-slot-hidden");
+    expect(
+      screen.getByRole("heading", { name: "Codex CLI" }),
+    ).toBeInTheDocument();
+
+    await user.type(
+      screen.getByRole("textbox", { name: "Default workspace path" }),
+      "/workspace-two",
+    );
+    await user.click(screen.getByRole("button", { name: "Start in Slot 2" }));
+    await screen.findByText("Running");
+    await user.click(
+      screen.getByRole("button", { name: "Stop all 1 active sessions" }),
+    );
+
+    pressSlotShortcut("1");
+    pressSlotShortcut("0");
+    expect(slotArticle(container, "slot-1")).toHaveClass("console-slot-hidden");
+    expect(
+      screen.getByRole("button", { name: "已完成 — Stop All" }),
+    ).toBeInTheDocument();
   });
 });
