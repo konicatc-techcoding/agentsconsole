@@ -971,14 +971,52 @@ details code {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
+/* Only `output` gets a terminal glow. `terminated` deliberately has no rule
+   here: two competing glows on the same frame turned out to be more noise than
+   signal, so the frame answers one question — is this Slot saying something
+   while you are not looking. A finished session still reports itself through
+   the header's Slot dot and the lifecycle phase dot, and note that its mark
+   overrides `output`, so a glowing Slot goes dark the moment its session ends.
+
+   The glow pulses three times on arrival, then rests at the static value. The
+   animation is deliberately shorthand with no fill mode: once it ends the
+   element falls back to the rule's own box-shadow, so the mark stays lit.
+   A repeat of the same event never restarts it — the class does not change, so
+   the browser leaves the finished animation alone and a chatty CLI cannot
+   blink forever. A hidden Slot is `display: none`, so showing it again replays
+   the pulse for free. Only opacity, blur and spread move: nothing here changes
+   the element's geometry, its border width, or the space the terminal has to
+   render in.
+
+   The 0.4s delay exists for the case where a marked Slot is being shown again:
+   revealing it re-flows the whole grid, and a pulse landing in the middle of
+   that reads as noise rather than as a signal. Waiting lets the layout settle
+   first. CSS cannot tell that case apart from a mark simply arriving, so the
+   delay applies to both; the mark is already at full static strength during
+   it, so nothing is hidden by waiting. */
 .console-slot.console-slot-attention-output {
   border-color: #4a5fd4;
-  box-shadow: 0 0 10px rgb(108 130 255 / 35%);
+  box-shadow: 0 0 0 1px rgb(108 130 255 / 75%), 0 0 22px 2px rgb(108 130 255 / 65%);
+  animation: slot-attention-output 1.2s ease-in-out 0.4s 3;
 }
 
-.console-slot.console-slot-attention-terminated {
-  border-color: #ffa24a;
-  box-shadow: 0 0 0 1px rgb(255 162 74 / 55%), 0 0 18px rgb(255 162 74 / 45%);
+@keyframes slot-attention-output {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px rgb(108 130 255 / 75%), 0 0 22px 2px rgb(108 130 255 / 65%);
+  }
+
+  50% {
+    box-shadow: 0 0 0 2px rgb(108 130 255 / 95%), 0 0 34px 7px rgb(108 130 255 / 90%);
+  }
+}
+
+/* Reduced motion drops the pulse only. The stronger static glow is the point
+   of the mark, not decoration, so it stays. */
+@media (prefers-reduced-motion: reduce) {
+  .console-slot.console-slot-attention-output {
+    animation: none;
+  }
 }
 
 /* Keyboard focus takes `outline`, a channel the two attention glows above
