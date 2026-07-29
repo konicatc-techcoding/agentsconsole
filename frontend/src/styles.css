@@ -971,16 +971,22 @@ details code {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
-/* Both marks pulse three times on arrival, then rest at the static glow below.
-   The animation is deliberately shorthand with no fill mode: once it ends the
+/* Only `output` gets a terminal glow. `terminated` deliberately has no rule
+   here: two competing glows on the same frame turned out to be more noise than
+   signal, so the frame answers one question — is this Slot saying something
+   while you are not looking. A finished session still reports itself through
+   the header's Slot dot and the lifecycle phase dot, and note that its mark
+   overrides `output`, so a glowing Slot goes dark the moment its session ends.
+
+   The glow pulses three times on arrival, then rests at the static value. The
+   animation is deliberately shorthand with no fill mode: once it ends the
    element falls back to the rule's own box-shadow, so the mark stays lit.
    A repeat of the same event never restarts it — the class does not change, so
    the browser leaves the finished animation alone and a chatty CLI cannot
-   blink forever. An `output` mark upgrading to `terminated` swaps the class,
-   which is a different animation name and therefore a fresh pulse. A hidden
-   Slot is `display: none`, so showing it again replays the pulse for free.
-   Only opacity, blur and spread move: nothing here changes the element's
-   geometry, its border width, or the space the terminal has to render in.
+   blink forever. A hidden Slot is `display: none`, so showing it again replays
+   the pulse for free. Only opacity, blur and spread move: nothing here changes
+   the element's geometry, its border width, or the space the terminal has to
+   render in.
 
    The 0.4s delay exists for the case where a marked Slot is being shown again:
    revealing it re-flows the whole grid, and a pulse landing in the middle of
@@ -994,12 +1000,6 @@ details code {
   animation: slot-attention-output 1.2s ease-in-out 0.4s 3;
 }
 
-.console-slot.console-slot-attention-terminated {
-  border-color: #ffa24a;
-  box-shadow: 0 0 0 2px rgb(255 162 74 / 85%), 0 0 30px 4px rgb(255 162 74 / 75%);
-  animation: slot-attention-terminated 1.2s ease-in-out 0.4s 3;
-}
-
 @keyframes slot-attention-output {
   0%,
   100% {
@@ -1011,25 +1011,10 @@ details code {
   }
 }
 
-/* Kept a clear step above `output` at every point of the cycle: a wider ring,
-   a larger spread and a higher floor, so the priority difference still reads
-   when both marks are on screen at once. */
-@keyframes slot-attention-terminated {
-  0%,
-  100% {
-    box-shadow: 0 0 0 2px rgb(255 162 74 / 85%), 0 0 30px 4px rgb(255 162 74 / 75%);
-  }
-
-  50% {
-    box-shadow: 0 0 0 3px rgb(255 162 74 / 100%), 0 0 46px 11px rgb(255 162 74 / 95%);
-  }
-}
-
 /* Reduced motion drops the pulse only. The stronger static glow is the point
    of the mark, not decoration, so it stays. */
 @media (prefers-reduced-motion: reduce) {
-  .console-slot.console-slot-attention-output,
-  .console-slot.console-slot-attention-terminated {
+  .console-slot.console-slot-attention-output {
     animation: none;
   }
 }
