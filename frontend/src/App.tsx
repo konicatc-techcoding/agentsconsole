@@ -1421,7 +1421,25 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                         )}
                         <details className="sidebar-provider-path">
                           <summary>Executable path</summary>
-                          <code>{provider.path ?? "Not found in PATH"}</code>
+                          {provider.path ? (
+                            <code>{provider.path}</code>
+                          ) : (
+                            // "Not found in PATH" is no help when the whole
+                            // problem is that PATH was not what you assumed.
+                            // Naming the directories makes it self-diagnosing.
+                            <>
+                              <code>Not found in PATH</code>
+                              {provider.searched_paths?.length ? (
+                                <ul className="sidebar-provider-searched">
+                                  {provider.searched_paths.map((directory) => (
+                                    <li key={directory}>
+                                      <code>{directory}</code>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : null}
+                            </>
+                          )}
                         </details>
                         <button
                           className="sidebar-launch-button"

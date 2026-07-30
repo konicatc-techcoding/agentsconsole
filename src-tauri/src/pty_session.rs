@@ -1,10 +1,11 @@
 use crate::launcher::{
     new_workspace, provider_command, validated_workspace, CommandError, SessionMode,
 };
-use crate::providers::resolve_executable;
+use crate::providers::{resolve_executable, search_path_value};
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::ffi::OsStr;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -132,6 +133,7 @@ trait PtyAdapter: Send + Sync {
         arguments: &[&str],
         workspace: &Path,
         removed_environment: &[&str],
+        search_path: &OsStr,
         rows: u16,
         columns: u16,
     ) -> Result<SpawnedPty, String>;
@@ -320,6 +322,14 @@ fn apply_environment_removals(command: &mut CommandBuilder, removed_environment:
     }
 }
 
+// The CLI needs the same PATH the App searched, or it starts and then fails
+// later, obscurely, the first time it reaches for git or node.
+fn apply_search_path(command: &mut CommandBuilder, search_path: &OsStr) {
+    if !search_path.is_empty() {
+        command.env("PATH", search_path);
+    }
+}
+
 impl PtyAdapter for SystemPtyAdapter {
     fn spawn(
         &self,
@@ -327,6 +337,7 @@ impl PtyAdapter for SystemPtyAdapter {
         arguments: &[&str],
         workspace: &Path,
         removed_environment: &[&str],
+        search_path: &OsStr,
         rows: u16,
         columns: u16,
     ) -> Result<SpawnedPty, String> {
@@ -342,6 +353,7 @@ impl PtyAdapter for SystemPtyAdapter {
         command.args(arguments);
         command.cwd(workspace);
         apply_environment_removals(&mut command, removed_environment);
+        apply_search_path(&mut command, search_path);
         let (reader, writer, child) = prepare_then_spawn(
             || {
                 pair.master
@@ -467,6 +479,7 @@ impl PtySessionEngine {
             &command[1..],
             &workspace,
             removed_environment(&request.provider_id),
+            &search_path_value(),
             request.rows,
             request.columns,
         ) {
@@ -731,6 +744,7 @@ fn internal_error(_: String) -> CommandError {
 mod tests {
     use super::*;
     use std::collections::{HashMap, VecDeque};
+    use std::ffi::OsString;
     use std::io;
     use std::sync::mpsc::{self, Receiver, Sender};
     use std::sync::Condvar;
@@ -769,6 +783,7 @@ mod tests {
         arguments: Vec<String>,
         workspace: PathBuf,
         removed_environment: Vec<String>,
+        search_path: OsString,
         rows: u16,
         columns: u16,
     }
@@ -885,6 +900,7 @@ mod tests {
             arguments: &[&str],
             workspace: &Path,
             removed_environment: &[&str],
+            search_path: &OsStr,
             rows: u16,
             columns: u16,
         ) -> Result<SpawnedPty, String> {
@@ -899,6 +915,7 @@ mod tests {
                     .iter()
                     .map(|name| (*name).to_string())
                     .collect(),
+                search_path: search_path.to_os_string(),
                 rows,
                 columns,
             });
@@ -1174,10 +1191,41 @@ mod tests {
         }
     }
 
-    // The engine test above can only prove the right list reaches the adapter.
-    // This one proves the list does something once it gets there. It builds its
+    #[test]
+    fn hands_the_apps_effective_search_path_to_the_cli() {
+        let workspace = temp_workspace();
+        let adapter = Arc::new(FakeAdapter::new());
+        let engine = engine(adapter.clone());
+        let sink = Arc::new(FakeSink::default());
+        let session = engine
+            .start_with_sink(request("codex", &workspace, SessionMode::New), sink)
+            .unwrap();
+
+        let call = lock(&adapter.calls).unwrap()[0].clone();
+        assert_eq!(call.search_path, crate::providers::search_path_value());
+        assert!(!call.search_path.is_empty());
+
+        engine.stop(session_request(&session)).unwrap();
+        std::fs::remove_dir_all(workspace).unwrap();
+    }
+
+    // The engine tests above can only prove the right values reach the adapter.
+    // These two prove they do something once they get there. They build their
     // own CommandBuilder rather than touching the test process environment,
     // which Rust runs from several threads at once.
+    #[test]
+    fn setting_the_search_path_puts_it_on_the_command() {
+        let mut command = CommandBuilder::new("codex");
+        command.env("PATH", "/usr/bin");
+
+        apply_search_path(&mut command, OsStr::new("/tools:/usr/bin"));
+
+        assert_eq!(
+            command.get_env("PATH").and_then(|value| value.to_str()),
+            Some("/tools:/usr/bin")
+        );
+    }
+
     #[test]
     fn removing_environment_takes_the_variable_off_the_command() {
         let mut command = CommandBuilder::new("claude");

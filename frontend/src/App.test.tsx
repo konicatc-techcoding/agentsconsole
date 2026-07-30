@@ -155,6 +155,7 @@ function mockApi(options?: {
 
 function mockRuntime(options?: {
   kind?: RuntimeAdapter["kind"];
+  providers?: Provider[];
   loadPreferences?: () => Promise<WorkspacePreferences>;
   savePreferences?: RuntimeAdapter["saveWorkspacePreferences"];
   loadLayout?: () => Promise<ConsoleLayout>;
@@ -169,7 +170,7 @@ function mockRuntime(options?: {
 }): RuntimeAdapter {
   const runtime: RuntimeAdapter = {
     kind: options?.kind ?? "web",
-    fetchProviders: vi.fn().mockResolvedValue(providers),
+    fetchProviders: vi.fn().mockResolvedValue(options?.providers ?? providers),
     launchProvider: vi.fn(async (request) => ({
       launched: true,
       provider_id: request.provider_id,
@@ -860,6 +861,37 @@ describe("AgentOS Console", () => {
       "antigravity",
     );
     expect(screen.getByRole("button", { name: "Save Layout" })).toBeDisabled();
+  });
+
+  it("names the directories it searched when a provider is unavailable", async () => {
+    const runtime = mockRuntime({
+      kind: "tauri",
+      providers: [
+        {
+          ...providers[0],
+          installed: false,
+          path: null,
+          version: null,
+          error: "Executable not found in PATH",
+          searched_paths: ["/usr/bin", "/bin", "/Users/z/.local/bin"],
+        },
+        ...providers.slice(1),
+      ],
+    });
+    const { container } = render(<App runtime={runtime} />);
+    await screen.findByText("Executable not found in PATH");
+
+    const searched = container.querySelector(".sidebar-provider-searched");
+    expect(searched).toBeInTheDocument();
+    expect(
+      Array.from(searched!.querySelectorAll("code")).map(
+        (entry) => entry.textContent,
+      ),
+    ).toEqual(["/usr/bin", "/bin", "/Users/z/.local/bin"]);
+    // The three available providers show a resolved path, not a search listing.
+    expect(
+      container.querySelectorAll(".sidebar-provider-searched"),
+    ).toHaveLength(1);
   });
 
   it("collapses the Provider sidebar and preserves the view across Refresh", async () => {

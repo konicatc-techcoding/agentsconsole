@@ -6,6 +6,9 @@ export interface Provider {
   path: string | null;
   version: string | null;
   error: string | null;
+  // Tauri only, and only when the executable was not found: the directories
+  // actually searched. The Web runtime does not send it.
+  searched_paths?: string[];
 }
 
 export type SessionMode = "new" | "continue";
