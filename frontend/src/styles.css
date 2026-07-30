@@ -855,6 +855,16 @@ details code {
   white-space: normal;
 }
 
+.sidebar-provider-searched {
+  margin: 6px 0 0;
+  padding-left: 14px;
+  color: #7f8ca0;
+}
+
+.sidebar-provider-searched code {
+  margin-top: 0;
+}
+
 .sidebar-launch-button,
 .save-layout-button {
   width: 100%;
