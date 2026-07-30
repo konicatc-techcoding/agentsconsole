@@ -7,15 +7,15 @@
 ```text
 請先讀取 status.md。LOO-12 至 LOO-30 已依序合併，最新基線為 2e49d6c。
 2026-07-30 首次打包成 .app，隨即發現一個讓打包版完全不能用的缺陷：從
-Finder 啟動時 PATH 不完整，四個 provider 全部 Unavailable。已建立 LOO-31，
-尚未掛 agent-ready。詳見「未完成事項」。搜尋有兩項已知的 xterm 上游限制
-且決定不修。
+Finder 啟動時 PATH 不完整，四個 provider 全部 Unavailable。LOO-31 已由
+/finn-build 實作完成，PR #43 待實機驗證與合併。詳見「未完成事項」。搜尋
+有兩項已知的 xterm 上游限制且決定不修。
 ```
 
 ## 未完成事項
 
-1. **打包版從 Finder 啟動時四個 provider 全部 Unavailable。已建立 `LOO-31`，
-   尚未掛 `agent-ready`。** macOS 只給 launchd 啟動的 App 一份裸 `PATH`
+1. **打包版從 Finder 啟動時四個 provider 全部 Unavailable。`LOO-31` 已實作，
+   PR #43 待實機驗證與合併。** macOS 只給 launchd 啟動的 App 一份裸 `PATH`
    （`/usr/bin:/bin:/usr/sbin:/sbin`），而四個 CLI 都裝在 `~/.local/bin`，
    因此一個都找不到，**整個打包版無法使用**。2026-07-30 首次打包後以
    `ps eww` 讀取 Finder 啟動的 App 程序確認。
@@ -96,8 +96,9 @@ LOO-23 加入每格終端的 scrollback 搜尋，但合併後即發現完全失�
 - `main` required status checks：`smoke`（ubuntu-latest，backend 與 frontend）
   與 `rust`（macos-latest，`cargo fmt --all --check` 與 `cargo test`），
   `strict` 為 true，即合併前分支必須為最新
-- 目前 Linear issue：`LOO-31`（`Backlog`，**尚未掛 `agent-ready`**）；掛上後
-  執行 `/loop /finn-build`
+- 目前 Linear issue：`LOO-31`（`In Review`，`agent-ready`）；已由
+  `/finn-build` 實作，PR <https://github.com/konicatc-techcoding/agentsconsole/pull/43>
+  待實機驗證與合併。狀態以 Linear 與該 PR 為準，本檔只記錄到「已進審查」
 - 打包產物：`/Volumes/OWC1M2/AgentOSConsole/`，頂層為使用中的
   `AgentOS Console.app`，`builds/` 存歷次版本，`BUILDS.md` 記錄各版對應的
   commit。無 updater，更新須重新 build 並覆蓋
