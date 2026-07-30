@@ -1,42 +1,38 @@
 # AgentOS Console — 工作交接狀態
 
-最後更新：2026-07-30
+最後更新：2026-07-31
 
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md。LOO-12 至 LOO-30 已依序合併，最新基線為 2e49d6c。
-2026-07-30 首次打包成 .app，隨即發現一個讓打包版完全不能用的缺陷：從
-Finder 啟動時 PATH 不完整，四個 provider 全部 Unavailable。LOO-31 已由
-/finn-build 實作完成，PR #43 待實機驗證與合併。詳見「未完成事項」。搜尋
-有兩項已知的 xterm 上游限制且決定不修。
+請先讀取 status.md。LOO-12 至 LOO-31 已依序合併，最新基線為 999bb34，
+Linear 的 agent-ready 佇列為空。App 已打包並部署於
+/Volumes/OWC1M2/AgentOSConsole/，2026-07-31 起從 Finder 點開即可正常使用。
+沒有功能性缺陷；唯一的未完成事項是 documentation-only PR 是否豁免
+Closes LOO-NNN 這個流程決定，已被推遲三次。搜尋有兩項已知的 xterm 上游
+限制且決定不修。下一步執行 /finn-spec；候選見「後續候選」。
 ```
 
 ## 未完成事項
 
-1. **打包版從 Finder 啟動時四個 provider 全部 Unavailable。`LOO-31` 已實作，
-   PR #43 待實機驗證與合併。** macOS 只給 launchd 啟動的 App 一份裸 `PATH`
-   （`/usr/bin:/bin:/usr/sbin:/sbin`），而四個 CLI 都裝在 `~/.local/bin`，
-   因此一個都找不到，**整個打包版無法使用**。2026-07-30 首次打包後以
-   `ps eww` 讀取 Finder 啟動的 App 程序確認。
-   規格見 <https://linear.app/loopent/issue/LOO-31/修正打包版從-finder-啟動時-path-不完整導致四個-provider-全部-unavailable>。
+1. **documentation-only PR 是否豁免 `Closes LOO-NNN`，這個決定已被刻意推遲
+   三次。** `.claude/skills/finn-review/SKILL.md` 第 26 至 28 行寫明「No linked
+   issue is a must-fix finding」，沒有任何例外條款；但本 repo 的 handoff PR
+   （#34、#36、#38、#39、#41、#42）沒有對應的 Linear issue 可關，寫
+   `Closes LOO-NNN` 反而會誤關掉程式碼的 issue。
+   經過：曾有人把豁免寫進 skill，2026-07-28 又還原且未進版控；#36 的審查提出
+   後由人工直接合併，標籤 `loop-changes-requested` 留到現在；#42 的審查再次
+   提出並改標 `needs-human-review`，同樣直接合併。
+   三個選項：在 skill 明文豁免（建議限定「diff 只含 `README.md` 與
+   `status.md`」，避免有人把程式碼混進文件 PR 躲過審查）、每個 handoff 建一個
+   文件 issue、或允許 `Refs LOO-NNN` 只連結不關閉。
+   **這不是缺陷，是流程落差**，不影響軟體行為，因此排在功能之後。記於此是
+   為了讓下一個 session 知道它已被討論過，不必重新調查。
 
-   **臨時可用方式**：改從 Terminal.app 啟動即可，`open` 會把呼叫端 shell 的
-   環境整份帶給 App：
-
-   ```bash
-   open "/Volumes/OWC1M2/AgentOSConsole/AgentOS Console.app"
-   ```
-
-   **這個缺陷在 `tauri:dev` 下永遠看不到**，開發模式繼承的是終端機環境，
-   `PATH` 一直完整。LOO-9 至 LOO-30 二十幾個 issue、多次實機驗證都沒走到
-   這條路徑上，是首次打包才暴露出來的。
-
-LOO-23 至 LOO-30 的實機驗證均已完成，無遺留項目。先前列在此處的兩項都已
+LOO-23 至 LOO-31 的實機驗證均已完成，無遺留項目。先前列在此處的三項都已
 結案：「注意力光暈太弱」由 LOO-29 處理，「App 把 `CLAUDE_CODE_*` 標記傳給
-子 CLI」由 LOO-30 處理。搜尋的兩項 xterm 上游限制已決定維持現狀，見「搜尋的
-兩項實機限制」。先前記錄的 `finn-review` documentation-only 例外修改已於
-2026-07-28 還原（未進版控）。
+子 CLI」由 LOO-30 處理，「打包版從 Finder 啟動全部 Unavailable」由 LOO-31
+處理。搜尋的兩項 xterm 上游限制已決定維持現狀，見「搜尋的兩項實機限制」。
 
 ## 目前功能狀態
 
@@ -89,20 +85,23 @@ LOO-23 加入每格終端的 scrollback 搜尋，但合併後即發現完全失�
   `status.md` 為共用追蹤檔案，任一邊的修改合併後都會影響另一邊；同一個
   分支無法同時在兩個 worktree checkout，切換開發環境時先合併回 `main`，
   再於另一個 worktree `git pull`。
-- 最新合併基線：`8e65b61 fix: stop passing CLAUDE_CODE_CHILD_SESSION to claude Slots (#40)`
+- 最新合併基線：`999bb34 fix: search the login shell's PATH so the packaged app finds the CLIs (#43)`
 - Finn-loop：`.claude/skills` 已安裝 finn-spec／finn-build／finn-review，
   綁定 Linear team `LOO`；GitHub labels `loop-approved`、
   `loop-changes-requested`、`needs-human-review` 均已建立
 - `main` required status checks：`smoke`（ubuntu-latest，backend 與 frontend）
   與 `rust`（macos-latest，`cargo fmt --all --check` 與 `cargo test`），
   `strict` 為 true，即合併前分支必須為最新
-- 目前 Linear issue：`LOO-31`（`In Review`，`agent-ready`）；已由
-  `/finn-build` 實作，PR <https://github.com/konicatc-techcoding/agentsconsole/pull/43>
-  待實機驗證與合併。狀態以 Linear 與該 PR 為準，本檔只記錄到「已進審查」
+- 目前 Linear issue：無；下一步使用 `/finn-spec` 建立新規格
 - 打包產物：`/Volumes/OWC1M2/AgentOSConsole/`，頂層為使用中的
-  `AgentOS Console.app`，`builds/` 存歷次版本，`BUILDS.md` 記錄各版對應的
-  commit。無 updater，更新須重新 build 並覆蓋
-- 最近完成的 Linear issue：`LOO-30 清除傳給 Claude Slot 的 CLAUDE_CODE_CHILD_SESSION，避免子 CLI 靜默停用 transcript`
+  `AgentOS Console.app`（目前為 `999bb34`），`builds/` 存歷次版本，
+  `BUILDS.md` 記錄各版對應的 commit。無 updater，更新須重新 build 後以
+  `ditto` 覆蓋——**用 `ditto` 而非 `cp -R`**，後者可能破壞 app bundle 的簽章
+- 最近完成的 Linear issue：`LOO-31 修正打包版從 Finder 啟動時 PATH 不完整導致四個 provider 全部 Unavailable`
+- LOO-31 URL：<https://linear.app/loopent/issue/LOO-31/修正打包版從-finder-啟動時-path-不完整導致四個-provider-全部-unavailable>
+- LOO-31 狀態：`Done`；PR <https://github.com/konicatc-techcoding/agentsconsole/pull/43>，
+  merge commit `999bb34`，review `loop-approved`，`smoke` 與 `rust` 皆 `SUCCESS`
+- 前一個：`LOO-30 清除傳給 Claude Slot 的 CLAUDE_CODE_CHILD_SESSION，避免子 CLI 靜默停用 transcript`
 - LOO-30 URL：<https://linear.app/loopent/issue/LOO-30/清除傳給-claude-slot-的-claude-code-child-session避免子-cli-靜默停用-transcript>
 - LOO-30 狀態：`Done`；PR <https://github.com/konicatc-techcoding/agentsconsole/pull/40>，
   merge commit `8e65b61`，review `loop-approved`，`smoke` 與 `rust` 皆 `SUCCESS`
@@ -1197,6 +1196,68 @@ Claude Code session 正在寫入，「檔案變大」在那裡不構成證據，
 
 AC-5（乾淨環境行為不變）另在一般 Terminal 啟動確認，四個 provider 皆正常。
 
+## LOO-31 打包版的 PATH：第一次打包就撞上的阻斷缺陷
+
+LOO-31 已完成並透過 PR #43 合併。**它是首次打包後三分鐘內就出現的缺陷，而且
+在此之前二十幾個 issue、無數次實機驗證都不可能發現它。**
+
+**根因**：macOS 只給 launchd 啟動的 App 一份裸 `PATH`——
+`/usr/bin:/bin:/usr/sbin:/sbin`，四個目錄。四個 CLI 都裝在 `~/.local/bin`，
+因此 `resolve_executable()` 一個都找不到，四個 provider 全部 Unavailable，
+整個打包版無法使用。`tauri:dev` 繼承的是終端機環境，`PATH` 一直完整，所以
+這條路徑從未被走到過。
+
+**修法**（`src-tauri/src/providers.rs`）：
+
+- App 啟動與每次 `Refresh` 都以 `$SHELL -l -c 'printf %s "$PATH"'` 向登入
+  shell 要一份 `PATH`，逾時 `LOGIN_SHELL_TIMEOUT` 為 3 秒。
+- **只用 `-l` 不用 `-i`**。實測確認本機 `PATH` 設於 `.zprofile`（login 會讀），
+  `-l` 已足夠；`-i` 會執行 `.zshrc`、帶入互動副作用與更高的卡住風險。
+- `merge_search_path()` 把探測結果與程序既有的 `PATH` **聯集**：既有項目保留
+  原位與優先序，探測到的接在後面，重複去除。探測失敗、逾時、`$SHELL` 未設定
+  或回傳空字串時，改用 `FALLBACK_DIRECTORIES` 四個常見位置，同樣聯集。
+  **任何情況都不會比修正前更糟。**
+- `LoginShellProbe` 抽成 trait，測試注入替身，不會真的執行使用者的 shell。
+- 有效路徑快取於 `search_path_cell()`，`refresh_search_path()` 供 Refresh 重探。
+- 同一份路徑也交給 Slot 內啟動的 CLI。**這一半同樣重要**：只修偵測的話，CLI
+  能啟動但找不到 `git`、`node`，會在使用中途以難以歸因的方式失敗。
+- provider 不可用時，Sidebar 的 `Executable path` 列出實際搜尋過的目錄，
+  不再只寫 `Not found in PATH`。
+
+## LOO-31 驗證結果
+
+- Linear：LOO-31 為 `Done`
+- GitHub：PR #43 已合併，`smoke` 與 `rust` 皆 `SUCCESS`，取得 `loop-approved`
+- 變更範圍：6 個檔案，+359／−7
+- **九條 AC 中七條實機驗證通過**（2026-07-31），兩條僅自動化涵蓋
+
+實機驗證用的是打包後**從 Finder 點開**的 `.app`，這是唯一算數的方式——
+`tauri:dev` 與從終端機 `open` 都會把呼叫端環境整份帶過去，測不出差別。過程中
+就曾因此誤判過一次 launchd 的 `PATH`。
+
+| AC | 依據 |
+|---|---|
+| AC-1 合併語意與順序 | 搜尋清單前四個是 launchd 裸值，探測結果接在後面 |
+| AC-4 Refresh 重新探測 | 註解掉 `.zprofile` 兩行 → 四個 Unavailable → 還原 → 恢復 |
+| AC-5 三處共用入口 | 偵測、Slot 啟動、版本查詢皆正常 |
+| AC-6 子 CLI 的 PATH | Slot 內 `echo $PATH` 完整、`git --version` 回 2.54.0 |
+| AC-7 顯示搜尋路徑 | 改名 `hermes` 後展開，列出 16 個目錄且含 `~/.local/bin` |
+| AC-8 Finder 啟動四格 Available | 最終判準 |
+| AC-9 dev 模式不退化 | 終端機啟動四個仍 Available |
+
+AC-2（回退清單）與 AC-3（3 秒逾時）僅自動化涵蓋：要驗得刻意破壞或拖慢使用者
+的 shell，代價高於價值。
+
+**AC-4 驗出了測試碰不到的東西。** 原本評估它「自動化涵蓋度較好、可略過」，
+實機做出來才看到：同一個執行中的 App 不重啟，只因為 `~/.zprofile` 改了就從
+四個 Available 變成四個 Unavailable、還原後又全部回來。Rust 測試只能斷言探測
+函式被再呼叫一次，證明不了整條路徑真的重走了一遍。
+
+**AC-7 的顯示設計值得留意。** 那份清單讓「找不到」自己說明原因：清單裡有
+`~/.local/bin`，代表該目錄確實被搜尋了，找不到純粹是因為檔案被改名。若修正
+失效，清單只會有四個裸目錄。下次再遇到同類問題，展開就知道，不必再用
+`ps eww` 查一次程序環境。
+
 ## Continue session 的除錯記錄
 
 2026-07-28 調查「Claude CLI 的 continue 不會帶入先前對話，其餘三家正常」。
@@ -1276,19 +1337,22 @@ env -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_CODE_SESSION_ID \
 
 依價值密度排序，尚未建立 issue：
 
-1. **持久化** — Session 名稱、Sidebar 收合、Slot view 選擇與終端字級目前都只
+1. **App icon** — bundle 內只有 `Info.plist` 與主執行檔，沒有 icon 檔，Finder
+   與 Dock 顯示通用白色文件圖示。現在 App 已是日常使用的工具，這件事每天都
+   看得到。範圍小、與功能無關。
+2. **持久化** — Session 名稱、Sidebar 收合、Slot view 選擇與終端字級目前都只
    在記憶體。要做就一次把四項納入同一次 `console-layout.json` schema v2 升級；
    Rust struct 有 `deny_unknown_fields`，需處理舊檔遷移。
-2. **`App.tsx` 拆分** — 已超過 2000 行。**不建議當成獨立 issue**：純重構寫不出
+3. **`App.tsx` 拆分** — 已超過 2000 行。**不建議當成獨立 issue**：純重構寫不出
    可觀察的 AC，而 `finn-review` 需要對照完整 diff 判斷是否越界，大型搬移正是
    自動審查最不可靠的場景。建議在後續功能開發時以小塊順手切出。
-3. **Header 注意力小圓點的視覺強度** — LOO-29 的 NG-1 刻意沒動
+4. **Header 注意力小圓點的視覺強度** — LOO-29 的 NG-1 刻意沒動
    `.slot-view-attention*`。終端邊框既然已收斂成只標記新輸出，Header 現在是
    session 結束的唯一提示來源，6px 圓點夠不夠用值得實機再看一次。
-4. **其他三家 CLI 的父 session 標記** — LOO-30 的 NG-2 刻意沒查。hermes、
+5. **其他三家 CLI 的父 session 標記** — LOO-30 的 NG-2 刻意沒查。hermes、
    codex、antigravity 是否也有類似的「偵測到父 session 就改變行為」機制未知。
    目前沒有任何症狀，屬預防性調查，優先度低。
-5. **遠端分支清理** — 遠端仍有 37 個分支，本機已於 2026-07-29 清到只剩兩個
+6. **遠端分支清理** — 遠端仍有 37 個分支，本機已於 2026-07-29 清到只剩兩個
    worktree 各自佔用的。屬雜務，不需佔用 Finn-loop 排程。
 
 ## 本機預覽方式

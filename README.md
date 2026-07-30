@@ -13,7 +13,7 @@ independent embedded terminals backed by managed PTY sessions.
 - macOS with Xcode command-line build tools
 - For the native app, stable Rust installed through official
   [rustup](https://rustup.rs/), not Homebrew
-- Any of the supported CLIs available on the active runtime's `PATH`:
+- Any of the supported CLIs available on your login shell's `PATH`:
   `hermes`, `codex`, `claude`, or `agy`
 
 Install the frontend dependencies once:
@@ -276,6 +276,21 @@ Closing or reloading while sessions are active requires one confirmation and
 cleanup of every active Slot. Output and process identifiers are not persisted,
 so a reopened App starts with every Slot at Idle. Web mode has no PTY commands,
 and the existing Terminal.app launcher remains independent.
+
+Finding those CLIs takes more than reading the process `PATH`. An app launched
+from Finder is started by launchd and inherits a bare `/usr/bin:/bin:/usr/sbin:/sbin`,
+which is why a packaged build once reported every Provider as unavailable while
+the same code run from a terminal found all four. At startup, and again on every
+`Refresh`, the App asks your login shell what its `PATH` is and unions the answer
+with the one the process already had — existing entries keep their place and
+precedence, and the discovered ones extend them. A probe that fails, times out
+after three seconds, or finds no `$SHELL` falls back to a short built-in list of
+the usual install directories, unioned the same way, so no outcome leaves the App
+worse off than the bare inherited `PATH`. The same effective path is used to
+discover the Providers, to start a Slot's CLI, and to decide whether the sidebar's
+Terminal.app launch is available, and it is handed to the CLI in each Slot so that
+the tools it shells out to are found as well. When a Provider is unavailable, its
+`Executable path` section lists the directories that were actually searched.
 
 A Slot otherwise inherits the App's environment, with one exception: the Claude
 Slot does not receive `CLAUDE_CODE_CHILD_SESSION`. Claude Code sets that marker
