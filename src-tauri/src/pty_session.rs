@@ -16,6 +16,12 @@ use tauri::{AppHandle, Emitter};
 pub const PTY_OUTPUT_EVENT: &str = "pty-output";
 pub const PTY_EXIT_EVENT: &str = "pty-exit";
 const SLOT_IDS: [&str; 4] = ["slot-1", "slot-2", "slot-3", "slot-4"];
+// Claude Code sets this on its own children. `CommandBuilder::new` hands the
+// App's whole environment to the Slot, so when the App is launched from a
+// Claude Code session the `claude` CLI inherits the marker, decides it is a
+// child session, and silently stops saving its transcript — Continue then
+// reconnects to a conversation that has been quietly losing its tail.
+const CLAUDE_CHILD_SESSION_MARKER: &str = "CLAUDE_CODE_CHILD_SESSION";
 const STOP_GRACE_PERIOD: Duration = Duration::from_millis(500);
 static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -125,6 +131,7 @@ trait PtyAdapter: Send + Sync {
         executable: &Path,
         arguments: &[&str],
         workspace: &Path,
+        removed_environment: &[&str],
         rows: u16,
         columns: u16,
     ) -> Result<SpawnedPty, String>;
@@ -295,12 +302,31 @@ impl RunningPty for SystemRunningPty {
     }
 }
 
+// The engine decides this per provider and passes it to the adapter rather
+// than the adapter deciding for itself: the adapter is replaced wholesale in
+// tests, so a rule living inside it could never be asserted on.
+fn removed_environment(provider_id: &str) -> &'static [&'static str] {
+    match provider_id {
+        "claude" => &[CLAUDE_CHILD_SESSION_MARKER],
+        _ => &[],
+    }
+}
+
+// Removal, not an empty value: Claude Code treats the marker as present either
+// way, so overwriting it would change nothing.
+fn apply_environment_removals(command: &mut CommandBuilder, removed_environment: &[&str]) {
+    for name in removed_environment {
+        command.env_remove(name);
+    }
+}
+
 impl PtyAdapter for SystemPtyAdapter {
     fn spawn(
         &self,
         executable: &Path,
         arguments: &[&str],
         workspace: &Path,
+        removed_environment: &[&str],
         rows: u16,
         columns: u16,
     ) -> Result<SpawnedPty, String> {
@@ -315,6 +341,7 @@ impl PtyAdapter for SystemPtyAdapter {
         let mut command = CommandBuilder::new(executable);
         command.args(arguments);
         command.cwd(workspace);
+        apply_environment_removals(&mut command, removed_environment);
         let (reader, writer, child) = prepare_then_spawn(
             || {
                 pair.master
@@ -439,6 +466,7 @@ impl PtySessionEngine {
             &executable,
             &command[1..],
             &workspace,
+            removed_environment(&request.provider_id),
             request.rows,
             request.columns,
         ) {
@@ -740,6 +768,7 @@ mod tests {
         executable: PathBuf,
         arguments: Vec<String>,
         workspace: PathBuf,
+        removed_environment: Vec<String>,
         rows: u16,
         columns: u16,
     }
@@ -855,6 +884,7 @@ mod tests {
             executable: &Path,
             arguments: &[&str],
             workspace: &Path,
+            removed_environment: &[&str],
             rows: u16,
             columns: u16,
         ) -> Result<SpawnedPty, String> {
@@ -865,6 +895,10 @@ mod tests {
                     .map(|argument| (*argument).to_string())
                     .collect(),
                 workspace: workspace.to_path_buf(),
+                removed_environment: removed_environment
+                    .iter()
+                    .map(|name| (*name).to_string())
+                    .collect(),
                 rows,
                 columns,
             });
@@ -1102,6 +1136,61 @@ mod tests {
             engine.stop(session_request(&session)).unwrap();
             std::fs::remove_dir_all(workspace).unwrap();
         }
+    }
+
+    #[test]
+    fn strips_the_child_session_marker_for_claude_slots_only() {
+        let cases = [
+            (
+                "claude",
+                SessionMode::New,
+                vec!["CLAUDE_CODE_CHILD_SESSION"],
+            ),
+            (
+                "claude",
+                SessionMode::Continue,
+                vec!["CLAUDE_CODE_CHILD_SESSION"],
+            ),
+            ("hermes", SessionMode::New, vec![]),
+            ("hermes", SessionMode::Continue, vec![]),
+            ("codex", SessionMode::New, vec![]),
+            ("codex", SessionMode::Continue, vec![]),
+            ("antigravity", SessionMode::New, vec![]),
+            ("antigravity", SessionMode::Continue, vec![]),
+        ];
+
+        for (provider, mode, expected_removals) in cases {
+            let workspace = temp_workspace();
+            let adapter = Arc::new(FakeAdapter::new());
+            let engine = engine(adapter.clone());
+            let sink = Arc::new(FakeSink::default());
+            let session = engine
+                .start_with_sink(request(provider, &workspace, mode), sink)
+                .unwrap();
+            let call = lock(&adapter.calls).unwrap()[0].clone();
+            assert_eq!(call.removed_environment, expected_removals);
+            engine.stop(session_request(&session)).unwrap();
+            std::fs::remove_dir_all(workspace).unwrap();
+        }
+    }
+
+    // The engine test above can only prove the right list reaches the adapter.
+    // This one proves the list does something once it gets there. It builds its
+    // own CommandBuilder rather than touching the test process environment,
+    // which Rust runs from several threads at once.
+    #[test]
+    fn removing_environment_takes_the_variable_off_the_command() {
+        let mut command = CommandBuilder::new("claude");
+        command.env(CLAUDE_CHILD_SESSION_MARKER, "1");
+        command.env("PATH", "/usr/bin");
+
+        apply_environment_removals(&mut command, removed_environment("claude"));
+
+        assert!(command.get_env(CLAUDE_CHILD_SESSION_MARKER).is_none());
+        assert_eq!(
+            command.get_env("PATH").and_then(|value| value.to_str()),
+            Some("/usr/bin")
+        );
     }
 
     #[test]
