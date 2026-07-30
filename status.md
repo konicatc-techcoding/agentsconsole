@@ -5,16 +5,32 @@
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md。LOO-12 至 LOO-30 已依序合併，最新基線為 8e65b61，
-工作樹乾淨、Linear 的 agent-ready 佇列為空。終端搜尋、連結開啟、Cmd 快捷鍵、
-注意力光暈與 CLAUDE_CODE_CHILD_SESSION 清除皆已完成並實機驗證。目前沒有
-未完成事項。搜尋有兩項已知的 xterm 上游限制且決定不修。下一步執行
-/finn-spec；候選見「後續候選」。
+請先讀取 status.md。LOO-12 至 LOO-30 已依序合併，最新基線為 2e49d6c。
+2026-07-30 首次打包成 .app，隨即發現一個讓打包版完全不能用的缺陷：從
+Finder 啟動時 PATH 不完整，四個 provider 全部 Unavailable。LOO-31 已由
+/finn-build 實作完成，PR #43 待實機驗證與合併。詳見「未完成事項」。搜尋
+有兩項已知的 xterm 上游限制且決定不修。
 ```
 
 ## 未完成事項
 
-目前無。
+1. **打包版從 Finder 啟動時四個 provider 全部 Unavailable。`LOO-31` 已實作，
+   PR #43 待實機驗證與合併。** macOS 只給 launchd 啟動的 App 一份裸 `PATH`
+   （`/usr/bin:/bin:/usr/sbin:/sbin`），而四個 CLI 都裝在 `~/.local/bin`，
+   因此一個都找不到，**整個打包版無法使用**。2026-07-30 首次打包後以
+   `ps eww` 讀取 Finder 啟動的 App 程序確認。
+   規格見 <https://linear.app/loopent/issue/LOO-31/修正打包版從-finder-啟動時-path-不完整導致四個-provider-全部-unavailable>。
+
+   **臨時可用方式**：改從 Terminal.app 啟動即可，`open` 會把呼叫端 shell 的
+   環境整份帶給 App：
+
+   ```bash
+   open "/Volumes/OWC1M2/AgentOSConsole/AgentOS Console.app"
+   ```
+
+   **這個缺陷在 `tauri:dev` 下永遠看不到**，開發模式繼承的是終端機環境，
+   `PATH` 一直完整。LOO-9 至 LOO-30 二十幾個 issue、多次實機驗證都沒走到
+   這條路徑上，是首次打包才暴露出來的。
 
 LOO-23 至 LOO-30 的實機驗證均已完成，無遺留項目。先前列在此處的兩項都已
 結案：「注意力光暈太弱」由 LOO-29 處理，「App 把 `CLAUDE_CODE_*` 標記傳給
@@ -80,7 +96,12 @@ LOO-23 加入每格終端的 scrollback 搜尋，但合併後即發現完全失�
 - `main` required status checks：`smoke`（ubuntu-latest，backend 與 frontend）
   與 `rust`（macos-latest，`cargo fmt --all --check` 與 `cargo test`），
   `strict` 為 true，即合併前分支必須為最新
-- 目前 Linear issue：無；下一步使用 `/finn-spec` 建立新規格
+- 目前 Linear issue：`LOO-31`（`In Review`，`agent-ready`）；已由
+  `/finn-build` 實作，PR <https://github.com/konicatc-techcoding/agentsconsole/pull/43>
+  待實機驗證與合併。狀態以 Linear 與該 PR 為準，本檔只記錄到「已進審查」
+- 打包產物：`/Volumes/OWC1M2/AgentOSConsole/`，頂層為使用中的
+  `AgentOS Console.app`，`builds/` 存歷次版本，`BUILDS.md` 記錄各版對應的
+  commit。無 updater，更新須重新 build 並覆蓋
 - 最近完成的 Linear issue：`LOO-30 清除傳給 Claude Slot 的 CLAUDE_CODE_CHILD_SESSION，避免子 CLI 靜默停用 transcript`
 - LOO-30 URL：<https://linear.app/loopent/issue/LOO-30/清除傳給-claude-slot-的-claude-code-child-session避免子-cli-靜默停用-transcript>
 - LOO-30 狀態：`Done`；PR <https://github.com/konicatc-techcoding/agentsconsole/pull/40>，
