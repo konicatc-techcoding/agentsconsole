@@ -1,36 +1,26 @@
 # AgentOS Console — 工作交接狀態
 
-最後更新：2026-07-29
+最後更新：2026-07-30
 
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md。LOO-12 至 LOO-29 已依序合併，最新基線為 497d921，
-工作樹乾淨、Linear 的 agent-ready 佇列為空。終端搜尋、連結開啟、Cmd 快捷鍵
-與注意力光暈皆已完成並實機驗證。剩一項未完成事項：App 會把呼叫者的
-CLAUDE_CODE_* session 標記傳給子 CLI，根因已確認但尚未建立 issue。搜尋另有
-兩項已知的 xterm 上游限制且決定不修。下一步執行 /finn-spec；候選見
-「後續候選」。
+請先讀取 status.md。LOO-12 至 LOO-30 已依序合併，最新基線為 8e65b61，
+工作樹乾淨、Linear 的 agent-ready 佇列為空。終端搜尋、連結開啟、Cmd 快捷鍵、
+注意力光暈與 CLAUDE_CODE_CHILD_SESSION 清除皆已完成並實機驗證。目前沒有
+未完成事項。搜尋有兩項已知的 xterm 上游限制且決定不修。下一步執行
+/finn-spec；候選見「後續候選」。
 ```
 
 ## 未完成事項
 
-1. **App 會把呼叫者的 `CLAUDE_CODE_*` session 標記傳給子 CLI。根因已確認，
-   尚未建立 Linear issue。** `portable-pty` 的 `CommandBuilder::new()` 以
-   `std::env::vars_os()` 完整繼承父程序環境，因此當 App 由某個 Claude Code
-   session 啟動時，`CLAUDE_CODE_CHILD_SESSION=1` 會一路傳到 Slot 內的
-   `claude` CLI。Claude Code 判定自己是子 session 便關閉 transcript 儲存
-   （終端底部顯示「Transcript saving is off — inherited
-   CLAUDE_CODE_CHILD_SESSION marker」），對話不留歷史，後續 `--continue`
-   自然回報 No conversation found。詳見「Continue session 的除錯記錄」。
-   修法方向是 spawn 前以 `CommandBuilder::env_remove` 清除這類標記，但
-   「清哪些」仍是未決的產品問題：全部 `CLAUDE_CODE_*` 一律清可能拿掉使用者
-   刻意設定的組態，且其他三家 CLI 是否有類似標記尚未調查。
+目前無。
 
-LOO-23 至 LOO-29 的實機驗證均已完成，無遺留項目。先前列在此處的「注意力
-光暈太弱」已由 LOO-29 處理完畢。搜尋的兩項 xterm
-上游限制已決定維持現狀，見「搜尋的兩項實機限制」。先前記錄的 `finn-review`
-documentation-only 例外修改已於 2026-07-28 還原（未進版控）。
+LOO-23 至 LOO-30 的實機驗證均已完成，無遺留項目。先前列在此處的兩項都已
+結案：「注意力光暈太弱」由 LOO-29 處理，「App 把 `CLAUDE_CODE_*` 標記傳給
+子 CLI」由 LOO-30 處理。搜尋的兩項 xterm 上游限制已決定維持現狀，見「搜尋的
+兩項實機限制」。先前記錄的 `finn-review` documentation-only 例外修改已於
+2026-07-28 還原（未進版控）。
 
 ## 目前功能狀態
 
@@ -83,7 +73,7 @@ LOO-23 加入每格終端的 scrollback 搜尋，但合併後即發現完全失�
   `status.md` 為共用追蹤檔案，任一邊的修改合併後都會影響另一邊；同一個
   分支無法同時在兩個 worktree checkout，切換開發環境時先合併回 `main`，
   再於另一個 worktree `git pull`。
-- 最新合併基線：`497d921 feat: strengthen the new-output mark and retire the terminated glow (#37)`
+- 最新合併基線：`8e65b61 fix: stop passing CLAUDE_CODE_CHILD_SESSION to claude Slots (#40)`
 - Finn-loop：`.claude/skills` 已安裝 finn-spec／finn-build／finn-review，
   綁定 Linear team `LOO`；GitHub labels `loop-approved`、
   `loop-changes-requested`、`needs-human-review` 均已建立
@@ -91,7 +81,11 @@ LOO-23 加入每格終端的 scrollback 搜尋，但合併後即發現完全失�
   與 `rust`（macos-latest，`cargo fmt --all --check` 與 `cargo test`），
   `strict` 為 true，即合併前分支必須為最新
 - 目前 Linear issue：無；下一步使用 `/finn-spec` 建立新規格
-- 最近完成的 Linear issue：`LOO-29 加強 Slot 注意力標記的視覺強度，並讓終端邊框只標記新輸出`
+- 最近完成的 Linear issue：`LOO-30 清除傳給 Claude Slot 的 CLAUDE_CODE_CHILD_SESSION，避免子 CLI 靜默停用 transcript`
+- LOO-30 URL：<https://linear.app/loopent/issue/LOO-30/清除傳給-claude-slot-的-claude-code-child-session避免子-cli-靜默停用-transcript>
+- LOO-30 狀態：`Done`；PR <https://github.com/konicatc-techcoding/agentsconsole/pull/40>，
+  merge commit `8e65b61`，review `loop-approved`，`smoke` 與 `rust` 皆 `SUCCESS`
+- 前一個：`LOO-29 加強 Slot 注意力標記的視覺強度，並讓終端邊框只標記新輸出`
 - LOO-29 URL：<https://linear.app/loopent/issue/LOO-29/加強-slot-注意力標記的視覺強度並讓終端邊框只標記新輸出>
 - LOO-29 狀態：`Done`；PR <https://github.com/konicatc-techcoding/agentsconsole/pull/37>，
   merge commit `497d921`，review `loop-approved`，`smoke` 與 `rust` 皆 `SUCCESS`。
@@ -1130,6 +1124,58 @@ LOO-29 已完成並透過 PR #37 合併。**這是目前為止唯一一個規格
   它若沒出現，這個 issue 等於把結束標記整個弄丟了。PR 描述停在合併當下的
   狀態，未再更新
 
+## LOO-30 清除傳給 Claude Slot 的 session 標記
+
+LOO-30 已完成並透過 PR #40 合併，結束了從 2026-07-28 就掛在「未完成事項」的
+唯一功能性缺陷。詳細根因見下方「Continue session 的除錯記錄」。
+
+- `SystemPtyAdapter::spawn` 在建好 `CommandBuilder` 後套用一份「待移除環境
+  變數」清單。provider 為 `claude` 時清單是 `["CLAUDE_CODE_CHILD_SESSION"]`，
+  其餘三家是空的。
+- **清單由引擎依 provider 決定後傳給 adapter，不寫死在 `SystemPtyAdapter`
+  裡。** 這是刻意的可測性結構：`PtyAdapter` 在測試中被 `FakeAdapter` 整個
+  取代，規則若住在 adapter 內部就永遠斷言不到，全綠等於零覆蓋——LOO-23 的
+  形狀。改成參數後 `FakeAdapter` 可以記錄它收到什麼，四個 provider × 兩種
+  session mode 的組合全部可驗。
+- 是**移除**不是設成空字串。Claude Code 兩種情況都視為標記存在，覆寫無效。
+- **只清一個變數。** 其餘 12 個 `CLAUDE_CODE_*` 原封不動傳下去，包含兩個
+  OAuth 相關的。當初 status.md 把「清哪些」列為未決的產品問題，但實測確認
+  有害的只有被 Claude Code 警告訊息點名的那一個，其他的沒有證據，不賭。
+
+## LOO-30 驗證結果
+
+- Linear：LOO-30 為 `Done`
+- GitHub：PR #40 已合併，`smoke` 與 `rust` 皆為 `SUCCESS`，取得 `loop-approved`
+- 變更範圍：`src-tauri/src/pty_session.rs` 單一檔案，+89 行
+- 七條 AC 全數實機驗證通過（2026-07-30）
+
+**驗證方法值得留存：用 `ps eww` 直接讀 Slot 內 CLI 的程序環境。** 比在終端裡
+叫 CLI 自己印可靠，也不必賭警告訊息會不會出現、文字有沒有改。同一次 App 執行
+中三方對照：
+
+| 程序 | `CLAUDE_CODE_*` 數量 | `CHILD_SESSION` |
+|---|---|---|
+| App 本身 | 13 | 有 |
+| Slot：claude | 12 | **沒有** |
+| Slot：codex | 13 | 有 |
+
+codex 那格是同一次執行裡的對照組，同時排除了「其實環境本來就沒帶標記」這個
+替代解釋——不必為了取得修正前對照而回 `main` 重建一次。
+
+transcript 寫入的證據同樣具體。在 `/Users/zackchiu/ClaudeCodeCLI`（該資料夾
+先前活動停在 7/29，無其他 session 干擾）先 New 再 Continue，同一個 `.jsonl`：
+
+- New：15:11:46 → 15:13:13，26 筆記錄、42,620 bytes
+- Continue：15:22:19 → 15:22:22，35 筆記錄、54,192 bytes
+- 目錄檔案數維持 4 個不變，證明 Continue 是接上原 session 追加，而非另開
+
+**選資料夾要避開有其他 session 在寫的路徑。** 本 repo 的 project 目錄
+（`-Volumes-1TBM2-AI-Drive-ClaudeCode-Projects-agentsconsole`）當時有三個
+Claude Code session 正在寫入，「檔案變大」在那裡不構成證據，`--continue`
+還會接到正在進行的對話並與之共寫同一個檔案。
+
+AC-5（乾淨環境行為不變）另在一般 Terminal 啟動確認，四個 provider 皆正常。
+
 ## Continue session 的除錯記錄
 
 2026-07-28 調查「Claude CLI 的 continue 不會帶入先前對話，其餘三家正常」。
@@ -1165,8 +1211,17 @@ Stop 的 SIGKILL 毀掉檔案（先前的 transcript 完好存活）；New Folde
 沒有任何一家存在 workspace 資料夾內；「跟著 workspace」的正確理解是集中式儲存
 以 workspace 路徑當索引。
 
-**開發者注意**：從 Claude Code session 啟動本 App 供人工驗證時，必須清除標記，
-否則使用者的 Claude session 測試會白做：
+**此段的開發者注意事項已由 LOO-30 解除。** 原本從 Claude Code session 啟動本
+App 供人工驗證時，必須以 `env -u` 手動清除標記，否則使用者的 Claude session
+測試會白做。LOO-30 之後 App 自己會在 spawn 前移除
+`CLAUDE_CODE_CHILD_SESSION`，直接啟動即可：
+
+```bash
+CARGO_TARGET_DIR=/Volumes/AgentOSBuild/target npm run tauri:dev
+```
+
+原本那條 `env -u` 指令清五個變數，範圍比修正大，現已不需要。保留於此僅供理解
+當初的迴避方式：
 
 ```bash
 env -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_CODE_SESSION_ID \
@@ -1200,19 +1255,19 @@ env -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_CODE_SESSION_ID \
 
 依價值密度排序，尚未建立 issue：
 
-1. **清除傳給子 CLI 的 `CLAUDE_CODE_*` session 標記** — 根因已確認，見
-   「未完成事項」與「Continue session 的除錯記錄」。這是目前唯一已知的功能性
-   缺陷。
-2. **持久化** — Session 名稱、Sidebar 收合、Slot view 選擇與終端字級目前都只
+1. **持久化** — Session 名稱、Sidebar 收合、Slot view 選擇與終端字級目前都只
    在記憶體。要做就一次把四項納入同一次 `console-layout.json` schema v2 升級；
    Rust struct 有 `deny_unknown_fields`，需處理舊檔遷移。
-3. **`App.tsx` 拆分** — 已超過 2000 行。**不建議當成獨立 issue**：純重構寫不出
+2. **`App.tsx` 拆分** — 已超過 2000 行。**不建議當成獨立 issue**：純重構寫不出
    可觀察的 AC，而 `finn-review` 需要對照完整 diff 判斷是否越界，大型搬移正是
    自動審查最不可靠的場景。建議在後續功能開發時以小塊順手切出。
-4. **Header 注意力小圓點的視覺強度** — LOO-29 的 NG-1 刻意沒動
+3. **Header 注意力小圓點的視覺強度** — LOO-29 的 NG-1 刻意沒動
    `.slot-view-attention*`。終端邊框既然已收斂成只標記新輸出，Header 現在是
    session 結束的唯一提示來源，6px 圓點夠不夠用值得實機再看一次。
-5. **遠端分支清理** — 遠端仍有 36 個分支，本機已於 2026-07-29 清到只剩兩個
+4. **其他三家 CLI 的父 session 標記** — LOO-30 的 NG-2 刻意沒查。hermes、
+   codex、antigravity 是否也有類似的「偵測到父 session 就改變行為」機制未知。
+   目前沒有任何症狀，屬預防性調查，優先度低。
+5. **遠端分支清理** — 遠端仍有 37 個分支，本機已於 2026-07-29 清到只剩兩個
    worktree 各自佔用的。屬雜務，不需佔用 Finn-loop 排程。
 
 ## 本機預覽方式

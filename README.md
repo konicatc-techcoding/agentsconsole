@@ -277,6 +277,15 @@ cleanup of every active Slot. Output and process identifiers are not persisted,
 so a reopened App starts with every Slot at Idle. Web mode has no PTY commands,
 and the existing Terminal.app launcher remains independent.
 
+A Slot otherwise inherits the App's environment, with one exception: the Claude
+Slot does not receive `CLAUDE_CODE_CHILD_SESSION`. Claude Code sets that marker
+on processes it starts, and a `claude` CLI that sees it treats itself as a child
+session and stops saving its transcript — so an App launched from a Claude Code
+session would hand its Claude Slot a CLI that silently keeps no history, and
+Continue would later reconnect to a conversation missing everything said through
+the App. The variable is removed rather than blanked, only for the Claude Slot,
+and every other variable is passed through untouched.
+
 Both runtimes accept only the fixed provider commands documented by the UI.
 They reject relative, missing, file, and filesystem-root base workspaces. New
 folder names cannot be absolute, nested, `.` or `..`, and an existing name is
