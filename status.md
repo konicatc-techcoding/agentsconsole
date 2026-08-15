@@ -1,17 +1,20 @@
 # AgentOS Console — 工作交接狀態
 
-最後更新：2026-08-15
+最後更新：2026-08-16
 
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md。LOO-12 至 LOO-33 已依序合併，最新基線為 eaa2e67，
+請先讀取 status.md。LOO-12 至 LOO-33 已依序合併，之後 PR #50（切換介面
+風格 + styles.css token 化，無 Linear issue，來自
+design_handoff_console_restyle/ 的設計交接）也已合併，最新基線為 740ee61，
 Linear 的 agent-ready 佇列為空。App 已打包並部署於
-/Volumes/OWC1M2/AgentOSConsole/（2026-08-15 更新為 eaa2e67，含 LOO-33
-為 Slot 內 CLI 補上的 TERM／COLORTERM／LANG），從 Finder 點開即可正常使用。
-沒有功能性缺陷；唯一的未完成事項是 documentation-only PR 是否豁免
-Closes LOO-NNN 這個流程決定，已被推遲三次。搜尋有兩項已知的 xterm 上游
-限制且決定不修。下一步執行 /finn-spec；候選見「後續候選」。
+/Volumes/OWC1M2/AgentOSConsole/（2026-08-16 更新為 740ee61，含 Header 的
+Style 主題／圓角切換），從 Finder 點開即可正常使用。沒有功能性缺陷；唯一
+的未完成事項是 documentation-only PR 是否豁免 Closes LOO-NNN 這個流程
+決定，已被推遲三次。搜尋有兩項已知的 xterm 上游限制且決定不修。下一步
+執行 /finn-spec；候選見「後續候選」（第 7 項是交接包裡尚未實作的完整方角
+改版）。
 ```
 
 ## 未完成事項
@@ -42,8 +45,12 @@ LOO-23 至 LOO-31 的實機驗證均已完成，無遺留項目。先前列在�
 全域字級控制、終端搜尋、Command+Click 開啟連結與 Cmd+0 至 Cmd+4 的位置編址
 快捷鍵。LOO-32 將四格終端之間的間隔由 10px 縮為 4px，周圍留白不變。LOO-33
 讓 Slot 內的 CLI 在 App 環境缺少 `TERM`、`COLORTERM`、`LANG` 時得到預設值，
-修正打包版 Claude 選單無高亮。終端邊框的注意力光暈自 LOO-29 起只標記新
-輸出，session 結束改由 Header 標記。CI 有 `smoke` 與 `rust` 兩個 required
+修正打包版 Claude 選單無高亮。PR #50 在 Header 加入 `Style`
+控制：三組色彩主題（Blueprint／Graphite／Daylight）× 三種圓角（Square／
+Soft／Round），寫在 `<html>` 的 `data-theme`／`data-radius` 並存
+localStorage；`styles.css` 的顏色與圓角全面改用 `themes.css` 的 CSS 變數，
+xterm 主題跟著 `data-theme` 即時換色。終端邊框的注意力光暈自 LOO-29 起
+只標記新輸出，session 結束改由 Header 標記。CI 有 `smoke` 與 `rust` 兩個 required
 check，快取已納入 rustc 版本，`cargo test` 帶 `--locked`。Finn-loop 的
 finn-spec／finn-build／finn-review 三個 skill 安裝於 `.claude/skills`，綁定
 Linear team `LOO`；LOO-33 收尾時新增第四個 skill `finn-handoff`，把合併後的
@@ -90,7 +97,11 @@ LOO-23 加入每格終端的 scrollback 搜尋，但合併後即發現完全失�
   `status.md` 為共用追蹤檔案，任一邊的修改合併後都會影響另一邊；同一個
   分支無法同時在兩個 worktree checkout，切換開發環境時先合併回 `main`，
   再於另一個 worktree `git pull`。
-- 最新合併基線：`eaa2e67 fix: give each Slot's CLI TERM, COLORTERM, and LANG when the App has none (#47)`
+- 最新合併基線：`740ee61 feat: add appearance switching and tokenize styles.css colours (#50)`
+- PR #50 沒有 Linear issue（設計交接直接指示實作，非 `/finn-spec` 產出）；
+  規格來源 `design_handoff_console_restyle/` 留在 Claude Code worktree，
+  untracked、不入版控
+- 前一個合併基線：`eaa2e67 fix: give each Slot's CLI TERM, COLORTERM, and LANG when the App has none (#47)`
 - Finn-loop：`.claude/skills` 已安裝 finn-spec／finn-build／finn-review，
   以及 2026-08-15 新增的 finn-handoff（合併後的收尾：清分支、打包部署、
   更新本檔、開 handoff PR），綁定 Linear team `LOO`；GitHub labels `loop-approved`、
@@ -100,7 +111,7 @@ LOO-23 加入每格終端的 scrollback 搜尋，但合併後即發現完全失�
   `strict` 為 true，即合併前分支必須為最新
 - 目前 Linear issue：無；下一步使用 `/finn-spec` 建立新規格
 - 打包產物：`/Volumes/OWC1M2/AgentOSConsole/`，頂層為使用中的
-  `AgentOS Console.app`（目前為 `eaa2e67`），`builds/` 存歷次版本，
+  `AgentOS Console.app`（目前為 `740ee61`），`builds/` 存歷次版本，
   `BUILDS.md` 記錄各版對應的 commit。無 updater，更新須重新 build 後以
   `ditto` 覆蓋——**用 `ditto` 而非 `cp -R`**，後者可能破壞 app bundle 的簽章
 - 最近完成的 Linear issue：`LOO-33 為 Slot 內的 CLI 補上缺失的 TERM、COLORTERM 與 LANG，修正打包版 Claude 選單無高亮`
@@ -1345,6 +1356,85 @@ session 標記、LOO-31 是 `PATH`，這次是終端能力變數。
 - 分支收尾：本地與遠端 `LOO-33-slot-terminal-env-defaults` 均已刪除，兩個
   worktree 皆與 `origin/main`（`eaa2e67`）同步且工作樹乾淨。
 
+## 切換介面風格與 styles.css token 化（PR #50）
+
+這一輪**沒有走 Finn-loop**：規格來自設計交接包
+`design_handoff_console_restyle/`（`THEME_SWITCHING.md` 為實作指南、
+`Agent Console Redesign.dc.html` 為可互動的視覺原型、`frontend-src/` 提供
+四個現成檔案），由人工直接指示 Claude Code 依步驟實作，因此沒有 Linear
+issue。交接資料夾留在工作樹、不入版控。
+
+**做了什麼**（PR #50，squash merge `740ee61`，7 個檔案，+697／−244）：
+
+- 新增 `frontend/src/themes.css`：三組色彩 token（`blueprint` 為現況深藍、
+  `graphite` 中性灰、`daylight` 淺色）× 三組圓角 token（`square`／`soft`／
+  `round`），由 `<html>` 的 `data-theme` 與 `data-radius` 兩個正交屬性選
+  擇；`main.tsx` 在 `styles.css` 之前匯入。預設 `blueprint` + `square`
+  （方角工程風），`round` 接近改版前外觀。
+- 新增 `useAppearance.ts`（讀寫兩個屬性、localStorage 持久化，key
+  `agentsconsole.appearance.theme`／`.radius`）與 `AppearanceControls.tsx`
+  （`Style` 下拉 + 三顆圓角按鈕）。`App.tsx` 只改三處：兩個 import、一行
+  hook、元件插在 `.tauri-header-controls` 內 `.terminal-font-controls` 之前。
+- `styles.css` 依交接對照表把所有硬編碼顏色與 `border-radius` 換成變數，
+  **只剩四個 provider 品牌色**（`grep -nE '#[0-9a-fA-F]{3,6}'` 恰為 4 筆）。
+  漸層、scrim、modal 陰影、status-dot 光暈改用 `--body-bg`／`--scrim`／
+  `--shadow-modal`／`--glow`；h1 光暈、card selected、input focus ring、
+  Header 注意力點與 `.console-slot-attention-output`（含 `@keyframes`）的
+  `rgb()` 改為 `color-mix(in srgb, var(--primary-line|--warn|--primary) N%,
+  transparent)`，三個主題都跟主色走。
+- 對照表以外的判斷：disabled 狀態的 `#303847`／`#151a22` → `--line-2`／
+  `--bg-raised`；`#e4efcf`（handoff 按鈕字）→ `--warn`；`#4a5fd4` →
+  `--primary-line`；`.terminal-search` 底 → `--bg-chrome`。**一處刻意偏離對
+  照表**：`.terminal-slot` 的 `#080c12` 表上是 `--bg-sunken`，但 xterm 底色
+  依指示用 `--bg-window`，兩者在 Daylight 差很多（`#eef0f4` vs `#fff`）會
+  在終端四周留 6px 灰邊，所以 `.terminal-slot` 也用 `--bg-window`。
+  `.slot-view-attention-terminated` 的 `border-radius: 2px` 不在表上，保留。
+- `TerminalSlot.tsx`（唯一允許動的地方）：新增 `readTerminalTheme()`，以
+  `getComputedStyle(document.documentElement)` 讀 `--bg-window`
+  （background）、`--text-2`（foreground）、`--text`（cursor）、
+  `--primary-line` + `59` alpha（selectionBackground，只在六位 hex 時附加）
+  組成 xterm theme；每項保留原色 fallback，jsdom 與 CSS 未載入時外觀不變。
+  掛載 effect 內加 `MutationObserver` 監聽 `<html>` 的 `data-theme`，變更時
+  設 `terminal.options.theme`，原地重繪、不重建 Terminal、session 不中斷；
+  cleanup 時 `disconnect()`。session／PTY／launcher／storage／Tauri／runtime
+  邏輯完全未動。
+- 已知的視覺取捨：Daylight + Round 時 h1 保留藍色光暈（`themes.css` 只在
+  `square` 關掉裝飾層），深色字上有淡藍暈，可讀但略突兀；屬交接設計本身
+  的決定，未動。
+- 交接 `README.md` 用的 `--line-strong`／`--line-control` 是舊命名，
+  `themes.css` 與 `THEME_SWITCHING.md` 一致用 `--line-2`／`--line-3`，以後者
+  為準。
+
+## 切換介面風格 驗證結果
+
+- GitHub：PR <https://github.com/konicatc-techcoding/agentsconsole/pull/50>
+  已合併（merge commit `740ee61`），`smoke` 與 `rust` 皆 `SUCCESS`；未跑
+  `/finn-review`、無 review label、無 Linear issue，由人工判斷合併
+- 變更範圍：`frontend/src/` 下 `App.tsx`、`main.tsx`、`TerminalSlot.tsx`、
+  `styles.css` 修改，`themes.css`、`useAppearance.ts`、
+  `AppearanceControls.tsx` 新增；+697／−244
+- `cd frontend && npm test`：4 檔 88 tests 全數通過（App 55、TerminalSlot
+  21、search 1、runtime 11），**未調整任何斷言**；`tsc -b` 與
+  `npm run build` 通過；`git diff --check` 乾淨。stderr 的
+  `HTMLCanvasElement.prototype.getContext` 訊息為既有（stash 後基線同樣出
+  現），來自 search 測試載入真實 xterm 模組。
+- 實機：`tauri:dev` 由使用者操作確認三個主題 × 三種圓角切換正常、xterm 隨
+  `data-theme` 即時換色、風格重開後保留。Web runtime 另以 vite dev 確認
+  token 解析與屬性切換。
+- 打包：兩次。2026-08-15 22:58 先從分支 commit `37eb622` 建置部署（合併
+  前，存檔 `builds/2026-08-15-37eb622/`）；合併後 2026-08-16 00:00 從
+  `740ee61` 重建並以 `ditto` 部署至 `/Volumes/OWC1M2/AgentOSConsole/` 頂
+  層，存檔於 `builds/2026-08-16-740ee61/`，`BUILDS.md` 兩筆皆已記錄。兩次
+  建置的 binary **md5 完全相同**（squash 後原始碼一字不差、cargo 可重現），
+  建置沿用快取，Rust 編譯 17 秒，12 MB。前端資產以 brotli 壓縮嵌入
+  binary，`strings` 抓不到字面值——改以 build 產出的 `frontend/dist` 含
+  `[data-theme=daylight]` 選擇器與 `agentsconsole.appearance.theme`，加上
+  來源、頂層、存檔三份 binary md5 一致來驗證。**以後前端-only 的變更都要
+  用這招驗證部署**，`strings` 只對 Rust 側字面值有效。
+- 分支收尾：本地與遠端 `claude/console-theme-switching` 均已刪除，兩個
+  worktree 皆與 `origin/main`（`740ee61`）同步；Claude Code worktree 僅餘
+  untracked 的 `design_handoff_console_restyle/`。
+
 ## Continue session 的除錯記錄
 
 2026-07-28 調查「Claude CLI 的 continue 不會帶入先前對話，其餘三家正常」。
@@ -1443,6 +1533,13 @@ env -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_CODE_SESSION_ID \
    LOO-5 至 LOO-31 的工作分支與歷次 docs handoff）；LOO-32 的分支已於
    2026-08-07 隨收尾刪除。本機維持只剩兩個 worktree 各自佔用的分支。
    屬雜務，不需佔用 Finn-loop 排程。
+7. **交接包 README 描述的完整方角改版尚未實作** — PR #50 只做了
+   `THEME_SWITCHING.md` 的範圍（主題切換 + token 化）。
+   `design_handoff_console_restyle/README.md` 另外描述 header 42px、slot
+   header 30px 的密度、1px hairline 網格（console grid `gap: 1px` 以邊框當
+   分隔）、狀態方點與 45° 菱形注意力標記、workspace 列與 status bar 等版面
+   改動，這些都還沒做。若要做，token 已就位，只需改 `styles.css` 與少量
+   class；`Agent Console Redesign.dc.html` 是可互動的參考稿。
 
 ## 本機預覽方式
 

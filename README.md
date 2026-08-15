@@ -238,6 +238,17 @@ each terminal keeps its existing output and scrollback across the change while
 its running session is resized to the new rows and columns. The size is
 in-memory: `Refresh` preserves it and an App reload returns to 16px.
 
+Next to it, a `Style` control picks the colour theme (Blueprint, Graphite,
+Daylight) and the corner shape (Square, Soft, Round). The two are independent:
+Blueprint + Square is the default engineering look, and Blueprint + Round is
+close to the pre-restyle appearance. The choice is written to `<html>` as
+`data-theme` and `data-radius`, and every colour and radius in `styles.css`
+reads through the tokens in `themes.css`, so a switch repaints the whole
+Console — including each Slot's xterm, which follows `data-theme` in place
+without rebuilding the terminal or touching its session. Unlike the font size,
+appearance persists in `localStorage` and survives an App restart. The four
+Provider brand colours are theme-independent.
+
 Command+F searches that Slot's own output. The search bar floats over the
 terminal, so opening or closing it never resizes the terminal or the running
 session. Typing highlights every match and moves to the first one; Enter and
