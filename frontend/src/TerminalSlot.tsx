@@ -101,6 +101,45 @@ export function openLinkOnCommandClick(
   void runtime.openExternalUrl?.(uri)?.catch(() => {});
 }
 
+// xterm paints its own canvas, so it never sees the CSS variables that
+// themes.css puts on <html>. This reads them at instance-creation time (and
+// again whenever `data-theme` changes) and folds them into an ITheme. Every
+// entry keeps the pre-theming colour as fallback: under jsdom, or before
+// themes.css has loaded, the variables read as "" and the terminal must still
+// come up looking as it always did.
+const TERMINAL_THEME_FALLBACK = {
+  background: "#080c12",
+  foreground: "#d9e1ee",
+  cursor: "#8ca4ff",
+  selectionBackground: "#334a78",
+} as const;
+
+// Selection is the primary colour at 35% over the terminal background. xterm
+// accepts #rrggbbaa, so the alpha is appended to the token when it is a plain
+// six-digit hex; any other form falls back to the original selection colour.
+function withAlpha(hex: string, alpha: string, fallback: string): string {
+  return /^#[0-9a-f]{6}$/i.test(hex) ? `${hex}${alpha}` : fallback;
+}
+
+export function readTerminalTheme(): ITerminalOptions["theme"] {
+  if (typeof document === "undefined" || typeof getComputedStyle !== "function") {
+    return { ...TERMINAL_THEME_FALLBACK };
+  }
+  const styles = getComputedStyle(document.documentElement);
+  const read = (name: string, fallback: string): string =>
+    styles.getPropertyValue(name).trim() || fallback;
+  return {
+    background: read("--bg-window", TERMINAL_THEME_FALLBACK.background),
+    foreground: read("--text-2", TERMINAL_THEME_FALLBACK.foreground),
+    cursor: read("--text", TERMINAL_THEME_FALLBACK.cursor),
+    selectionBackground: withAlpha(
+      read("--primary-line", ""),
+      "59",
+      TERMINAL_THEME_FALLBACK.selectionBackground,
+    ),
+  };
+}
+
 // Single source of truth for the Terminal options: the component and the
 // real-module search test must build the terminal exactly the same way, or the
 // test stops protecting the option it exists to protect. `allowProposedApi`
@@ -118,12 +157,7 @@ export function createTerminalOptions(
     fontFamily: 'ui-monospace, "SFMono-Regular", Consolas, monospace',
     fontSize,
     scrollback: 5000,
-    theme: {
-      background: "#080c12",
-      foreground: "#d9e1ee",
-      cursor: "#8ca4ff",
-      selectionBackground: "#334a78",
-    },
+    theme: readTerminalTheme(),
   };
 }
 
@@ -345,6 +379,21 @@ export default function TerminalSlot({
     viewport.addEventListener("focusin", reportFocus);
     viewport.addEventListener("focusout", reportBlur);
 
+    // Follow the colour theme without rebuilding the terminal: swapping
+    // `options.theme` repaints in place, so the buffer, selection and PTY
+    // session are untouched. Only `data-theme` matters here — `data-radius`
+    // never changes a colour xterm reads.
+    const themeObserver =
+      typeof MutationObserver === "undefined"
+        ? null
+        : new MutationObserver(() => {
+            terminal.options.theme = readTerminalTheme();
+          });
+    themeObserver?.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+
     let disposed = false;
     const unlisteners: Array<() => void> = [];
     void runtime
@@ -386,6 +435,7 @@ export default function TerminalSlot({
     return () => {
       disposed = true;
       resizeObserver?.disconnect();
+      themeObserver?.disconnect();
       viewport.removeEventListener("focusin", reportFocus);
       viewport.removeEventListener("focusout", reportBlur);
       inputDisposable.dispose();

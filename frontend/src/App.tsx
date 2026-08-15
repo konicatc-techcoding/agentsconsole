@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { AppearanceControls } from "./AppearanceControls";
 import { defaultRuntime } from "./runtime";
 import {
   CONSOLE_PROVIDERS,
@@ -23,6 +24,7 @@ import type {
   SessionMode,
   WorkspacePreferences,
 } from "./types";
+import { useAppearance } from "./useAppearance";
 
 function isAvailable(provider: Provider): boolean {
   return provider.installed && provider.error === null;
@@ -237,6 +239,7 @@ function terminalWorkspace(state: TerminalState): string {
 
 export default function App({ runtime = defaultRuntime }: AppProps) {
   const isTauri = runtime.kind === "tauri";
+  const { theme, radius, setTheme, setRadius } = useAppearance();
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
   const [visibleSlotQueue, setVisibleSlotQueue] =
     useState<VisibleSlotQueue>(null);
@@ -1282,6 +1285,12 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                   Stop All ({activeTerminalSlots.length})
                 </button>
               </div>
+              <AppearanceControls
+                theme={theme}
+                radius={radius}
+                onThemeChange={setTheme}
+                onRadiusChange={setRadius}
+              />
               <div
                 className="terminal-font-controls"
                 aria-label="Terminal font size"
