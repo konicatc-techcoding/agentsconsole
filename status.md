@@ -1,13 +1,14 @@
 # AgentOS Console — 工作交接狀態
 
-最後更新：2026-07-31
+最後更新：2026-08-07
 
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md。LOO-12 至 LOO-31 已依序合併，最新基線為 999bb34，
+請先讀取 status.md。LOO-12 至 LOO-32 已依序合併，最新基線為 7409adf，
 Linear 的 agent-ready 佇列為空。App 已打包並部署於
-/Volumes/OWC1M2/AgentOSConsole/，2026-07-31 起從 Finder 點開即可正常使用。
+/Volumes/OWC1M2/AgentOSConsole/（2026-08-07 更新為 7409adf，含 LOO-32
+的 4px 終端間隔），從 Finder 點開即可正常使用。
 沒有功能性缺陷；唯一的未完成事項是 documentation-only PR 是否豁免
 Closes LOO-NNN 這個流程決定，已被推遲三次。搜尋有兩項已知的 xterm 上游
 限制且決定不修。下一步執行 /finn-spec；候選見「後續候選」。
@@ -39,7 +40,7 @@ LOO-23 至 LOO-31 的實機驗證均已完成，無遺留項目。先前列在�
 四個 Slot 已完成 embedded terminal rollout、自適應版面、Session 顯示名稱、
 全域 Stop All、status.md handoff、Slot 注意力指示、provider 專屬色標題列、
 全域字級控制、終端搜尋、Command+Click 開啟連結與 Cmd+0 至 Cmd+4 的位置編址
-快捷鍵。終端邊框的注意力光暈自 LOO-29 起只標記新輸出，session 結束改由
+快捷鍵。LOO-32 將四格終端之間的間隔由 10px 縮為 4px，周圍留白不變。終端邊框的注意力光暈自 LOO-29 起只標記新輸出，session 結束改由
 Header 標記。CI 有 `smoke` 與 `rust` 兩個 required check，快取已納入 rustc
 版本，`cargo test` 帶 `--locked`。Finn-loop 三個 skill 安裝於
 `.claude/skills`，綁定 Linear team `LOO`。
@@ -85,7 +86,7 @@ LOO-23 加入每格終端的 scrollback 搜尋，但合併後即發現完全失�
   `status.md` 為共用追蹤檔案，任一邊的修改合併後都會影響另一邊；同一個
   分支無法同時在兩個 worktree checkout，切換開發環境時先合併回 `main`，
   再於另一個 worktree `git pull`。
-- 最新合併基線：`999bb34 fix: search the login shell's PATH so the packaged app finds the CLIs (#43)`
+- 最新合併基線：`7409adf style: shrink console grid gap from 10px to 4px (#45)`
 - Finn-loop：`.claude/skills` 已安裝 finn-spec／finn-build／finn-review，
   綁定 Linear team `LOO`；GitHub labels `loop-approved`、
   `loop-changes-requested`、`needs-human-review` 均已建立
@@ -94,10 +95,14 @@ LOO-23 加入每格終端的 scrollback 搜尋，但合併後即發現完全失�
   `strict` 為 true，即合併前分支必須為最新
 - 目前 Linear issue：無；下一步使用 `/finn-spec` 建立新規格
 - 打包產物：`/Volumes/OWC1M2/AgentOSConsole/`，頂層為使用中的
-  `AgentOS Console.app`（目前為 `999bb34`），`builds/` 存歷次版本，
+  `AgentOS Console.app`（目前為 `7409adf`），`builds/` 存歷次版本，
   `BUILDS.md` 記錄各版對應的 commit。無 updater，更新須重新 build 後以
   `ditto` 覆蓋——**用 `ditto` 而非 `cp -R`**，後者可能破壞 app bundle 的簽章
-- 最近完成的 Linear issue：`LOO-31 修正打包版從 Finder 啟動時 PATH 不完整導致四個 provider 全部 Unavailable`
+- 最近完成的 Linear issue：`LOO-32 縮小 Console 四格終端之間的間隔至 4px`
+- LOO-32 URL：<https://linear.app/loopent/issue/LOO-32/縮小-console-四格終端之間的間隔至-4px>
+- LOO-32 狀態：`Done`；PR <https://github.com/konicatc-techcoding/agentsconsole/pull/45>，
+  merge commit `7409adf`，review `loop-approved`，`smoke` 與 `rust` 皆 `SUCCESS`
+- 前一個：`LOO-31 修正打包版從 Finder 啟動時 PATH 不完整導致四個 provider 全部 Unavailable`
 - LOO-31 URL：<https://linear.app/loopent/issue/LOO-31/修正打包版從-finder-啟動時-path-不完整導致四個-provider-全部-unavailable>
 - LOO-31 狀態：`Done`；PR <https://github.com/konicatc-techcoding/agentsconsole/pull/43>，
   merge commit `999bb34`，review `loop-approved`，`smoke` 與 `rust` 皆 `SUCCESS`
@@ -1258,6 +1263,37 @@ AC-2（回退清單）與 AC-3（3 秒逾時）僅自動化涵蓋：要驗得刻
 失效，清單只會有四個裸目錄。下次再遇到同類問題，展開就知道，不必再用
 `ps eww` 查一次程序環境。
 
+## LOO-32 縮小 Console 四格終端間隔
+
+LOO-32 已完成並透過 PR #45 合併，全程走 `/finn-spec` → `/finn-build` →
+`/finn-review` 流程：
+
+- `.console-grid` 的 `gap` 由 `10px` 改為 `4px`，唯一的程式碼變更是
+  `frontend/src/styles.css` 一行；1／2／3／4 格所有版面模式共用同一個
+  gap，全部一起縮小。
+- 依 NG-1 至 NG-3，視窗邊緣 padding、sidebar 與 Console 之間、警示區與
+  grid 之間的留白維持不變；Slot 邊框、圓角與注意力光暈樣式也未動，4px
+  下相鄰 Slot 的光暈較貼近屬預期結果。
+- 純 CSS 變更，未新增自動化測試；既有 `npm test` 與 build 維持通過。
+
+## LOO-32 驗證結果
+
+- Linear：LOO-32 為 `Done`
+- GitHub：PR #45 已合併（merge commit `7409adf`），review `loop-approved`，
+  `smoke` 與 `rust` 皆 `SUCCESS`
+- CI 插曲：第一次 run 的 `rust` job 在「Set up job」就失敗，macOS runner
+  根本沒啟動，checkout 之後的步驟一步都沒執行；`smoke` 同時排隊超過
+  10 分鐘。這是 GitHub Actions 的基礎設施故障，與變更無關（CSS-only
+  碰不到 Rust）。處法：等整個 run 結束後 `gh run rerun <run-id> --failed`
+  只重跑失敗的 job（run 進行中無法重跑）。**不必重開 PR**——新 run 兩個
+  job 都要重新排隊，只會更慢。重跑後兩個 check 皆綠。
+- 打包：2026-08-07 已重新建置並以 `ditto` 部署至
+  `/Volumes/OWC1M2/AgentOSConsole/`，存檔於 `builds/2026-08-07-7409adf/`，
+  `BUILDS.md` 已更新。建置沿用 APFS 映像既有快取，Rust 編譯僅 18 秒。
+- 分支收尾：本地與遠端 `LOO-32-console-grid-gap` 及本地
+  `docs/loo-31-handoff` 均已刪除，兩個 worktree 皆與 `origin/main` 同步
+  且工作樹乾淨。
+
 ## Continue session 的除錯記錄
 
 2026-07-28 調查「Claude CLI 的 continue 不會帶入先前對話，其餘三家正常」。
@@ -1352,8 +1388,10 @@ env -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_CODE_SESSION_ID \
 5. **其他三家 CLI 的父 session 標記** — LOO-30 的 NG-2 刻意沒查。hermes、
    codex、antigravity 是否也有類似的「偵測到父 session 就改變行為」機制未知。
    目前沒有任何症狀，屬預防性調查，優先度低。
-6. **遠端分支清理** — 遠端仍有 37 個分支，本機已於 2026-07-29 清到只剩兩個
-   worktree 各自佔用的。屬雜務，不需佔用 Finn-loop 排程。
+6. **遠端分支清理** — 遠端仍有 42 個已合併的歷史分支（不含 `main`，即
+   LOO-5 至 LOO-31 的工作分支與歷次 docs handoff）；LOO-32 的分支已於
+   2026-08-07 隨收尾刪除。本機維持只剩兩個 worktree 各自佔用的分支。
+   屬雜務，不需佔用 Finn-loop 排程。
 
 ## 本機預覽方式
 
