@@ -1,14 +1,14 @@
 # AgentOS Console — 工作交接狀態
 
-最後更新：2026-08-07
+最後更新：2026-08-15
 
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md。LOO-12 至 LOO-32 已依序合併，最新基線為 7409adf，
+請先讀取 status.md。LOO-12 至 LOO-33 已依序合併，最新基線為 eaa2e67，
 Linear 的 agent-ready 佇列為空。App 已打包並部署於
-/Volumes/OWC1M2/AgentOSConsole/（2026-08-07 更新為 7409adf，含 LOO-32
-的 4px 終端間隔），從 Finder 點開即可正常使用。
+/Volumes/OWC1M2/AgentOSConsole/（2026-08-15 更新為 eaa2e67，含 LOO-33
+為 Slot 內 CLI 補上的 TERM／COLORTERM／LANG），從 Finder 點開即可正常使用。
 沒有功能性缺陷；唯一的未完成事項是 documentation-only PR 是否豁免
 Closes LOO-NNN 這個流程決定，已被推遲三次。搜尋有兩項已知的 xterm 上游
 限制且決定不修。下一步執行 /finn-spec；候選見「後續候選」。
@@ -40,10 +40,14 @@ LOO-23 至 LOO-31 的實機驗證均已完成，無遺留項目。先前列在�
 四個 Slot 已完成 embedded terminal rollout、自適應版面、Session 顯示名稱、
 全域 Stop All、status.md handoff、Slot 注意力指示、provider 專屬色標題列、
 全域字級控制、終端搜尋、Command+Click 開啟連結與 Cmd+0 至 Cmd+4 的位置編址
-快捷鍵。LOO-32 將四格終端之間的間隔由 10px 縮為 4px，周圍留白不變。終端邊框的注意力光暈自 LOO-29 起只標記新輸出，session 結束改由
-Header 標記。CI 有 `smoke` 與 `rust` 兩個 required check，快取已納入 rustc
-版本，`cargo test` 帶 `--locked`。Finn-loop 三個 skill 安裝於
-`.claude/skills`，綁定 Linear team `LOO`。
+快捷鍵。LOO-32 將四格終端之間的間隔由 10px 縮為 4px，周圍留白不變。LOO-33
+讓 Slot 內的 CLI 在 App 環境缺少 `TERM`、`COLORTERM`、`LANG` 時得到預設值，
+修正打包版 Claude 選單無高亮。終端邊框的注意力光暈自 LOO-29 起只標記新
+輸出，session 結束改由 Header 標記。CI 有 `smoke` 與 `rust` 兩個 required
+check，快取已納入 rustc 版本，`cargo test` 帶 `--locked`。Finn-loop 的
+finn-spec／finn-build／finn-review 三個 skill 安裝於 `.claude/skills`，綁定
+Linear team `LOO`；LOO-33 收尾時新增第四個 skill `finn-handoff`，把合併後的
+分支清理、打包部署、`status.md` 更新與 handoff PR 固定成一套流程。
 
 LOO-12 將 PTY engine 擴展為最多四個獨立 session 並啟用 Slot 2；
 LOO-13、LOO-14 接續啟用 Slot 3、4。Tauri 目前四格皆支援完整
@@ -86,19 +90,24 @@ LOO-23 加入每格終端的 scrollback 搜尋，但合併後即發現完全失�
   `status.md` 為共用追蹤檔案，任一邊的修改合併後都會影響另一邊；同一個
   分支無法同時在兩個 worktree checkout，切換開發環境時先合併回 `main`，
   再於另一個 worktree `git pull`。
-- 最新合併基線：`7409adf style: shrink console grid gap from 10px to 4px (#45)`
+- 最新合併基線：`eaa2e67 fix: give each Slot's CLI TERM, COLORTERM, and LANG when the App has none (#47)`
 - Finn-loop：`.claude/skills` 已安裝 finn-spec／finn-build／finn-review，
-  綁定 Linear team `LOO`；GitHub labels `loop-approved`、
+  以及 2026-08-15 新增的 finn-handoff（合併後的收尾：清分支、打包部署、
+  更新本檔、開 handoff PR），綁定 Linear team `LOO`；GitHub labels `loop-approved`、
   `loop-changes-requested`、`needs-human-review` 均已建立
 - `main` required status checks：`smoke`（ubuntu-latest，backend 與 frontend）
   與 `rust`（macos-latest，`cargo fmt --all --check` 與 `cargo test`），
   `strict` 為 true，即合併前分支必須為最新
 - 目前 Linear issue：無；下一步使用 `/finn-spec` 建立新規格
 - 打包產物：`/Volumes/OWC1M2/AgentOSConsole/`，頂層為使用中的
-  `AgentOS Console.app`（目前為 `7409adf`），`builds/` 存歷次版本，
+  `AgentOS Console.app`（目前為 `eaa2e67`），`builds/` 存歷次版本，
   `BUILDS.md` 記錄各版對應的 commit。無 updater，更新須重新 build 後以
   `ditto` 覆蓋——**用 `ditto` 而非 `cp -R`**，後者可能破壞 app bundle 的簽章
-- 最近完成的 Linear issue：`LOO-32 縮小 Console 四格終端之間的間隔至 4px`
+- 最近完成的 Linear issue：`LOO-33 為 Slot 內的 CLI 補上缺失的 TERM、COLORTERM 與 LANG，修正打包版 Claude 選單無高亮`
+- LOO-33 URL：<https://linear.app/loopent/issue/LOO-33/為-slot-內的-cli-補上缺失的-termcolorterm-與-lang修正打包版-claude-選單無高亮>
+- LOO-33 狀態：`Done`；PR <https://github.com/konicatc-techcoding/agentsconsole/pull/47>，
+  merge commit `eaa2e67`，review `loop-approved`，`smoke` 與 `rust` 皆 `SUCCESS`
+- 前一個：`LOO-32 縮小 Console 四格終端之間的間隔至 4px`
 - LOO-32 URL：<https://linear.app/loopent/issue/LOO-32/縮小-console-四格終端之間的間隔至-4px>
 - LOO-32 狀態：`Done`；PR <https://github.com/konicatc-techcoding/agentsconsole/pull/45>，
   merge commit `7409adf`，review `loop-approved`，`smoke` 與 `rust` 皆 `SUCCESS`
@@ -1294,6 +1303,48 @@ LOO-32 已完成並透過 PR #45 合併，全程走 `/finn-spec` → `/finn-buil
   `docs/loo-31-handoff` 均已刪除，兩個 worktree 皆與 `origin/main` 同步
   且工作樹乾淨。
 
+## LOO-33 為 Slot 內的 CLI 補上 TERM、COLORTERM 與 LANG
+
+LOO-33 已完成並透過 PR #47 合併，全程走 `/finn-spec` → `/finn-build` →
+`/finn-review` 流程。**這是第三個「Finder 啟動的環境太裸」缺陷**：LOO-30 是
+session 標記、LOO-31 是 `PATH`，這次是終端能力變數。
+
+**根因**：從 Finder 啟動的 App 繼承 launchd 的 11 個環境變數，其中沒有
+`TERM`、`COLORTERM`、`LANG`；`portable-pty` 只額外補 `SHELL`。Claude Code
+（Node／Ink，走 `supports-color`）在這種環境下把顏色**與粗體**一併關閉，
+背景 agent 選單因此看不到高亮、狀態星號沒有顏色；同一個 CLI 在 Terminal.app
+裡完全正常。Codex（ratatui）不論環境都輸出顏色，所以另一格看起來沒事，
+反而掩蓋了問題。
+
+**修法**（`src-tauri/src/pty_session.rs`）：
+
+- `SystemPtyAdapter::spawn` 在建好 `CommandBuilder` 後，對四個 provider 一律
+  補上 `TERM=xterm-256color`、`COLORTERM=truecolor`、`LANG=en_US.UTF-8`——
+  **只在該變數缺失時補，既有值一律不覆寫**，因此 `tauri:dev` 或從終端機
+  啟動時行為不變。
+- LOO-31 的 `PATH` 聯集與 LOO-30 的 `CLAUDE_CODE_CHILD_SESSION` 移除維持不變。
+- Rust 單元測試涵蓋「缺失→補上」與「已存在→保留」兩種情況。
+- README 的環境繼承段落已隨 PR 更新。
+
+## LOO-33 驗證結果
+
+- Linear：LOO-33 為 `Done`
+- GitHub：PR #47 已合併（merge commit `eaa2e67`），review `loop-approved`，
+  `smoke` 與 `rust` 皆 `SUCCESS`
+- 變更範圍：`README.md` 與 `src-tauri/src/pty_session.rs` 兩個檔案，
+  +139／−8
+- 診斷方法沿用 LOO-30：對執行中的 App 及其 `claude` 子程序直接 `ps eww`
+  讀環境，確認 App 本身只有 launchd 的 11 個變數、子 CLI 缺少三個終端
+  變數。**遇到「打包版看起來怪、dev 模式正常」的症狀，先用這招比對兩邊
+  環境，不要從 CLI 本身找起。**
+- 打包：2026-08-15 15:57 已從 `eaa2e67` 重新建置並以 `ditto` 部署至
+  `/Volumes/OWC1M2/AgentOSConsole/`，存檔於 `builds/2026-08-15-eaa2e67/`，
+  `BUILDS.md` 已更新。建置沿用 APFS 映像既有快取，Rust 編譯僅 16 秒；
+  已以 `strings` 確認部署的二進位含 `xterm-256color`、`truecolor`、
+  `en_US.UTF-8` 三個字面值。
+- 分支收尾：本地與遠端 `LOO-33-slot-terminal-env-defaults` 均已刪除，兩個
+  worktree 皆與 `origin/main`（`eaa2e67`）同步且工作樹乾淨。
+
 ## Continue session 的除錯記錄
 
 2026-07-28 調查「Claude CLI 的 continue 不會帶入先前對話，其餘三家正常」。
@@ -1446,11 +1497,11 @@ CARGO_TARGET_DIR=/Volumes/AgentOSBuild/target npm run tauri:dev
 
 ## 接續流程
 
-1. 先確認本次 README／status 文件 diff，取得使用者確認後 commit。若目前
-   不在 `main`（例如 Claude Code worktree 的 `claude/*` 分支），文件改動
-   同樣要 push 分支並開 PR，待 required check `smoke` 通過後才合併，不可
-   直接推 `main`。合併後在另一個 worktree `git pull`，確保兩個 worktree
-   都與 `origin/main` 同步且工作樹乾淨。
+1. 程式碼 PR 合併後執行 `/finn-handoff`：它會確認合併、清分支、同步兩個
+   worktree、在有程式碼變更時重新打包並以 `ditto` 部署、更新本檔，最後開
+   `docs/loo-NN-handoff` PR。文件改動一律走 PR，待 required check 通過後
+   由人工合併，不可直接推 `main`；合併後再跑一次 `/finn-handoff` 清掉
+   handoff 分支，確保兩個 worktree 都與 `origin/main` 同步且工作樹乾淨。
 2. 執行 `/finn-spec` 訪談並建立下一個 issue。`agent-ready` 標籤一律由人工
    在 Linear 掛上，skill 不會自行套用，那是動工前的核准閘門。
 3. 掛上標籤後執行 `/loop /finn-build` 認領並實作，完成後建立 PR；審查可另
