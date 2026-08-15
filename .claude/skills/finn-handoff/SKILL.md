@@ -104,18 +104,29 @@ behavior it does not describe. Then `git diff --check`.
 ## 5. Ship the record
 
 ```bash
-git switch -c docs/loo-NN-handoff
+git switch -c docs/handoff-NN
 git add status.md          # plus README.md or .claude/skills/ only if this pass changed them
-git commit -m "docs: record LOO-NN and <one-line outcome>"
-git push -u origin docs/loo-NN-handoff
-gh pr create --base main --head docs/loo-NN-handoff --title "docs: record LOO-NN and <outcome>" --body "…"
+git commit -m "docs: record issue NN handoff — <one-line outcome>"
+git push -u origin docs/handoff-NN
+gh pr create --base main --head docs/handoff-NN --title "docs: record issue NN handoff — <outcome>" --body "…"
 ```
 
-The body says `Refs LOO-NN` — **not** `Closes`: the issue is already Done and a
-docs PR has no issue of its own (see `status.md` 未完成事項 for the standing
-policy gap). List what the record covers and note that `smoke`/`rust` are
-docs-only. Report the PR URL. When the user says it merged, run steps 1–2 for
-`docs/loo-NN-handoff` (no packaging needed).
+Keep the Linear identifier (`LOO-NN`) **out of the branch name and the PR
+title, and never pair it with a magic word** (`Closes`, `Fixes`, `Refs`, …)
+in the body. Any of those links the PR to the issue, and Linear's GitHub
+automation then drags the already-Done issue back to `In Progress` when the
+PR opens — with `Refs` it never comes back on merge (this happened to LOO-32
+and LOO-33). In the body write it as plain text, e.g. "records the LOO-NN
+merge"; the docs PR has no issue of its own (see `status.md` 未完成事項 for
+the standing policy gap). List what the record covers and note that
+`smoke`/`rust` are docs-only.
+
+Right after `gh pr create`, `get_issue LOO-NN` through the Linear connector.
+If its state is anything but `Done`, set it back to `Done` with `save_issue`
+and say so — the plain-text mention is believed not to link, and this check is
+what proves it each time. Report the PR URL. When the user says it merged,
+run steps 1–2 for `docs/handoff-NN` (no packaging needed) and check the
+issue state once more.
 
 ## If CI sticks
 
