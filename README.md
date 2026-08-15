@@ -292,14 +292,21 @@ Terminal.app launch is available, and it is handed to the CLI in each Slot so th
 the tools it shells out to are found as well. When a Provider is unavailable, its
 `Executable path` section lists the directories that were actually searched.
 
-A Slot otherwise inherits the App's environment, with one exception: the Claude
-Slot does not receive `CLAUDE_CODE_CHILD_SESSION`. Claude Code sets that marker
-on processes it starts, and a `claude` CLI that sees it treats itself as a child
-session and stops saving its transcript — so an App launched from a Claude Code
-session would hand its Claude Slot a CLI that silently keeps no history, and
-Continue would later reconnect to a conversation missing everything said through
-the App. The variable is removed rather than blanked, only for the Claude Slot,
-and every other variable is passed through untouched.
+A Slot otherwise inherits the App's environment, with two adjustments. First,
+the Claude Slot does not receive `CLAUDE_CODE_CHILD_SESSION`. Claude Code sets
+that marker on processes it starts, and a `claude` CLI that sees it treats itself
+as a child session and stops saving its transcript — so an App launched from a
+Claude Code session would hand its Claude Slot a CLI that silently keeps no
+history, and Continue would later reconnect to a conversation missing everything
+said through the App. The variable is removed rather than blanked, only for the
+Claude Slot. Second, every Slot is guaranteed `TERM`, `COLORTERM`, and `LANG`.
+The same bare launchd environment that hides the CLIs also carries none of the
+three, and a CLI that sees no terminal capabilities may switch colour and bold
+off entirely — Claude Code did exactly that, leaving its menus with no visible
+selection. When one is missing it is filled in with `xterm-256color`,
+`truecolor`, or `en_US.UTF-8` respectively; a value that is already present, from
+an App started in a terminal or however else, is always kept as it is. Every
+other variable is passed through untouched.
 
 Both runtimes accept only the fixed provider commands documented by the UI.
 They reject relative, missing, file, and filesystem-root base workspaces. New
