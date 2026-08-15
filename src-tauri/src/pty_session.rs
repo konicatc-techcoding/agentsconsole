@@ -23,6 +23,18 @@ const SLOT_IDS: [&str; 4] = ["slot-1", "slot-2", "slot-3", "slot-4"];
 // child session, and silently stops saving its transcript — Continue then
 // reconnects to a conversation that has been quietly losing its tail.
 const CLAUDE_CHILD_SESSION_MARKER: &str = "CLAUDE_CODE_CHILD_SESSION";
+// launchd starts a Finder-launched App with a bare environment — no `TERM`,
+// `COLORTERM`, or `LANG` — and portable-pty only fills in `SHELL`, so the CLI
+// in a Slot would otherwise see no terminal capabilities at all. Claude Code
+// then decides through `supports-color` that colour is unavailable and drops
+// colour and bold both, which is why its menus lost their highlight while
+// Codex, which never asks, carried on. These are filled in only when missing,
+// so an App started from a terminal hands its own values through untouched.
+const TERMINAL_ENVIRONMENT_DEFAULTS: [(&str, &str); 3] = [
+    ("TERM", "xterm-256color"),
+    ("COLORTERM", "truecolor"),
+    ("LANG", "en_US.UTF-8"),
+];
 const STOP_GRACE_PERIOD: Duration = Duration::from_millis(500);
 static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -322,6 +334,17 @@ fn apply_environment_removals(command: &mut CommandBuilder, removed_environment:
     }
 }
 
+// A default, not an override: `CommandBuilder::new` already carries the App's
+// environment, so a variable that is present — whatever its value — is the
+// user's own and stays as it is. Only an absent one is filled in.
+fn apply_terminal_environment_defaults(command: &mut CommandBuilder) {
+    for (name, value) in TERMINAL_ENVIRONMENT_DEFAULTS {
+        if command.get_env(name).is_none() {
+            command.env(name, value);
+        }
+    }
+}
+
 // The CLI needs the same PATH the App searched, or it starts and then fails
 // later, obscurely, the first time it reaches for git or node.
 fn apply_search_path(command: &mut CommandBuilder, search_path: &OsStr) {
@@ -353,6 +376,7 @@ impl PtyAdapter for SystemPtyAdapter {
         command.args(arguments);
         command.cwd(workspace);
         apply_environment_removals(&mut command, removed_environment);
+        apply_terminal_environment_defaults(&mut command);
         apply_search_path(&mut command, search_path);
         let (reader, writer, child) = prepare_then_spawn(
             || {
@@ -1238,6 +1262,106 @@ mod tests {
         assert_eq!(
             command.get_env("PATH").and_then(|value| value.to_str()),
             Some("/usr/bin")
+        );
+    }
+
+    fn command_env(command: &CommandBuilder, name: &str) -> Option<String> {
+        command
+            .get_env(name)
+            .and_then(|value| value.to_str())
+            .map(str::to_string)
+    }
+
+    // The builder starts from the test process environment, which may or may
+    // not carry these already, so each test states its own starting point.
+    #[test]
+    fn missing_terminal_environment_is_filled_with_defaults() {
+        let mut command = CommandBuilder::new("claude");
+        command.env_remove("TERM");
+        command.env_remove("COLORTERM");
+        command.env_remove("LANG");
+        command.env("PATH", "/usr/bin");
+
+        apply_terminal_environment_defaults(&mut command);
+
+        assert_eq!(
+            command_env(&command, "TERM").as_deref(),
+            Some("xterm-256color")
+        );
+        assert_eq!(
+            command_env(&command, "COLORTERM").as_deref(),
+            Some("truecolor")
+        );
+        assert_eq!(
+            command_env(&command, "LANG").as_deref(),
+            Some("en_US.UTF-8")
+        );
+        assert_eq!(command_env(&command, "PATH").as_deref(), Some("/usr/bin"));
+    }
+
+    #[test]
+    fn existing_terminal_environment_is_kept() {
+        let mut command = CommandBuilder::new("codex");
+        command.env("TERM", "screen-256color");
+        command.env("COLORTERM", "24bit");
+        command.env("LANG", "zh_TW.UTF-8");
+
+        apply_terminal_environment_defaults(&mut command);
+
+        assert_eq!(
+            command_env(&command, "TERM").as_deref(),
+            Some("screen-256color")
+        );
+        assert_eq!(command_env(&command, "COLORTERM").as_deref(), Some("24bit"));
+        assert_eq!(
+            command_env(&command, "LANG").as_deref(),
+            Some("zh_TW.UTF-8")
+        );
+    }
+
+    // Each variable is judged on its own: one present and two absent means one
+    // kept and two filled, not all-or-nothing.
+    #[test]
+    fn terminal_environment_defaults_are_decided_per_variable() {
+        let mut command = CommandBuilder::new("hermes");
+        command.env("TERM", "vt100");
+        command.env_remove("COLORTERM");
+        command.env_remove("LANG");
+
+        apply_terminal_environment_defaults(&mut command);
+
+        assert_eq!(command_env(&command, "TERM").as_deref(), Some("vt100"));
+        assert_eq!(
+            command_env(&command, "COLORTERM").as_deref(),
+            Some("truecolor")
+        );
+        assert_eq!(
+            command_env(&command, "LANG").as_deref(),
+            Some("en_US.UTF-8")
+        );
+    }
+
+    // The three steps run in this order in `SystemPtyAdapter::spawn`; the
+    // defaults must neither bring the marker back nor disturb the search path.
+    #[test]
+    fn terminal_environment_defaults_leave_removal_and_search_path_alone() {
+        let mut command = CommandBuilder::new("claude");
+        command.env(CLAUDE_CHILD_SESSION_MARKER, "1");
+        command.env_remove("TERM");
+        command.env("PATH", "/usr/bin");
+
+        apply_environment_removals(&mut command, removed_environment("claude"));
+        apply_terminal_environment_defaults(&mut command);
+        apply_search_path(&mut command, OsStr::new("/tools:/usr/bin"));
+
+        assert!(command.get_env(CLAUDE_CHILD_SESSION_MARKER).is_none());
+        assert_eq!(
+            command_env(&command, "TERM").as_deref(),
+            Some("xterm-256color")
+        );
+        assert_eq!(
+            command_env(&command, "PATH").as_deref(),
+            Some("/tools:/usr/bin")
         );
     }
 
