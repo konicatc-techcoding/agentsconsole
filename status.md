@@ -1,20 +1,21 @@
 # AgentOS Console — 工作交接狀態
 
-最後更新：2026-08-16
+最後更新：2026-08-19
 
 ## 下次對話直接使用
 
 ```text
 請先讀取 status.md。LOO-12 至 LOO-33 已依序合併，之後 PR #50（切換介面
 風格 + styles.css token 化，無 Linear issue，來自
-design_handoff_console_restyle/ 的設計交接）也已合併，最新基線為 740ee61，
-Linear 的 agent-ready 佇列為空。App 已打包並部署於
-/Volumes/OWC1M2/AgentOSConsole/（2026-08-16 更新為 740ee61，含 Header 的
-Style 主題／圓角切換），從 Finder 點開即可正常使用。沒有功能性缺陷；唯一
-的未完成事項是 documentation-only PR 是否豁免 Closes LOO-NNN 這個流程
-決定，已被推遲三次。搜尋有兩項已知的 xterm 上游限制且決定不修。下一步
-執行 /finn-spec；候選見「後續候選」（第 7 項是交接包裡尚未實作的完整方角
-改版）。
+design_handoff_console_restyle/ 的設計交接）與 PR #52（修正打包版從沒有
+圖示，使用者提供來源圖）也已合併，最新基線為 77c4d29，Linear 的
+agent-ready 佇列為空。App 已打包並部署於 /Volumes/OWC1M2/AgentOSConsole/
+（2026-08-19 更新為 77c4d29，含 Header 的 Style 主題／圓角切換，且是
+**第一個有 App icon 的版本**），從 Finder 點開即可正常使用。沒有功能性
+缺陷；唯一的未完成事項是 documentation-only PR 是否豁免 Closes LOO-NNN
+這個流程決定，已被推遲三次。搜尋有兩項已知的 xterm 上游限制且決定不修。
+下一步執行 /finn-spec；候選見「後續候選」（App icon 已完成移除；第 7 項
+是交接包裡尚未實作的完整方角改版）。
 ```
 
 ## 未完成事項
@@ -49,7 +50,9 @@ LOO-23 至 LOO-31 的實機驗證均已完成，無遺留項目。先前列在�
 控制：三組色彩主題（Blueprint／Graphite／Daylight）× 三種圓角（Square／
 Soft／Round），寫在 `<html>` 的 `data-theme`／`data-radius` 並存
 localStorage；`styles.css` 的顏色與圓角全面改用 `themes.css` 的 CSS 變數，
-xterm 主題跟著 `data-theme` 即時換色。終端邊框的注意力光暈自 LOO-29 起
+xterm 主題跟著 `data-theme` 即時換色。PR #52 修正打包版 `.app` 一直沒有
+圖示的缺陷（`tauri.conf.json` 缺 `bundle.icon`），Finder／Dock 現在顯示
+正式圖示。終端邊框的注意力光暈自 LOO-29 起
 只標記新輸出，session 結束改由 Header 標記。CI 有 `smoke` 與 `rust` 兩個 required
 check，快取已納入 rustc 版本，`cargo test` 帶 `--locked`。Finn-loop 的
 finn-spec／finn-build／finn-review 三個 skill 安裝於 `.claude/skills`，綁定
@@ -97,11 +100,13 @@ LOO-23 加入每格終端的 scrollback 搜尋，但合併後即發現完全失�
   `status.md` 為共用追蹤檔案，任一邊的修改合併後都會影響另一邊；同一個
   分支無法同時在兩個 worktree checkout，切換開發環境時先合併回 `main`，
   再於另一個 worktree `git pull`。
-- 最新合併基線：`740ee61 feat: add appearance switching and tokenize styles.css colours (#50)`
-- PR #50 沒有 Linear issue（設計交接直接指示實作，非 `/finn-spec` 產出）；
-  規格來源 `design_handoff_console_restyle/` 留在 Claude Code worktree，
-  untracked、不入版控
-- 前一個合併基線：`eaa2e67 fix: give each Slot's CLI TERM, COLORTERM, and LANG when the App has none (#47)`
+- 最新合併基線：`77c4d29 fix: give the packaged App a real icon (#52)`
+- PR #52 沒有 Linear issue（使用者直接指示套用圖示，非 `/finn-spec` 產出）
+- 前一個合併基線：`740ee61 feat: add appearance switching and tokenize styles.css colours (#50)`
+- PR #50 也沒有 Linear issue（設計交接直接指示實作，非 `/finn-spec` 產出）；
+  規格來源 `design_handoff_console_restyle/` 已從 Claude Code worktree 刪除
+  （原為 untracked、不入版控，任務完成後使用者要求移除）
+- 再前一個合併基線：`eaa2e67 fix: give each Slot's CLI TERM, COLORTERM, and LANG when the App has none (#47)`
 - Finn-loop：`.claude/skills` 已安裝 finn-spec／finn-build／finn-review，
   以及 2026-08-15 新增的 finn-handoff（合併後的收尾：清分支、打包部署、
   更新本檔、開 handoff PR），綁定 Linear team `LOO`；GitHub labels `loop-approved`、
@@ -111,7 +116,8 @@ LOO-23 加入每格終端的 scrollback 搜尋，但合併後即發現完全失�
   `strict` 為 true，即合併前分支必須為最新
 - 目前 Linear issue：無；下一步使用 `/finn-spec` 建立新規格
 - 打包產物：`/Volumes/OWC1M2/AgentOSConsole/`，頂層為使用中的
-  `AgentOS Console.app`（目前為 `740ee61`），`builds/` 存歷次版本，
+  `AgentOS Console.app`（目前為 `77c4d29`，第一個有 App icon 的版本），
+  `builds/` 存歷次版本，
   `BUILDS.md` 記錄各版對應的 commit。無 updater，更新須重新 build 後以
   `ditto` 覆蓋——**用 `ditto` 而非 `cp -R`**，後者可能破壞 app bundle 的簽章
 - 最近完成的 Linear issue：`LOO-33 為 Slot 內的 CLI 補上缺失的 TERM、COLORTERM 與 LANG，修正打包版 Claude 選單無高亮`
@@ -1433,7 +1439,52 @@ issue。交接資料夾留在工作樹、不入版控。
   用這招驗證部署**，`strings` 只對 Rust 側字面值有效。
 - 分支收尾：本地與遠端 `claude/console-theme-switching` 均已刪除，兩個
   worktree 皆與 `origin/main`（`740ee61`）同步；Claude Code worktree 僅餘
-  untracked 的 `design_handoff_console_restyle/`。
+  untracked 的 `design_handoff_console_restyle/`。之後使用者要求直接刪除
+  這份交接資料，已移至 `~/.Trash`（非 `rm -rf`，可從垃圾桶救回）。
+
+## App icon（PR #52）
+
+**根因**：`tauri.conf.json` 的 `bundle` 從 LOO-7 建立 Tauri Foundation 起
+就沒有 `icon` 欄位。`src-tauri/icons/` 雖然一直有 scaffold 留下的
+`icon.icns`／`icon.png`，但 macOS 打包在沒有明確 `bundle.icon` 時完全不帶
+圖示——檢查歷次部署的 `.app` 都只有 `Contents/MacOS` 與 `Info.plist`，
+沒有 `Contents/Resources`，`Info.plist` 也沒有 `CFBundleIconFile`。這正是
+「後續候選」原第 1 項的根因；過去誤以為是「沒放 icon 檔」，其實檔案在，
+只是沒被引用，Finder／Dock 因此顯示通用文件圖示。
+
+**修法**：使用者提供 `~/Downloads/export/` 內 1024px、含透明通道的來源圖
+（`AICLI-icon-1024.png`），以 `npx tauri icon <source> --output
+src-tauri/icons` 產出完整圖示集；該指令同時會產 iOS／Android／Windows 一整
+組，因為 `bundle.targets` 只有 `["app"]`，全數刪除只留 macOS 五個檔案
+（`icon.icns`、`icon.png`、`32x32.png`、`128x128.png`、`128x128@2x.png`）。
+`tauri.conf.json` 的 `bundle.icon` 明確列出前四者路徑。
+
+**驗證方式**：先用建置產物（非正式部署那份）重建一次，確認
+`Contents/Resources/icon.icns` 存在且 `Info.plist` 有
+`CFBundleIconFile = icon.icns`；把 `.icns` 用 `sips -s format png` 轉回
+PNG 檢視，經過 macOS squircle 遮罩後與來源圖一致，才進入正式部署。這個
+「先用建置產物本身、不碰正式部署副本」的做法，是為了在確認視覺結果前不
+讓未合併變更影響到 `/Volumes/OWC1M2/AgentOSConsole/` 目前使用中的版本。
+
+## App icon 驗證結果
+
+- GitHub：PR <https://github.com/konicatc-techcoding/agentsconsole/pull/52>
+  已合併（merge commit `77c4d29`），`smoke` 與 `rust` 皆 `SUCCESS`；無
+  Linear issue，由人工判斷合併
+- 變更範圍：`src-tauri/tauri.conf.json` 修改，`src-tauri/icons/icon.icns`／
+  `icon.png` 修改，`32x32.png`／`128x128.png`／`128x128@2x.png` 新增；無
+  Rust 或前端原始碼變更，`smoke`／`rust` 兩個 required check 涵蓋的程式碼
+  路徑其實沒動到，綠燈只代表沒有連帶破壞
+- 未跑 `npm test` 或 `cargo test`：這次異動只有設定檔與二進位圖示資產，
+  沒有任何 `.ts`／`.tsx`／`.rs` 變更
+- 打包：2026-08-19 13:45 從 `main` 的 `77c4d29` 建置並以 `ditto` 部署至
+  `/Volumes/OWC1M2/AgentOSConsole/` 頂層，存檔於 `builds/2026-08-19-77c4d29/`，
+  `BUILDS.md` 已記錄。建置沿用既有快取，Rust 編譯 21 秒；大小 11 MB
+  （比前一版小 1 MB，屬預期，來源圖示的中介產物本來就比 scaffold 版小）。
+  三份 binary（建置來源、頂層、存檔）md5 一致，且 `Info.plist` 的
+  `CFBundleIconFile` 與 `Contents/Resources/icon.icns` 均已確認存在
+- 分支收尾：本地與遠端 `claude/app-icon` 均已刪除，兩個 worktree 皆與
+  `origin/main`（`77c4d29`）同步
 
 ## Continue session 的除錯記錄
 
@@ -1512,34 +1563,33 @@ env -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_CODE_SESSION_ID \
 
 ## 後續候選
 
-依價值密度排序，尚未建立 issue：
+依價值密度排序，尚未建立 issue。原第 1 項「App icon」已由 PR #52 完成
+（見「App icon」章節），故此處移除、以下重新編號：
 
-1. **App icon** — bundle 內只有 `Info.plist` 與主執行檔，沒有 icon 檔，Finder
-   與 Dock 顯示通用白色文件圖示。現在 App 已是日常使用的工具，這件事每天都
-   看得到。範圍小、與功能無關。
-2. **持久化** — Session 名稱、Sidebar 收合、Slot view 選擇與終端字級目前都只
+1. **持久化** — Session 名稱、Sidebar 收合、Slot view 選擇與終端字級目前都只
    在記憶體。要做就一次把四項納入同一次 `console-layout.json` schema v2 升級；
    Rust struct 有 `deny_unknown_fields`，需處理舊檔遷移。
-3. **`App.tsx` 拆分** — 已超過 2000 行。**不建議當成獨立 issue**：純重構寫不出
+2. **`App.tsx` 拆分** — 已超過 2000 行。**不建議當成獨立 issue**：純重構寫不出
    可觀察的 AC，而 `finn-review` 需要對照完整 diff 判斷是否越界，大型搬移正是
    自動審查最不可靠的場景。建議在後續功能開發時以小塊順手切出。
-4. **Header 注意力小圓點的視覺強度** — LOO-29 的 NG-1 刻意沒動
+3. **Header 注意力小圓點的視覺強度** — LOO-29 的 NG-1 刻意沒動
    `.slot-view-attention*`。終端邊框既然已收斂成只標記新輸出，Header 現在是
    session 結束的唯一提示來源，6px 圓點夠不夠用值得實機再看一次。
-5. **其他三家 CLI 的父 session 標記** — LOO-30 的 NG-2 刻意沒查。hermes、
+4. **其他三家 CLI 的父 session 標記** — LOO-30 的 NG-2 刻意沒查。hermes、
    codex、antigravity 是否也有類似的「偵測到父 session 就改變行為」機制未知。
    目前沒有任何症狀，屬預防性調查，優先度低。
-6. **遠端分支清理** — 遠端仍有 42 個已合併的歷史分支（不含 `main`，即
+5. **遠端分支清理** — 遠端仍有 42 個已合併的歷史分支（不含 `main`，即
    LOO-5 至 LOO-31 的工作分支與歷次 docs handoff）；LOO-32 的分支已於
    2026-08-07 隨收尾刪除。本機維持只剩兩個 worktree 各自佔用的分支。
    屬雜務，不需佔用 Finn-loop 排程。
-7. **交接包 README 描述的完整方角改版尚未實作** — PR #50 只做了
-   `THEME_SWITCHING.md` 的範圍（主題切換 + token 化）。
-   `design_handoff_console_restyle/README.md` 另外描述 header 42px、slot
-   header 30px 的密度、1px hairline 網格（console grid `gap: 1px` 以邊框當
-   分隔）、狀態方點與 45° 菱形注意力標記、workspace 列與 status bar 等版面
-   改動，這些都還沒做。若要做，token 已就位，只需改 `styles.css` 與少量
-   class；`Agent Console Redesign.dc.html` 是可互動的參考稿。
+6. **交接包 README 描述的完整方角改版尚未實作** — PR #50 只做了
+   `THEME_SWITCHING.md` 的範圍（主題切換 + token 化）。原始交接包
+   `design_handoff_console_restyle/`（`README.md` 描述 header 42px、slot
+   header 30px 的密度、1px hairline 網格、狀態方點與 45° 菱形注意力標記、
+   workspace 列與 status bar 等版面改動；`Agent Console Redesign.dc.html`
+   是可互動的參考稿）已於 2026-08-19 應使用者要求從本機刪除（移至
+   `~/.Trash`，未進版控故 git 歷史也沒有）。若之後要做，token 已就位，
+   只需改 `styles.css` 與少量 class，但視覺參考需要使用者重新提供。
 
 ## 本機預覽方式
 
