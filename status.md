@@ -1,21 +1,21 @@
 # AgentOS Console — 工作交接狀態
 
-最後更新：2026-08-19
+最後更新：2026-08-20
 
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md。LOO-12 至 LOO-33 已依序合併，之後 PR #50（切換介面
-風格 + styles.css token 化，無 Linear issue，來自
-design_handoff_console_restyle/ 的設計交接）與 PR #52（修正打包版從沒有
-圖示，使用者提供來源圖）也已合併，最新基線為 77c4d29，Linear 的
-agent-ready 佇列為空。App 已打包並部署於 /Volumes/OWC1M2/AgentOSConsole/
-（2026-08-19 更新為 77c4d29，含 Header 的 Style 主題／圓角切換，且是
-**第一個有 App icon 的版本**），從 Finder 點開即可正常使用。沒有功能性
-缺陷；唯一的未完成事項是 documentation-only PR 是否豁免 Closes LOO-NNN
-這個流程決定，已被推遲三次。搜尋有兩項已知的 xterm 上游限制且決定不修。
-下一步執行 /finn-spec；候選見「後續候選」（App icon 已完成移除；第 7 項
-是交接包裡尚未實作的完整方角改版）。
+請先讀取 status.md。LOO-12 至 LOO-34 已依序合併；LOO-33 與 LOO-34 之間另有
+兩個沒有 Linear issue 的 PR：PR #50（切換介面風格 + styles.css token 化，
+來自 design_handoff_console_restyle/ 的設計交接）與 PR #52（修正打包版從
+沒有圖示，使用者提供來源圖）。最新基線為 dee14ab，Linear 的 agent-ready
+佇列為空。App 已打包並部署於 /Volumes/OWC1M2/AgentOSConsole/
+（2026-08-20 更新為 dee14ab，含 LOO-34 的 Continue 改由 App 挑好對話再跑
+claude --resume），從 Finder 點開即可正常使用。沒有功能性缺陷；唯一的
+未完成事項是 documentation-only PR 是否豁免 Closes LOO-NNN 這個流程決定，
+已被推遲三次。搜尋有兩項已知的 xterm 上游限制且決定不修。
+下一步執行 /finn-spec；候選見「後續候選」（第 6 項是交接包裡尚未實作的
+完整方角改版）。
 ```
 
 ## 未完成事項
@@ -52,8 +52,11 @@ Soft／Round），寫在 `<html>` 的 `data-theme`／`data-radius` 並存
 localStorage；`styles.css` 的顏色與圓角全面改用 `themes.css` 的 CSS 變數，
 xterm 主題跟著 `data-theme` 即時換色。PR #52 修正打包版 `.app` 一直沒有
 圖示的缺陷（`tauri.conf.json` 缺 `bundle.icon`），Finder／Dock 現在顯示
-正式圖示。終端邊框的注意力光暈自 LOO-29 起
-只標記新輸出，session 結束改由 Header 標記。CI 有 `smoke` 與 `rust` 兩個 required
+正式圖示。LOO-34 讓 Claude slot 的 Continue 不再交給 `claude --continue`
+自己挑對話：App 由 workspace 推出 CLI 的 project 目錄，挑出最新且程序未在
+執行中的 transcript，再以 `claude --resume <id>` 啟動，Slot 狀態列以 `↩`
+標出接的是哪一個；背景 agent 的對話自此接得到。終端邊框的注意力光暈自
+LOO-29 起只標記新輸出，session 結束改由 Header 標記。CI 有 `smoke` 與 `rust` 兩個 required
 check，快取已納入 rustc 版本，`cargo test` 帶 `--locked`。Finn-loop 的
 finn-spec／finn-build／finn-review 三個 skill 安裝於 `.claude/skills`，綁定
 Linear team `LOO`；LOO-33 收尾時新增第四個 skill `finn-handoff`，把合併後的
@@ -100,13 +103,14 @@ LOO-23 加入每格終端的 scrollback 搜尋，但合併後即發現完全失�
   `status.md` 為共用追蹤檔案，任一邊的修改合併後都會影響另一邊；同一個
   分支無法同時在兩個 worktree checkout，切換開發環境時先合併回 `main`，
   再於另一個 worktree `git pull`。
-- 最新合併基線：`77c4d29 fix: give the packaged App a real icon (#52)`
+- 最新合併基線：`dee14ab feat: let the App pick which Claude conversation a Continue resumes (#54)`
+- 前一個合併基線：`77c4d29 fix: give the packaged App a real icon (#52)`
 - PR #52 沒有 Linear issue（使用者直接指示套用圖示，非 `/finn-spec` 產出）
-- 前一個合併基線：`740ee61 feat: add appearance switching and tokenize styles.css colours (#50)`
+- 再前一個合併基線：`740ee61 feat: add appearance switching and tokenize styles.css colours (#50)`
 - PR #50 也沒有 Linear issue（設計交接直接指示實作，非 `/finn-spec` 產出）；
   規格來源 `design_handoff_console_restyle/` 已從 Claude Code worktree 刪除
   （原為 untracked、不入版控，任務完成後使用者要求移除）
-- 再前一個合併基線：`eaa2e67 fix: give each Slot's CLI TERM, COLORTERM, and LANG when the App has none (#47)`
+- 更早的合併基線：`eaa2e67 fix: give each Slot's CLI TERM, COLORTERM, and LANG when the App has none (#47)`
 - Finn-loop：`.claude/skills` 已安裝 finn-spec／finn-build／finn-review，
   以及 2026-08-15 新增的 finn-handoff（合併後的收尾：清分支、打包部署、
   更新本檔、開 handoff PR），綁定 Linear team `LOO`；GitHub labels `loop-approved`、
@@ -116,11 +120,15 @@ LOO-23 加入每格終端的 scrollback 搜尋，但合併後即發現完全失�
   `strict` 為 true，即合併前分支必須為最新
 - 目前 Linear issue：無；下一步使用 `/finn-spec` 建立新規格
 - 打包產物：`/Volumes/OWC1M2/AgentOSConsole/`，頂層為使用中的
-  `AgentOS Console.app`（目前為 `77c4d29`，第一個有 App icon 的版本），
+  `AgentOS Console.app`（目前為 `dee14ab`），
   `builds/` 存歷次版本，
   `BUILDS.md` 記錄各版對應的 commit。無 updater，更新須重新 build 後以
   `ditto` 覆蓋——**用 `ditto` 而非 `cp -R`**，後者可能破壞 app bundle 的簽章
-- 最近完成的 Linear issue：`LOO-33 為 Slot 內的 CLI 補上缺失的 TERM、COLORTERM 與 LANG，修正打包版 Claude 選單無高亮`
+- 最近完成的 Linear issue：`LOO-34 Claude 的 Continue session 改用 --resume <session-id>，由 App 決定要接哪一個`
+- LOO-34 URL：<https://linear.app/loopent/issue/LOO-34/claude-的-continue-session-改用-resume-session-id由-app-決定要接哪一個>
+- LOO-34 狀態：`Done`；PR <https://github.com/konicatc-techcoding/agentsconsole/pull/54>，
+  merge commit `dee14ab`，review `loop-approved`，`smoke` 與 `rust` 皆 `SUCCESS`
+- 前一個：`LOO-33 為 Slot 內的 CLI 補上缺失的 TERM、COLORTERM 與 LANG，修正打包版 Claude 選單無高亮`
 - LOO-33 URL：<https://linear.app/loopent/issue/LOO-33/為-slot-內的-cli-補上缺失的-termcolorterm-與-lang修正打包版-claude-選單無高亮>
 - LOO-33 狀態：`Done`；PR <https://github.com/konicatc-techcoding/agentsconsole/pull/47>，
   merge commit `eaa2e67`，review `loop-approved`，`smoke` 與 `rust` 皆 `SUCCESS`
@@ -1362,6 +1370,67 @@ session 標記、LOO-31 是 `PATH`，這次是終端能力變數。
 - 分支收尾：本地與遠端 `LOO-33-slot-terminal-env-defaults` 均已刪除，兩個
   worktree 皆與 `origin/main`（`eaa2e67`）同步且工作樹乾淨。
 
+## LOO-34 Continue 改由 App 挑對話再 `claude --resume`
+
+LOO-34 已完成並透過 PR #54 合併，全程走 `/finn-spec` → `/finn-build` →
+`/finn-review` 流程。起點是使用者回報：在一個 session 打 `/stop` 之後，
+Continue 就回 `No conversation found to continue`。
+
+**根因**：`claude --continue` 自己挑對話，規則是
+`if (E.sessionKind) return false`（讀 CLI 2.1.237 的二進位確認）。背景 agent
+的 transcript 每一筆都帶 `"sessionKind":"bg"`，所以永遠被跳過。`/stop` 不是
+肇因——它的說明是 "transcript and worktree are kept"，檔案確實保留，標記也
+不會因為停止而消失。由此衍生兩個症狀：workspace 只有背景對話時直接報找不到；
+workspace 混有非背景對話時**靜悄悄接到舊的那筆**，畫面上沒有任何線索。
+對照組是 `/resume`，它只濾掉 `sessionKind` 為 `daemon`／`daemon-worker`，
+`bg` 列得出來——問題出在 `--continue` 這個旗標的選擇，不是 CLI 沒能力接。
+
+**修法**（新增 `src-tauri/src/claude_resume.rs` 與
+`backend/app/claude_resume.py`）：
+
+- 由 workspace 路徑推出 CLI 的 project 目錄。`project_slug` 重現 CLI 的
+  `replace(/[^a-zA-Z0-9]/g, "-")`；超過 200 字元時 CLI 會截斷再接自己的
+  hash，那種情況回 `None` 不猜
+- 取 mtime 最新、且 transcript 自身記錄的 `cwd` 與該 workspace 相符的那筆。
+  **slug 是有損的**（`/`、`_`、空白都變 `-`，本機真的有一組撞名），所以歸屬
+  由 `cwd` 決定而不是目錄名；`cwd` 不在第一筆記錄上（實測落在第 4 與第 7
+  行），因此掃描前 64 行，讀不到就跳過而不假設相符
+- 跳過程序仍存活的 session（`sessions/*.json` 配 pid，signal 0 判定，
+  `EPERM` 算活著）。**每次 Continue 重算、不快取**，因為停掉的背景 session
+  隨時可能從 Agent View 被重新拉起
+- 挑得出來就跑 `claude --resume <id>`；挑不出來退回原本的 `--continue`，
+  由 CLI 自己報「沒有東西可接」，行為與過去一致
+- `provider_command()` 改回傳
+  `ProviderCommand { executable, arguments, resumed_session_id }`，Slot 狀態列
+  在 `Continue` 標記後顯示 `↩ 3f2c1c05`，完整 id 在 hover 的 title
+- 其他三家不經過這條路：codex／hermes／antigravity 的固定參數與測試不變
+
+## LOO-34 驗證結果
+
+- Linear：LOO-34 為 `Done`
+- GitHub：PR #54 已合併（merge commit `dee14ab`），review `loop-approved`，
+  `smoke` 與 `rust` 皆 `SUCCESS`
+- 變更範圍：13 個檔案，+1210／−36。新增 `src-tauri/src/claude_resume.rs`、
+  `backend/app/claude_resume.py`、`backend/tests/test_claude_resume.py`；
+  另改 `launcher.rs`／`launcher.py`／`pty_session.rs`／`lib.rs`／
+  `TerminalSlot.tsx`／`types.ts`／`styles.css`／各自的測試與 `README.md`
+- 兩個驗收 workspace 以真實 `~/.claude`（唯讀）確認：
+  `~/ClaudeCodeCLI/PromptAgent` 解出 `26624ea6…`（`--continue` 完全跳過的
+  那筆）；`~/ClaudeCodeCLI` 解出 `3f2c1c05…`（8/20 09:50 的背景對話，而非
+  `--continue` 會接到的 8/19 16:51 `a13aa2d3…`）
+- **打包驗證有個會誤導人的陷阱，別重走**：`--resume` 剛好 8 bytes，arm64
+  release build 把它編成 `mov`／`movk` 立即值直接寫進指令，rodata 裡沒有
+  這串，`strings | grep -- --resume` 與逐位元組搜尋都會落空，看起來像功能
+  沒進去。反組譯在 `0x100215a60` 與 `0x10022e230` 兩處看到建出
+  `0x656d757365722d2d`（`"--resume"` 的小端）後 `str x8, [x0]`，確認無誤。
+  **驗證打包產物一律挑 9 bytes 以上的字面值**；本次用 `CLAUDE_CONFIG_DIR`，
+  部署版有、`77c4d29` 存檔版沒有
+- 打包：2026-08-20 11:46 已從 `dee14ab` 重新建置並以 `ditto` 部署至
+  `/Volumes/OWC1M2/AgentOSConsole/`，存檔於 `builds/2026-08-20-dee14ab/`，
+  `BUILDS.md` 已更新。沿用 APFS 映像既有快取，Rust 編譯 16.45 秒
+- 分支收尾：本地與遠端 `LOO-34-claude-resume-session` 均已刪除，兩個
+  worktree 皆與 `origin/main`（`dee14ab`）同步且工作樹乾淨
+
 ## 切換介面風格與 styles.css token 化（PR #50）
 
 這一輪**沒有走 Finn-loop**：規格來自設計交接包
@@ -1490,6 +1559,11 @@ PNG 檢視，經過 macOS squircle 遮罩後與來源圖一致，才進入正式
 
 2026-07-28 調查「Claude CLI 的 continue 不會帶入先前對話，其餘三家正常」。
 結論是 App 的環境繼承缺陷，記錄於此避免日後重複調查。
+
+**Continue 另有一個與本節無關的根因，見「LOO-34」章節。** 兩者要分清楚：
+本節是 transcript 根本沒被寫出來（App 傳了 `CLAUDE_CODE_CHILD_SESSION`
+下去，已由 LOO-30 修正）；LOO-34 是 transcript 明明存在，但 `--continue`
+自己把背景 agent 的對話跳過。遇到 Continue 的症狀先分辨是哪一種。
 
 **根因**：`portable-pty` 的 `CommandBuilder::new()` 以 `std::env::vars_os()`
 完整繼承父程序環境。當 App 由某個 Claude Code session 啟動時，
