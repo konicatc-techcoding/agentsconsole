@@ -9,6 +9,7 @@ import subprocess
 from pathlib import Path
 from typing import Literal, TypedDict
 
+from .claude_resume import resumable_session_id
 from .providers import PROVIDERS
 
 SessionMode = Literal["new", "continue"]
@@ -137,8 +138,19 @@ def validate_workspace(workspace_path: str) -> WorkspaceResult:
 
 
 def _provider_command(
-    provider_id: str, session_mode: SessionMode
-) -> tuple[str, ...]:
+    provider_id: str,
+    session_mode: SessionMode,
+    workspace: Path,
+    resumable=resumable_session_id,
+) -> tuple[tuple[str, ...], str | None]:
+    """Resolve a provider command and the Claude session it will resume.
+
+    Only Claude's Continue is decided here. The other three have no equivalent
+    of ``sessionKind`` and keep the fixed arguments they have always used, and
+    so does Claude whenever no resumable session can be identified — the CLI
+    then reports "nothing to continue" itself, exactly as it does today.
+    """
+
     modes = SESSION_COMMANDS.get(provider_id)
     if modes is None:
         raise LaunchError(
@@ -146,7 +158,13 @@ def _provider_command(
             code="unknown_provider",
             status_code=404,
         )
-    return modes[session_mode]
+    if provider_id != "claude" or session_mode != "continue":
+        return modes[session_mode], None
+
+    session_id = resumable(workspace)
+    if session_id is None:
+        return modes[session_mode], None
+    return ("claude", "--resume", session_id), session_id
 
 
 def _new_workspace(
@@ -216,7 +234,9 @@ def launch_provider(
     """Validate and launch a fixed provider command in Terminal.app."""
 
     base_workspace = _validated_workspace(workspace_path)
-    command = _provider_command(provider_id, session_mode)
+    # Web mode hands the session to Terminal.app and stops tracking it, so the
+    # chosen session id has nowhere to be shown; the embedded Slots report it.
+    command, _ = _provider_command(provider_id, session_mode, base_workspace)
     provider_command = PROVIDER_COMMANDS[provider_id]
     if shutil.which(provider_command) is None:
         raise LaunchError(

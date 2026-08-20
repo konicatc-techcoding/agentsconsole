@@ -431,6 +431,36 @@ describe("TerminalSlot", () => {
     expect(onExit).toHaveBeenCalledOnce();
   });
 
+  it("names the conversation a Continue resumed, and shows nothing when it did not", async () => {
+    const { runtime } = terminalRuntime();
+    const view = renderTerminal(runtime, {
+      session: {
+        ...session,
+        providerId: "claude",
+        sessionMode: "continue",
+        resumedSessionId: "3f2c1c05-77c3-4a5e-ace1-b5d3abfb0625",
+      },
+    });
+    await waitFor(() => expect(runtime.onPtyOutput).toHaveBeenCalledOnce());
+
+    const resumed = screen.getByText("↩ 3f2c1c05");
+    expect(resumed).toHaveAttribute(
+      "title",
+      "Resumed conversation 3f2c1c05-77c3-4a5e-ace1-b5d3abfb0625",
+    );
+
+    // A Continue that fell back to the CLI's own choice has nothing specific
+    // to name, so the Slot stays quiet rather than showing a blank badge.
+    view.rerender(
+      <TerminalSlot
+        {...view.props}
+        session={{ ...session, sessionMode: "continue" }}
+      />,
+    );
+    expect(screen.queryByText(/↩/)).not.toBeInTheDocument();
+    expect(screen.getByText("Continue")).toBeInTheDocument();
+  });
+
   it("searches its own scrollback without resizing the terminal", async () => {
     const { runtime } = terminalRuntime();
     const view = renderTerminal(runtime);

@@ -173,6 +173,13 @@ function terminalStatus(
   return phase.charAt(0).toUpperCase() + phase.slice(1);
 }
 
+// Session ids are UUIDs. The first group is what the CLI itself uses to name a
+// background conversation, and it is enough to tell two of them apart at a
+// glance; the full id stays in the title.
+function resumedSessionLabel(resumedSessionId: string): string {
+  return `↩ ${resumedSessionId.split("-")[0]}`;
+}
+
 export default function TerminalSlot({
   slotId,
   provider,
@@ -611,6 +618,14 @@ export default function TerminalSlot({
             <span>{provider.display_name}</span>
             <span title={session.workspacePath}>{session.workspacePath}</span>
             <span>{session.sessionMode === "new" ? "New" : "Continue"}</span>
+            {session.resumedSessionId && (
+              <span
+                className="terminal-resumed-session"
+                title={`Resumed conversation ${session.resumedSessionId}`}
+              >
+                {resumedSessionLabel(session.resumedSessionId)}
+              </span>
+            )}
           </>
         )}
         {error && (

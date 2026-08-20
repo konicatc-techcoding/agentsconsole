@@ -1,3 +1,4 @@
+mod claude_resume;
 mod console_layout;
 mod launcher;
 mod providers;

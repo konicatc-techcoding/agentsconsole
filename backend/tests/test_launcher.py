@@ -1,4 +1,5 @@
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -24,6 +25,53 @@ def test_new_and_continue_commands_are_fixed():
             "continue": ("agy", "--continue"),
         },
     }
+
+
+def _command(provider_id, session_mode, resumable, workspace="/workspace"):
+    return launcher._provider_command(
+        provider_id,
+        session_mode,
+        Path(workspace),
+        resumable=lambda _workspace: resumable,
+    )
+
+
+# The other three providers have no session-kind rule to work around, so their
+# commands stay fixed whether or not a Claude session could be found.
+@pytest.mark.parametrize("resumable", [None, "session-that-must-not-be-used"])
+@pytest.mark.parametrize(
+    ("provider_id", "session_mode", "expected"),
+    [
+        ("hermes", "continue", ("hermes", "--continue", "--no-restore-cwd")),
+        ("codex", "continue", ("codex", "resume", "--last")),
+        ("antigravity", "continue", ("agy", "--continue")),
+        ("claude", "new", ("claude",)),
+    ],
+)
+def test_only_claude_continue_consults_the_resumer(
+    provider_id, session_mode, expected, resumable
+):
+    assert _command(provider_id, session_mode, resumable) == (expected, None)
+
+
+def test_claude_continue_resumes_the_session_the_app_picked():
+    assert _command("claude", "continue", "3f2c1c05") == (
+        ("claude", "--resume", "3f2c1c05"),
+        "3f2c1c05",
+    )
+
+
+# Falling back rather than failing keeps the CLI's own "No conversation found
+# to continue" as the thing the user sees, exactly as before.
+def test_claude_continue_falls_back_when_no_session_can_be_identified():
+    assert _command("claude", "continue", None) == (("claude", "--continue"), None)
+
+
+def test_unknown_provider_is_rejected_before_any_session_lookup():
+    with pytest.raises(launcher.LaunchError) as error:
+        _command("other", "continue", "session")
+
+    assert error.value.code == "unknown_provider"
 
 
 @pytest.mark.parametrize("workspace_path", ["relative/path", "/"])

@@ -152,7 +152,15 @@ pub fn validate_workspace(workspace_path: &str) -> Result<WorkspaceResult, Comma
     })
 }
 
-pub(crate) fn provider_command(
+/// A resolved provider command, plus the Claude session it will resume.
+pub(crate) struct ProviderCommand {
+    pub(crate) executable: &'static str,
+    pub(crate) arguments: Vec<String>,
+    /// The session `--resume` was given, so a Slot can say which one it picked.
+    pub(crate) resumed_session_id: Option<String>,
+}
+
+fn fixed_command(
     provider_id: &str,
     session_mode: SessionMode,
 ) -> Result<(&'static str, &'static [&'static str]), CommandError> {
@@ -176,6 +184,51 @@ pub(crate) fn provider_command(
         }
     };
     Ok(command)
+}
+
+/// Resolve the command for a provider, choosing the Claude session to resume.
+///
+/// Only Claude's Continue is decided here. The other three have no equivalent
+/// of `sessionKind` and keep the fixed arguments they have always used, and so
+/// does Claude whenever no resumable session can be identified — the CLI then
+/// reports "nothing to continue" itself, exactly as it does today.
+pub(crate) fn provider_command_for(
+    provider_id: &str,
+    session_mode: SessionMode,
+    workspace: &Path,
+    resumable: impl Fn(&Path) -> Option<String>,
+) -> Result<ProviderCommand, CommandError> {
+    let (executable, fixed) = fixed_command(provider_id, session_mode)?;
+    let resumed_session_id = match (provider_id, session_mode) {
+        ("claude", SessionMode::Continue) => resumable(workspace),
+        _ => None,
+    };
+    let arguments = match &resumed_session_id {
+        Some(session_id) => vec![
+            executable.to_string(),
+            "--resume".to_string(),
+            session_id.clone(),
+        ],
+        None => fixed.iter().map(|argument| argument.to_string()).collect(),
+    };
+    Ok(ProviderCommand {
+        executable,
+        arguments,
+        resumed_session_id,
+    })
+}
+
+pub(crate) fn provider_command(
+    provider_id: &str,
+    session_mode: SessionMode,
+    workspace: &Path,
+) -> Result<ProviderCommand, CommandError> {
+    provider_command_for(
+        provider_id,
+        session_mode,
+        workspace,
+        crate::claude_resume::resumable_session_id,
+    )
 }
 
 pub(crate) fn new_workspace(
@@ -244,7 +297,7 @@ fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\"'\"'"))
 }
 
-fn shell_command(workspace: &Path, command: &[&str]) -> String {
+fn shell_command(workspace: &Path, command: &[String]) -> String {
     let workspace = shell_quote(&workspace.to_string_lossy());
     let command = command
         .iter()
@@ -264,9 +317,8 @@ where
     L: TerminalLauncher,
 {
     let base_workspace = validated_workspace(&request.workspace_path)?;
-    let (provider_executable, command) =
-        provider_command(&request.provider_id, request.session_mode)?;
-    if !executable_available(provider_executable) {
+    let command = provider_command(&request.provider_id, request.session_mode, &base_workspace)?;
+    if !executable_available(command.executable) {
         return Err(CommandError::new(
             "provider_unavailable",
             "CLI provider is no longer available in PATH",
@@ -279,7 +331,7 @@ where
         request.session_mode,
         request.new_folder.as_deref(),
     )?;
-    if let Err(error) = terminal.launch(&shell_command(&workspace, command)) {
+    if let Err(error) = terminal.launch(&shell_command(&workspace, &command.arguments)) {
         if workspace_created {
             return Err(CommandError::new(
                 &error.code,
@@ -372,26 +424,74 @@ mod tests {
         }
     }
 
+    fn command_for(
+        provider_id: &str,
+        session_mode: SessionMode,
+        resumable: Option<&str>,
+    ) -> ProviderCommand {
+        provider_command_for(provider_id, session_mode, Path::new("/workspace"), |_| {
+            resumable.map(str::to_string)
+        })
+        .unwrap()
+    }
+
+    // The other three providers have no session-kind rule to work around, so
+    // their commands stay fixed whether or not a Claude session could be found.
     #[test]
     fn fixed_commands_match_web_runtime() {
-        assert_eq!(
-            provider_command("hermes", SessionMode::Continue).unwrap().1,
-            ["hermes", "--continue", "--no-restore-cwd"]
-        );
-        assert_eq!(
-            provider_command("codex", SessionMode::Continue).unwrap().1,
-            ["codex", "resume", "--last"]
-        );
-        assert_eq!(
-            provider_command("claude", SessionMode::Continue).unwrap().1,
-            ["claude", "--continue"]
-        );
-        assert_eq!(
-            provider_command("antigravity", SessionMode::Continue)
-                .unwrap()
-                .1,
-            ["agy", "--continue"]
-        );
+        for resumable in [None, Some("session-that-must-not-be-used")] {
+            assert_eq!(
+                command_for("hermes", SessionMode::Continue, resumable).arguments,
+                ["hermes", "--continue", "--no-restore-cwd"]
+            );
+            assert_eq!(
+                command_for("codex", SessionMode::Continue, resumable).arguments,
+                ["codex", "resume", "--last"]
+            );
+            assert_eq!(
+                command_for("antigravity", SessionMode::Continue, resumable).arguments,
+                ["agy", "--continue"]
+            );
+            assert_eq!(
+                command_for("claude", SessionMode::New, resumable).arguments,
+                ["claude"]
+            );
+        }
+    }
+
+    #[test]
+    fn claude_continue_resumes_the_session_the_app_picked() {
+        let command = command_for("claude", SessionMode::Continue, Some("3f2c1c05"));
+
+        assert_eq!(command.arguments, ["claude", "--resume", "3f2c1c05"]);
+        assert_eq!(command.resumed_session_id.as_deref(), Some("3f2c1c05"));
+    }
+
+    // Falling back rather than failing keeps the CLI's own "No conversation
+    // found to continue" as the thing the user sees, exactly as before.
+    #[test]
+    fn claude_continue_falls_back_when_no_session_can_be_identified() {
+        let command = command_for("claude", SessionMode::Continue, None);
+
+        assert_eq!(command.arguments, ["claude", "--continue"]);
+        assert_eq!(command.resumed_session_id, None);
+    }
+
+    #[test]
+    fn a_resumed_session_id_is_quoted_like_any_other_argument() {
+        let workspace = temp_workspace();
+        let terminal = FakeTerminal {
+            calls: RefCell::new(vec![]),
+            failure: None,
+        };
+        let command = command_for("claude", SessionMode::Continue, Some("id with spaces"));
+
+        terminal
+            .launch(&shell_command(&workspace, &command.arguments))
+            .unwrap();
+
+        assert!(terminal.calls.borrow()[0].ends_with("exec claude --resume 'id with spaces'"));
+        fs::remove_dir_all(workspace).unwrap();
     }
 
     #[test]

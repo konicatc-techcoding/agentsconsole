@@ -95,6 +95,23 @@ session does not change the saved default workspace.
   for that provider, newest first. If there is no recent workspace, it falls
   back to the saved default.
 
+Which conversation a Continue reopens is the CLI's own business for three of
+the four Providers. Claude is the exception. Its `--continue` skips every
+transcript marked as a background agent's, so a workspace whose only
+conversation ran in the background reports that there is nothing to continue,
+and a workspace holding both kinds silently reopens an older foreground one
+instead. The App therefore picks the conversation itself and starts Claude with
+`--resume`: it derives the CLI's project directory from the workspace path,
+takes the most recently written transcript whose own recorded working directory
+matches that workspace, and skips any whose process is still running, since the
+CLI refuses to attach a second one. The directory name is lossy — every
+character outside `A–Z`, `a–z`, and `0–9` becomes `-`, so two workspaces can
+share a directory — which is why the recorded working directory, not the
+directory name, decides what belongs. Liveness is rechecked on every Continue,
+because a stopped background session can be restarted from the Agent View at any
+time. When no conversation can be identified this way, Claude falls back to
+plain `--continue` and reports the outcome itself, exactly as before.
+
 These recent paths identify workspaces, not native CLI session IDs. Web and
 Tauri keep separate preferences and do not synchronize:
 
@@ -209,6 +226,11 @@ in-memory only: `Refresh` preserves them, while an App reload clears them.
 Stopped, exited, and failed sessions retain their name for Start again; changing
 an inactive Slot's Provider clears it.
 
+A Slot that resumed a specific Claude conversation says so in its status bar,
+after the `Continue` marker: the conversation's id, shortened to its first
+group, with the full id on hover. A Continue that fell back to the CLI's own
+choice has no particular conversation to name and shows nothing there.
+
 The Tauri Header also shows the number of Starting, Running, or Stopping
 sessions and a matching `Stop All` action. Its confirmation dialog lists each
 active Slot's name, Provider, workspace, and phase. `已完成 — Stop All` attempts
@@ -279,7 +301,10 @@ The PTY remains exposed only through fixed typed Tauri commands. It accepts
 one of the fixed Slot IDs from Slot 1 through Slot 4, one of the four registered
 Providers, the existing New/Continue mode, a validated workspace, and terminal
 rows/columns. It does not accept an executable, shell command, custom arguments,
-environment settings, or permission-bypass flags. Each Slot can run at most one
+environment settings, or permission-bypass flags. The one argument that is not
+fixed, the session id Claude's Continue resumes, is chosen by the App from the
+CLI's own files; it cannot be supplied through the command. Each Slot can run at
+most one
 embedded session, for a maximum of four concurrent sessions. Input and output
 remain binary-safe, resize is supported, and stale or cross-Slot session IDs are
 rejected. Stop or app shutdown terminates the relevant PTY process trees.
