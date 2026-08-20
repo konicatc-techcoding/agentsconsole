@@ -1292,6 +1292,13 @@ details code {
   color: var(--text-3);
 }
 
+/* The workspace path is allowed to shrink before this does: which conversation
+   was resumed is the part of the line that cannot be guessed from elsewhere. */
+.terminal-resumed-session {
+  flex: 0 0 auto;
+  color: var(--text-3);
+}
+
 .terminal-phase-running {
   color: var(--ok);
 }

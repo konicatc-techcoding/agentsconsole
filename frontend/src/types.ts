@@ -93,6 +93,8 @@ export interface PtySession {
   providerId: ConsoleProviderId;
   workspacePath: string;
   sessionMode: SessionMode;
+  /** The Claude conversation this Slot resumed, when the App picked one. */
+  resumedSessionId?: string | null;
 }
 
 export interface PtyOutputEvent {

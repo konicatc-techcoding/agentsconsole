@@ -1,5 +1,5 @@
 use crate::launcher::{
-    new_workspace, provider_command, validated_workspace, CommandError, SessionMode,
+    new_workspace, provider_command_for, validated_workspace, CommandError, SessionMode,
 };
 use crate::providers::{resolve_executable, search_path_value};
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
@@ -82,6 +82,10 @@ pub struct PtySession {
     provider_id: String,
     workspace_path: String,
     session_mode: SessionMode,
+    /// The Claude session this Slot resumed, when the App picked one. `None`
+    /// for every other provider and whenever Continue fell back to the CLI's
+    /// own choice, which is the case the Slot has nothing specific to report.
+    resumed_session_id: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -416,10 +420,28 @@ struct ActiveSession {
     reader_thread: Mutex<Option<JoinHandle<()>>>,
 }
 
+/// Which Claude session a Continue in this workspace should resume.
+///
+/// Injected for the same reason the adapter and the resolver are: it reads the
+/// real `~/.claude`, and a test that reached it would be asserting on whatever
+/// conversations happen to exist on the machine running it.
+trait ResumableSessions: Send + Sync {
+    fn resumable(&self, workspace: &Path) -> Option<String>;
+}
+
+struct SystemResumableSessions;
+
+impl ResumableSessions for SystemResumableSessions {
+    fn resumable(&self, workspace: &Path) -> Option<String> {
+        crate::claude_resume::resumable_session_id(workspace)
+    }
+}
+
 struct EngineInner {
     active: Mutex<HashMap<String, Arc<ActiveSession>>>,
     adapter: Arc<dyn PtyAdapter>,
     resolver: Arc<dyn ExecutableResolver>,
+    resumable: Arc<dyn ResumableSessions>,
 }
 
 #[derive(Clone)]
@@ -432,17 +454,23 @@ impl Default for PtySessionEngine {
         Self::new(
             Arc::new(SystemPtyAdapter),
             Arc::new(SystemExecutableResolver),
+            Arc::new(SystemResumableSessions),
         )
     }
 }
 
 impl PtySessionEngine {
-    fn new(adapter: Arc<dyn PtyAdapter>, resolver: Arc<dyn ExecutableResolver>) -> Self {
+    fn new(
+        adapter: Arc<dyn PtyAdapter>,
+        resolver: Arc<dyn ExecutableResolver>,
+        resumable: Arc<dyn ResumableSessions>,
+    ) -> Self {
         Self {
             inner: Arc::new(EngineInner {
                 active: Mutex::new(HashMap::new()),
                 adapter,
                 resolver,
+                resumable,
             }),
         }
     }
@@ -480,12 +508,16 @@ impl PtySessionEngine {
         }
 
         let base_workspace = validated_workspace(&request.workspace_path)?;
-        let (provider_executable, command) =
-            provider_command(&request.provider_id, request.session_mode)?;
+        let command = provider_command_for(
+            &request.provider_id,
+            request.session_mode,
+            &base_workspace,
+            |workspace| self.inner.resumable.resumable(workspace),
+        )?;
         let executable = self
             .inner
             .resolver
-            .resolve(provider_executable)
+            .resolve(command.executable)
             .ok_or_else(|| {
                 CommandError::new(
                     "provider_unavailable",
@@ -498,9 +530,15 @@ impl PtySessionEngine {
             request.session_mode,
             request.new_folder.as_deref(),
         )?;
+        let arguments = command
+            .arguments
+            .iter()
+            .skip(1)
+            .map(String::as_str)
+            .collect::<Vec<_>>();
         let spawned = match self.inner.adapter.spawn(
             &executable,
-            &command[1..],
+            &arguments,
             &workspace,
             removed_environment(&request.provider_id),
             &search_path_value(),
@@ -527,6 +565,7 @@ impl PtySessionEngine {
             provider_id: request.provider_id,
             workspace_path: workspace.to_string_lossy().into_owned(),
             session_mode: request.session_mode,
+            resumed_session_id: command.resumed_session_id,
         };
         let active = Arc::new(ActiveSession {
             session: session.clone(),
@@ -1048,8 +1087,26 @@ mod tests {
         })
     }
 
+    struct FakeResumable(Option<String>);
+
+    impl ResumableSessions for FakeResumable {
+        fn resumable(&self, _workspace: &Path) -> Option<String> {
+            self.0.clone()
+        }
+    }
+
+    // No resumable session by default, so a Continue falls back to the fixed
+    // command and no test reads the real `~/.claude`.
     fn engine(adapter: Arc<FakeAdapter>) -> PtySessionEngine {
-        PtySessionEngine::new(adapter, resolver())
+        PtySessionEngine::new(adapter, resolver(), Arc::new(FakeResumable(None)))
+    }
+
+    fn engine_resuming(adapter: Arc<FakeAdapter>, session_id: &str) -> PtySessionEngine {
+        PtySessionEngine::new(
+            adapter,
+            resolver(),
+            Arc::new(FakeResumable(Some(session_id.to_string()))),
+        )
     }
 
     fn temp_workspace() -> PathBuf {
@@ -1177,6 +1234,73 @@ mod tests {
             engine.stop(session_request(&session)).unwrap();
             std::fs::remove_dir_all(workspace).unwrap();
         }
+    }
+
+    // The case the fixed-command test above cannot cover: when the App has
+    // identified a session, Claude's Continue resumes that one by id, and the
+    // Slot is told which one so it can show it.
+    #[test]
+    fn claude_continue_resumes_the_identified_session_and_reports_it() {
+        let workspace = temp_workspace();
+        let adapter = Arc::new(FakeAdapter::new());
+        let engine = engine_resuming(adapter.clone(), "3f2c1c05-77c3-4a5e-ace1-b5d3abfb0625");
+        let sink = Arc::new(FakeSink::default());
+
+        let session = engine
+            .start_with_sink(request("claude", &workspace, SessionMode::Continue), sink)
+            .unwrap();
+
+        assert_eq!(
+            lock(&adapter.calls).unwrap()[0].arguments,
+            ["--resume", "3f2c1c05-77c3-4a5e-ace1-b5d3abfb0625"]
+        );
+        assert_eq!(
+            session.resumed_session_id.as_deref(),
+            Some("3f2c1c05-77c3-4a5e-ace1-b5d3abfb0625")
+        );
+        engine.stop(session_request(&session)).unwrap();
+        std::fs::remove_dir_all(workspace).unwrap();
+    }
+
+    // The other three never consult the resumer, so a session id being
+    // available must not reach their command or their reported session.
+    #[test]
+    fn other_providers_ignore_an_available_claude_session() {
+        for provider in ["hermes", "codex", "antigravity"] {
+            let workspace = temp_workspace();
+            let adapter = Arc::new(FakeAdapter::new());
+            let engine = engine_resuming(adapter.clone(), "must-not-be-used");
+            let sink = Arc::new(FakeSink::default());
+
+            let session = engine
+                .start_with_sink(request(provider, &workspace, SessionMode::Continue), sink)
+                .unwrap();
+
+            let arguments = lock(&adapter.calls).unwrap()[0].arguments.clone();
+            assert!(!arguments.iter().any(|argument| argument == "--resume"));
+            assert_eq!(session.resumed_session_id, None);
+            engine.stop(session_request(&session)).unwrap();
+            std::fs::remove_dir_all(workspace).unwrap();
+        }
+    }
+
+    // A New session is a new conversation, so nothing is resumed even when a
+    // session exists for that workspace.
+    #[test]
+    fn a_new_claude_session_never_resumes() {
+        let workspace = temp_workspace();
+        let adapter = Arc::new(FakeAdapter::new());
+        let engine = engine_resuming(adapter.clone(), "must-not-be-used");
+        let sink = Arc::new(FakeSink::default());
+
+        let session = engine
+            .start_with_sink(request("claude", &workspace, SessionMode::New), sink)
+            .unwrap();
+
+        assert!(lock(&adapter.calls).unwrap()[0].arguments.is_empty());
+        assert_eq!(session.resumed_session_id, None);
+        engine.stop(session_request(&session)).unwrap();
+        std::fs::remove_dir_all(workspace).unwrap();
     }
 
     #[test]
@@ -1417,6 +1541,7 @@ mod tests {
             Arc::new(FakeResolver {
                 paths: HashMap::new(),
             }),
+            Arc::new(FakeResumable(None)),
         );
         assert_eq!(
             unavailable
