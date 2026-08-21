@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { open as openFolderDialog } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
 import type {
@@ -216,6 +217,18 @@ export const tauriRuntime: RuntimeAdapter = {
       await openUrl(url);
     } catch (error) {
       throw commandError(error, "Link could not be opened");
+    }
+  },
+
+  async pickFolder(defaultPath?: string): Promise<string | null> {
+    try {
+      return await openFolderDialog({
+        directory: true,
+        multiple: false,
+        ...(defaultPath?.startsWith("/") ? { defaultPath } : {}),
+      });
+    } catch (error) {
+      throw commandError(error, "Folder picker could not be opened");
     }
   },
 };

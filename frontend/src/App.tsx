@@ -630,6 +630,23 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
     }
   };
 
+  const browseForWorkspace = async () => {
+    if (!runtime.pickFolder || launching || savingDefault) {
+      return;
+    }
+    try {
+      const picked = await runtime.pickFolder(workspacePath || undefined);
+      if (picked) {
+        setWorkspacePath(picked);
+        setSaveNotice(null);
+      }
+    } catch (error) {
+      setLaunchError(
+        error instanceof Error ? error.message : "Folder picker could not be opened",
+      );
+    }
+  };
+
   const persistRecentWorkspace = async (
     provider: Provider,
     resolvedWorkspace: string,
@@ -1853,6 +1870,16 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                         disabled={modalBusy}
                         required
                       />
+                      {runtime.pickFolder && (
+                        <button
+                          className="browse-workspace-button"
+                          type="button"
+                          onClick={() => void browseForWorkspace()}
+                          disabled={modalBusy}
+                        >
+                          Browse…
+                        </button>
+                      )}
                       <button
                         className="save-workspace-button"
                         type="button"
