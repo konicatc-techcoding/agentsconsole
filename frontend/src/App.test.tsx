@@ -167,6 +167,7 @@ function mockRuntime(options?: {
   onCloseRequested?: RuntimeAdapter["onCloseRequested"];
   closeWindow?: RuntimeAdapter["closeWindow"];
   reloadWindow?: RuntimeAdapter["reloadWindow"];
+  pickFolder?: RuntimeAdapter["pickFolder"];
 }): RuntimeAdapter {
   const runtime: RuntimeAdapter = {
     kind: options?.kind ?? "web",
@@ -216,6 +217,7 @@ function mockRuntime(options?: {
       options?.closeWindow ?? vi.fn().mockResolvedValue(undefined);
     runtime.reloadWindow =
       options?.reloadWindow ?? vi.fn().mockResolvedValue(undefined);
+    runtime.pickFolder = options?.pickFolder ?? vi.fn().mockResolvedValue(null);
   }
   return runtime;
 }
@@ -459,6 +461,98 @@ describe("AgentOS Console", () => {
     expect(
       screen.getByRole("textbox", { name: "Default workspace path" }),
     ).toHaveValue("/Users/zack/Projects");
+  });
+
+  it("shows no Browse button in Web mode", async () => {
+    const { fetchMock } = mockApi();
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Launch Codex CLI" }),
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Browse…" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("fills the workspace field from the native folder picker without saving", async () => {
+    const pickFolder = vi.fn().mockResolvedValue("/Users/zack/Picked");
+    const runtime = mockRuntime({ kind: "tauri", pickFolder });
+    const user = userEvent.setup();
+    render(<App runtime={runtime} />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Launch Codex CLI" }),
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Default workspace path" }),
+      "/Users/zack/Typed",
+    );
+    await user.click(screen.getByRole("button", { name: "Browse…" }));
+
+    expect(pickFolder).toHaveBeenCalledWith("/Users/zack/Typed");
+    expect(
+      await screen.findByRole("textbox", { name: "Default workspace path" }),
+    ).toHaveValue("/Users/zack/Picked");
+    expect(runtime.saveWorkspacePreferences).not.toHaveBeenCalled();
+    expect(
+      screen.queryByText("Default workspace saved"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("leaves the workspace field untouched when the folder picker is cancelled", async () => {
+    const pickFolder = vi.fn().mockResolvedValue(null);
+    const runtime = mockRuntime({ kind: "tauri", pickFolder });
+    const user = userEvent.setup();
+    render(<App runtime={runtime} />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Launch Codex CLI" }),
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Default workspace path" }),
+      "/Users/zack/Typed",
+    );
+    await user.click(screen.getByRole("button", { name: "Browse…" }));
+
+    expect(pickFolder).toHaveBeenCalledOnce();
+    expect(
+      screen.getByRole("textbox", { name: "Default workspace path" }),
+    ).toHaveValue("/Users/zack/Typed");
+    expect(
+      screen.queryByRole("alert"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("disables Browse while the modal is busy saving", async () => {
+    let resolveValidate: ((value: { workspace_path: string }) => void) | undefined;
+    const runtime = mockRuntime({ kind: "tauri" });
+    runtime.validateWorkspace = vi.fn(
+      () =>
+        new Promise<{ workspace_path: string }>((resolve) => {
+          resolveValidate = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    render(<App runtime={runtime} />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Launch Codex CLI" }),
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Default workspace path" }),
+      "/Users/zack/Typed",
+    );
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(screen.getByRole("button", { name: "Browse…" })).toBeDisabled();
+
+    resolveValidate?.({ workspace_path: "/Users/zack/Typed" });
+    await screen.findByText("Default workspace saved");
+    expect(screen.getByRole("button", { name: "Browse…" })).toBeEnabled();
   });
 
   it("starts in a new folder without automatically saving the default", async () => {
