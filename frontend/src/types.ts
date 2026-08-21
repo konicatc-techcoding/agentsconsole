@@ -95,6 +95,8 @@ export interface PtySession {
   sessionMode: SessionMode;
   /** The Claude conversation this Slot resumed, when the App picked one. */
   resumedSessionId?: string | null;
+  /** The spawned CLI process's PID, when the runtime reports one. */
+  processId?: number | null;
 }
 
 export interface PtyOutputEvent {

@@ -1104,6 +1104,19 @@ details code {
   opacity: 0.55;
 }
 
+.console-slot-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.console-slot-pid,
+.console-slot-resumed-session {
+  flex: 0 0 auto;
+  color: var(--text-4);
+}
+
 .console-placeholder {
   display: grid;
   min-height: 0;
@@ -1288,13 +1301,6 @@ details code {
 }
 
 .terminal-phase {
-  flex: 0 0 auto;
-  color: var(--text-3);
-}
-
-/* The workspace path is allowed to shrink before this does: which conversation
-   was resumed is the part of the line that cannot be guessed from elsewhere. */
-.terminal-resumed-session {
   flex: 0 0 auto;
   color: var(--text-3);
 }

@@ -86,6 +86,7 @@ pub struct PtySession {
     /// for every other provider and whenever Continue fell back to the CLI's
     /// own choice, which is the case the Slot has nothing specific to report.
     resumed_session_id: Option<String>,
+    process_id: Option<u32>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -134,6 +135,7 @@ trait RunningPty: Send + Sync {
     fn resize(&self, rows: u16, columns: u16) -> Result<(), String>;
     fn terminate_tree(&self) -> Result<(), String>;
     fn wait(&self) -> Result<ProcessExit, String>;
+    fn process_id(&self) -> Option<u32>;
 }
 
 struct SpawnedPty {
@@ -317,6 +319,10 @@ impl RunningPty for SystemRunningPty {
         };
         *exit_guard = Some(exit.clone());
         Ok(exit)
+    }
+
+    fn process_id(&self) -> Option<u32> {
+        self.process_id
     }
 }
 
@@ -559,6 +565,7 @@ impl PtySessionEngine {
             }
         };
 
+        let process_id = spawned.process.process_id();
         let session = PtySession {
             slot_id: request.slot_id,
             session_id: next_session_id(),
@@ -566,6 +573,7 @@ impl PtySessionEngine {
             workspace_path: workspace.to_string_lossy().into_owned(),
             session_mode: request.session_mode,
             resumed_session_id: command.resumed_session_id,
+            process_id,
         };
         let active = Arc::new(ActiveSession {
             session: session.clone(),
@@ -901,6 +909,8 @@ mod tests {
         }
     }
 
+    const FAKE_PROCESS_ID: u32 = 4242;
+
     struct FakeRunningPty {
         state: Arc<FakeProcessState>,
     }
@@ -929,6 +939,10 @@ mod tests {
                 }),
                 reason: "exited".to_string(),
             })
+        }
+
+        fn process_id(&self) -> Option<u32> {
+            Some(FAKE_PROCESS_ID)
         }
     }
 
@@ -1234,6 +1248,22 @@ mod tests {
             engine.stop(session_request(&session)).unwrap();
             std::fs::remove_dir_all(workspace).unwrap();
         }
+    }
+
+    #[test]
+    fn start_reports_the_spawned_process_id() {
+        let workspace = temp_workspace();
+        let adapter = Arc::new(FakeAdapter::new());
+        let engine = engine(adapter.clone());
+        let sink = Arc::new(FakeSink::default());
+
+        let session = engine
+            .start_with_sink(request("codex", &workspace, SessionMode::New), sink)
+            .unwrap();
+
+        assert_eq!(session.process_id, Some(FAKE_PROCESS_ID));
+        engine.stop(session_request(&session)).unwrap();
+        std::fs::remove_dir_all(workspace).unwrap();
     }
 
     // The case the fixed-command test above cannot cover: when the App has

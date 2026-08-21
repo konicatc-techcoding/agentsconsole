@@ -12,6 +12,7 @@ import type { RuntimeAdapter } from "./runtime/types";
 import TerminalSlot, {
   CONSOLE_SHORTCUT_DIGITS,
   DEFAULT_FONT_SIZE,
+  resumedSessionLabel,
   type TerminalPhase,
 } from "./TerminalSlot";
 import type {
@@ -1535,6 +1536,7 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                   );
                   const slotOnlyLabel = slotLabel(embeddedSlotId);
                   const attention = slotAttention[embeddedSlotId];
+                  const session = terminalStates[embeddedSlotId].session;
                   return (
                     <article
                       className={`console-slot ${
@@ -1570,38 +1572,56 @@ export default function App({ runtime = defaultRuntime }: AppProps) {
                             </span>
                           )}
                         </span>
-                        <label>
-                          <span className="sr-only">
-                            {slotOnlyLabel} provider
-                          </span>
-                          <select
-                            aria-label={`${slotOnlyLabel} provider`}
-                            value={slot.providerId}
-                            disabled={
-                              !layoutReady ||
-                              savingLayout ||
-                              isActiveTerminal(terminalStates[slot.slotId])
-                            }
-                            onChange={(event) =>
-                              updateConsoleSlot(
-                                slot.slotId,
-                                event.target.value as ConsoleProviderId,
-                              )
-                            }
-                          >
-                            {CONSOLE_PROVIDERS.map((option) => (
-                              <option value={option.id} key={option.id}>
-                                {option.displayName}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                        <span className="console-slot-meta">
+                          {session?.processId != null && (
+                            <span
+                              className="console-slot-pid"
+                              title={`Process ID ${session.processId}`}
+                            >
+                              PID {session.processId}
+                            </span>
+                          )}
+                          {session?.resumedSessionId && (
+                            <span
+                              className="console-slot-resumed-session"
+                              title={`Resumed conversation ${session.resumedSessionId}`}
+                            >
+                              {resumedSessionLabel(session.resumedSessionId)}
+                            </span>
+                          )}
+                          <label>
+                            <span className="sr-only">
+                              {slotOnlyLabel} provider
+                            </span>
+                            <select
+                              aria-label={`${slotOnlyLabel} provider`}
+                              value={slot.providerId}
+                              disabled={
+                                !layoutReady ||
+                                savingLayout ||
+                                isActiveTerminal(terminalStates[slot.slotId])
+                              }
+                              onChange={(event) =>
+                                updateConsoleSlot(
+                                  slot.slotId,
+                                  event.target.value as ConsoleProviderId,
+                                )
+                              }
+                            >
+                              {CONSOLE_PROVIDERS.map((option) => (
+                                <option value={option.id} key={option.id}>
+                                  {option.displayName}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </span>
                       </header>
                       <TerminalSlot
                         slotId={embeddedSlotId}
                         provider={provider}
                         phase={terminalStates[embeddedSlotId].phase}
-                        session={terminalStates[embeddedSlotId].session}
+                        session={session}
                         exitEvent={terminalStates[embeddedSlotId].exitEvent}
                         error={terminalStates[embeddedSlotId].error}
                         resetToken={terminalResetTokens[embeddedSlotId]}

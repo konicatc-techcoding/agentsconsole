@@ -267,6 +267,26 @@ function slotHeaderProvider(
     .getAttribute("data-provider-id");
 }
 
+function slotHeaderPid(
+  container: HTMLElement,
+  slotId: ConsoleSlotId,
+): string | null {
+  return (
+    slotArticle(container, slotId).querySelector<HTMLElement>(
+      ".console-slot-pid",
+    )?.textContent ?? null
+  );
+}
+
+function slotHeaderResumedSession(
+  container: HTMLElement,
+  slotId: ConsoleSlotId,
+): HTMLElement | null {
+  return slotArticle(container, slotId).querySelector<HTMLElement>(
+    ".console-slot-resumed-session",
+  );
+}
+
 function slotViewport(
   container: HTMLElement,
   slotId: ConsoleSlotId,
@@ -2316,6 +2336,62 @@ describe("AgentOS Console", () => {
         name: "Slot 2 · Codex CLI · workspace-two — Running",
       }),
     ).toBeInTheDocument();
+  });
+
+  it("shows the running session's PID next to the provider selector", async () => {
+    const startPty = vi.fn<NonNullable<RuntimeAdapter["startPtySession"]>>(
+      async (request) => ({
+        slotId: request.slotId,
+        sessionId: `session-${request.slotId}`,
+        providerId: request.providerId,
+        workspacePath: request.workspacePath,
+        sessionMode: request.sessionMode,
+        processId: 4242,
+      }),
+    );
+    const runtime = mockRuntime({ kind: "tauri", startPty });
+    const user = userEvent.setup();
+    const { container } = render(<App runtime={runtime} />);
+    await startSlotSession(user, 1, "/workspace-one");
+    await waitFor(() => expect(screen.getByText("Running")).toBeInTheDocument());
+
+    const pid = slotHeaderPid(container, "slot-1");
+    expect(pid).toBe("PID 4242");
+  });
+
+  it("names the Claude conversation a Continue resumed next to the provider selector, and shows nothing for a New session", async () => {
+    const startPty = vi.fn<NonNullable<RuntimeAdapter["startPtySession"]>>(
+      async (request) => ({
+        slotId: request.slotId,
+        sessionId: `session-${request.slotId}`,
+        providerId: request.providerId,
+        workspacePath: request.workspacePath,
+        sessionMode: request.sessionMode,
+        resumedSessionId:
+          request.providerId === "claude"
+            ? "3f2c1c05-77c3-4a5e-ace1-b5d3abfb0625"
+            : null,
+      }),
+    );
+    const runtime = mockRuntime({ kind: "tauri", startPty });
+    const user = userEvent.setup();
+    const { container } = render(<App runtime={runtime} />);
+    // Slot 3 is Claude in the default layout.
+    await startSlotSession(user, 3, "/workspace-three");
+    await waitFor(() => expect(screen.getByText("Running")).toBeInTheDocument());
+
+    const resumed = slotHeaderResumedSession(container, "slot-3");
+    expect(resumed?.textContent).toBe("↩ 3f2c1c05");
+    expect(resumed).toHaveAttribute(
+      "title",
+      "Resumed conversation 3f2c1c05-77c3-4a5e-ace1-b5d3abfb0625",
+    );
+
+    await startSlotSession(user, 1, "/workspace-one");
+    await waitFor(() =>
+      expect(screen.getAllByText("Running")).toHaveLength(2),
+    );
+    expect(slotHeaderResumedSession(container, "slot-1")).toBeNull();
   });
 
   it("keeps hidden Slot marks and separates ended sessions from Stop", async () => {
