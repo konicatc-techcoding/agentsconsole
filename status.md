@@ -1,6 +1,6 @@
 # AgentOS Console — 工作交接狀態
 
-最後更新：2026-08-20
+最後更新：2026-08-21
 
 ## 下次對話直接使用
 
@@ -8,14 +8,24 @@
 請先讀取 status.md。LOO-12 至 LOO-34 已依序合併；LOO-33 與 LOO-34 之間另有
 兩個沒有 Linear issue 的 PR：PR #50（切換介面風格 + styles.css token 化，
 來自 design_handoff_console_restyle/ 的設計交接）與 PR #52（修正打包版從
-沒有圖示，使用者提供來源圖）。最新基線為 dee14ab，Linear 的 agent-ready
-佇列為空。App 已打包並部署於 /Volumes/OWC1M2/AgentOSConsole/
-（2026-08-20 更新為 dee14ab，含 LOO-34 的 Continue 改由 App 挑好對話再跑
-claude --resume），從 Finder 點開即可正常使用。沒有功能性缺陷；唯一的
-未完成事項是 documentation-only PR 是否豁免 Closes LOO-NNN 這個流程決定，
-已被推遲三次。搜尋有兩項已知的 xterm 上游限制且決定不修。
-下一步執行 /finn-spec；候選見「後續候選」（第 6 項是交接包裡尚未實作的
-完整方角改版）。
+沒有圖示，使用者提供來源圖）。main 最新基線為 8386755（dee14ab 之後一個純
+文件 commit），Linear 的 agent-ready 佇列為空。
+
+**目前部署的 App 領先 main**：分支 feat/slot-pid-session-display（commit
+34c61b8，已 push 到 origin，尚未開 PR、尚未 review、尚未合併）新增 Slot
+標題列 PID／Claude session id 顯示，使用者直接指示 push 並部署，不經過
+finn-loop。App 已打包並部署於 /Volumes/OWC1M2/AgentOSConsole/
+（2026-08-21 更新為 34c61b8），從 Finder 點開即可正常使用，細節見
+BUILDS.md 的「2026-08-21-34c61b8」條目。**下一個 session 若要接續這件事**，
+先確認這個分支的 PR 狀態（可能還沒開、可能已經開了、可能已經合併），
+合併後若 merge commit 內容與 34c61b8 相同可以不用重建，只要更新這裡的
+基線記錄；內容不同則要重建部署。
+
+沒有功能性缺陷；唯一的未完成事項是 documentation-only PR 是否豁免
+Closes LOO-NNN 這個流程決定，已被推遲三次。搜尋有兩項已知的 xterm 上游限制
+且決定不修。下一步視使用者指示：可能是幫 feat/slot-pid-session-display
+開 PR，也可能是 /finn-spec；候選見「後續候選」（第 6 項是交接包裡尚未實作
+的完整方角改版）。
 ```
 
 ## 未完成事項
@@ -120,7 +130,9 @@ LOO-23 加入每格終端的 scrollback 搜尋，但合併後即發現完全失�
   `strict` 為 true，即合併前分支必須為最新
 - 目前 Linear issue：無；下一步使用 `/finn-spec` 建立新規格
 - 打包產物：`/Volumes/OWC1M2/AgentOSConsole/`，頂層為使用中的
-  `AgentOS Console.app`（目前為 `dee14ab`），
+  `AgentOS Console.app`（目前為 `34c61b8`，來自尚未合併的分支
+  `feat/slot-pid-session-display`，領先 `main` 的 `8386755`——見上方
+  「下次對話直接使用」），
   `builds/` 存歷次版本，
   `BUILDS.md` 記錄各版對應的 commit。無 updater，更新須重新 build 後以
   `ditto` 覆蓋——**用 `ditto` 而非 `cp -R`**，後者可能破壞 app bundle 的簽章
