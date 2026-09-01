@@ -397,10 +397,11 @@ details code {
 
 .workspace-save-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 8px;
 }
 
+.browse-workspace-button,
 .save-workspace-button {
   min-width: 82px;
   padding: 10px 14px;
@@ -411,6 +412,7 @@ details code {
   background: var(--bg-raised);
 }
 
+.browse-workspace-button:disabled,
 .save-workspace-button:disabled {
   cursor: wait;
   opacity: 0.6;

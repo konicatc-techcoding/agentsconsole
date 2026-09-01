@@ -90,7 +90,11 @@ leaves all interaction and approval handling to the native CLI. Starting a
 session does not change the saved default workspace.
 
 - `New session` starts in the default workspace. An optional single-level
-  folder name creates a new child folder and starts there.
+  folder name creates a new child folder and starts there. In Tauri mode, a
+  `Browse…` button next to the workspace field opens the native macOS
+  folder-selection dialog (folders only); picking one fills the field but does
+  not save it, so `Save` is still required. Cancelling leaves the field
+  unchanged. Web mode has no `Browse…` button.
 - `Continue session` offers up to five unique workspaces previously started
   for that provider, newest first. If there is no recent workspace, it falls
   back to the saved default.

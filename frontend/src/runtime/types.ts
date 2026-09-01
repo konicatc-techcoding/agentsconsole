@@ -47,4 +47,6 @@ export interface RuntimeAdapter {
   closeWindow?(): Promise<void>;
   reloadWindow?(): Promise<void>;
   openExternalUrl?(url: string): Promise<void>;
+  /** Opens the native folder picker; resolves `null` if the user cancels. */
+  pickFolder?(defaultPath?: string): Promise<string | null>;
 }
