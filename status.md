@@ -1,21 +1,32 @@
 # AgentOS Console — 工作交接狀態
 
-最後更新：2026-08-20
+最後更新：2026-09-01
 
 ## 下次對話直接使用
 
 ```text
-請先讀取 status.md。LOO-12 至 LOO-34 已依序合併；LOO-33 與 LOO-34 之間另有
-兩個沒有 Linear issue 的 PR：PR #50（切換介面風格 + styles.css token 化，
-來自 design_handoff_console_restyle/ 的設計交接）與 PR #52（修正打包版從
-沒有圖示，使用者提供來源圖）。最新基線為 dee14ab，Linear 的 agent-ready
-佇列為空。App 已打包並部署於 /Volumes/OWC1M2/AgentOSConsole/
-（2026-08-20 更新為 dee14ab，含 LOO-34 的 Continue 改由 App 挑好對話再跑
-claude --resume），從 Finder 點開即可正常使用。沒有功能性缺陷；唯一的
-未完成事項是 documentation-only PR 是否豁免 Closes LOO-NNN 這個流程決定，
-已被推遲三次。搜尋有兩項已知的 xterm 上游限制且決定不修。
+請先讀取 status.md。LOO-12 至 LOO-35 已依序合併；LOO-33 與 LOO-34 之間、
+LOO-34 與 LOO-35 之間另有三個沒有 Linear issue 的 PR：PR #50（切換介面
+風格 + styles.css token 化，來自 design_handoff_console_restyle/ 的設計
+交接）、PR #52（修正打包版從沒有圖示，使用者提供來源圖）、PR #55
+（LOO-34 的 handoff 紀錄本身）。最新基線為 f7aae29，Linear 的
+agent-ready 佇列為空。App 已打包並部署於 /Volumes/OWC1M2/AgentOSConsole/
+（2026-09-01 更新為 f7aae29，含 LOO-35 的 Launch modal Browse 按鈕），
+從 Finder 點開即可正常使用。沒有功能性缺陷；唯一的未完成事項是
+documentation-only PR 是否豁免 Closes LOO-NNN 這個流程決定，已被推遲
+三次。搜尋有兩項已知的 xterm 上游限制且決定不修。另記錄一項 Agent View
+可能接管桌面版對話的已知風險，尚未查出根因，見「Agent View 可能接管
+仍存活的桌面版對話」章節。
+**分支 `feat/slot-pid-session-display`（commit 34c61b8）沒有 Linear
+issue、沒有 PR、未合併，但曾在 2026-08-21 至 2026-09-01 期間被部署到
+頂層 App 過**；目前使用者確認不需要保留該功能（Slot 顯示 PID／Claude
+session id），分支仍在、未刪除，見「LOO-35 驗證結果」與
+BUILDS.md 的 2026-08-21／2026-09-01 條目。
+**這個 worktree 所在硬碟已從 1TBM2 改名為 WDSSD**，若某次對話開頭發現
+git 完全讀不到，先查 .git 是否為 pointer file、其 gitdir 路徑是否還
+存在，見「Source of truth」的 2026-09-01 更新。
 下一步執行 /finn-spec；候選見「後續候選」（第 6 項是交接包裡尚未實作的
-完整方角改版）。
+完整方角改版，第 7 項是 Agent View 風險的 App 側緩解方案）。
 ```
 
 ## 未完成事項
@@ -60,7 +71,10 @@ LOO-29 起只標記新輸出，session 結束改由 Header 標記。CI 有 `smok
 check，快取已納入 rustc 版本，`cargo test` 帶 `--locked`。Finn-loop 的
 finn-spec／finn-build／finn-review 三個 skill 安裝於 `.claude/skills`，綁定
 Linear team `LOO`；LOO-33 收尾時新增第四個 skill `finn-handoff`，把合併後的
-分支清理、打包部署、`status.md` 更新與 handoff PR 固定成一套流程。
+分支清理、打包部署、`status.md` 更新與 handoff PR 固定成一套流程。LOO-35
+在 Launch modal 的 `Default workspace path` 欄位旁加了 `Browse…` 按鈕，
+呼叫 `tauri-plugin-dialog` 開啟原生資料夾選取對話框，選取後只填入欄位、
+仍須手動按 `Save` 才會持久化；Web runtime 不提供這個按鈕。
 
 LOO-12 將 PTY engine 擴展為最多四個獨立 session 並啟用 Slot 2；
 LOO-13、LOO-14 接續啟用 Slot 3、4。Tauri 目前四格皆支援完整
@@ -93,20 +107,29 @@ LOO-23 加入每格終端的 scrollback 搜尋，但合併後即發現完全失�
 ## Source of truth
 
 - Workspace（Codex 原始開發區）：
-  `/Volumes/1TBM2/AI_Drive/Codex_Projects/agentsconsole`，branch `main`
+  `/Volumes/WDSSD/AI_Drive/Codex_Projects/agentsconsole`，branch `main`
 - Workspace（Claude Code 工作區）：
-  `/Volumes/1TBM2/AI_Drive/ClaudeCode_Projects/agentsconsole`；每個 issue
+  `/Volumes/WDSSD/AI_Drive/ClaudeCode_Projects/agentsconsole`；每個 issue
   各自從預設分支開工作分支，Finn-loop builder 使用 `LOO-NNN-short-slug`。
   本 repo 以 squash merge 合併，長期分支重複使用會需要 force-push，因此
   合併後即丟棄工作分支。
+  **2026-09-01 更新**：兩個 workspace 所在的實體硬碟從 `1TBM2` 換成
+  `WDSSD`（路徑字串跟著換），但 git 的 worktree 登記表沒有跟著更新，
+  一度整個讀不到（`.git` pointer file 仍指向舊路徑）。已用
+  `git worktree repair <新路徑>` 修正，純 metadata 操作、未動任何內容。
+  下次若又發生「這個 worktree 完全讀不到 git」，先查
+  `/Volumes/<硬碟>/…/.git` 是不是一個小檔案（pointer file）而非目錄，
+  以及它指向的 `gitdir` 路徑是否還存在。
 - 兩個 workspace 是同一個 repo 的 git worktree，兩邊都可以繼續開發。
   `status.md` 為共用追蹤檔案，任一邊的修改合併後都會影響另一邊；同一個
   分支無法同時在兩個 worktree checkout，切換開發環境時先合併回 `main`，
   再於另一個 worktree `git pull`。
-- 最新合併基線：`dee14ab feat: let the App pick which Claude conversation a Continue resumes (#54)`
-- 前一個合併基線：`77c4d29 fix: give the packaged App a real icon (#52)`
+- 最新合併基線：`f7aae29 feat: add a native folder Browse button to the Launch modal (#56)`
+- 前一個合併基線：`8386755 docs: record issue 34 handoff — Continue now resumes the conversation the App picks (#55)`
+- 再前一個合併基線：`dee14ab feat: let the App pick which Claude conversation a Continue resumes (#54)`
+- 更早的合併基線：`77c4d29 fix: give the packaged App a real icon (#52)`
 - PR #52 沒有 Linear issue（使用者直接指示套用圖示，非 `/finn-spec` 產出）
-- 再前一個合併基線：`740ee61 feat: add appearance switching and tokenize styles.css colours (#50)`
+- 更早的合併基線：`740ee61 feat: add appearance switching and tokenize styles.css colours (#50)`
 - PR #50 也沒有 Linear issue（設計交接直接指示實作，非 `/finn-spec` 產出）；
   規格來源 `design_handoff_console_restyle/` 已從 Claude Code worktree 刪除
   （原為 untracked、不入版控，任務完成後使用者要求移除）
@@ -120,11 +143,15 @@ LOO-23 加入每格終端的 scrollback 搜尋，但合併後即發現完全失�
   `strict` 為 true，即合併前分支必須為最新
 - 目前 Linear issue：無；下一步使用 `/finn-spec` 建立新規格
 - 打包產物：`/Volumes/OWC1M2/AgentOSConsole/`，頂層為使用中的
-  `AgentOS Console.app`（目前為 `dee14ab`），
+  `AgentOS Console.app`（目前為 `f7aae29`），
   `builds/` 存歷次版本，
   `BUILDS.md` 記錄各版對應的 commit。無 updater，更新須重新 build 後以
   `ditto` 覆蓋——**用 `ditto` 而非 `cp -R`**，後者可能破壞 app bundle 的簽章
-- 最近完成的 Linear issue：`LOO-34 Claude 的 Continue session 改用 --resume <session-id>，由 App 決定要接哪一個`
+- 最近完成的 Linear issue：`LOO-35 在 Launch modal 新增資料夾瀏覽按鈕，避免手動輸入絕對路徑`
+- LOO-35 URL：<https://linear.app/loopent/issue/LOO-35/在-launch-modal-新增資料夾瀏覽按鈕避免手動輸入絕對路徑>
+- LOO-35 狀態：`Done`；PR <https://github.com/konicatc-techcoding/agentsconsole/pull/56>，
+  merge commit `f7aae29`，review `loop-approved`，`smoke` 與 `rust` 皆 `SUCCESS`
+- 前一個：`LOO-34 Claude 的 Continue session 改用 --resume <session-id>，由 App 決定要接哪一個`
 - LOO-34 URL：<https://linear.app/loopent/issue/LOO-34/claude-的-continue-session-改用-resume-session-id由-app-決定要接哪一個>
 - LOO-34 狀態：`Done`；PR <https://github.com/konicatc-techcoding/agentsconsole/pull/54>，
   merge commit `dee14ab`，review `loop-approved`，`smoke` 與 `rust` 皆 `SUCCESS`
@@ -1431,6 +1458,86 @@ workspace 混有非背景對話時**靜悄悄接到舊的那筆**，畫面上沒
 - 分支收尾：本地與遠端 `LOO-34-claude-resume-session` 均已刪除，兩個
   worktree 皆與 `origin/main`（`dee14ab`）同步且工作樹乾淨
 
+## LOO-35 Launch modal 新增資料夾瀏覽按鈕
+
+LOO-35 已完成並透過 PR #56 合併，全程走 `/finn-spec` → `/finn-build` →
+`/finn-review` 流程。起點是 New session 模式的 `Default workspace path`
+只能手動輸入絕對路徑，容易打錯或需要另開 Finder 複製。
+
+**做了什麼**：Launch modal 的欄位與 `Save` 按鈕之間新增 `Browse…`，呼叫
+`tauri-plugin-dialog` 的 `open({ directory: true, defaultPath })` 開啟
+macOS 原生資料夾選取對話框（`directory: true` 限定只能選資料夾）；
+`defaultPath` 只在欄位目前值是絕對路徑時帶入，否則用系統預設起始位置。
+選取後只呼叫 `setWorkspacePath` 把路徑填進欄位，**不自動儲存**——`Save`
+仍是分開、刻意的一步，與手動輸入路徑行為一致。Cancel（plugin 的
+`null` 回傳）不改欄位、不跳錯誤。`RuntimeAdapter` 沿用既有的 optional
+method 模式（比照 `openExternalUrl`／`launchCodexAgents`）新增
+`pickFolder?`，Web adapter 不實作，因此 Web 模式沒有這個按鈕。Tauri
+capability 只開放 `dialog:allow-open` 這一個最小權限，不含存檔／訊息
+對話框。共用同一個 Launch modal，Sidebar 與 Slot embedded 兩邊自動一起
+套用，不需分別實作。
+
+## LOO-35 驗證結果
+
+- Linear：LOO-35 為 `Done`
+- GitHub：PR #56 已合併（merge commit `f7aae29`），review `loop-approved`，
+  `smoke` 與 `rust` 皆 `SUCCESS`
+- 變更範圍：12 個檔案，+302／−4。新增依賴 `@tauri-apps/plugin-dialog`
+  （frontend）與 `tauri-plugin-dialog`（`Cargo.toml`）；改
+  `App.tsx`／`runtime/tauri.ts`／`runtime/types.ts`／`styles.css`／
+  `capabilities/default.json`／`lib.rs`／各自的測試與 `README.md`
+- **這次的合併有 12 天延遲**：PR #56 於 2026-08-21 就已 `loop-approved`
+  且 checks 全綠，但没人按下合併，直到 2026-09-01 才由使用者確認合併。
+  期間這個 worktree 所在硬碟從 `1TBM2` 換成 `WDSSD`，一度導致
+  git worktree 完全讀不到（見「Source of truth」的 2026-09-01 更新）。
+  下次若又有 PR 卡著沒合併超過幾天，開新對話時主動提醒使用者，不要
+  假設 Linear 佇列為空就代表沒有待辦
+- **打包環境問題，與這次程式碼無關，記錄避免重複診斷**：
+  `CARGO_TARGET_DIR=/Volumes/AgentOSBuild/target npm run tauri:build`
+  三次建置全部失敗。第一次是 npm optional-dependencies 已知 bug
+  （`@tauri-apps/cli-darwin-arm64` 的 `.node` binding 沒裝上，
+  `rm -rf node_modules && npm ci` 修復，未動 `package-lock.json`）。
+  第二、三次是 Cargo 產生的每個 build-script（`proc-macro2`、`quote`、
+  `serde_core` 等未簽章裸執行檔）被 macOS Gatekeeper 逐一攔下跳互動式
+  確認、沒人回應而逾時，系統直接 `SIGKILL`。**一開始誤判為 OOM**
+  （當時可用記憶體確實只剩約 445MB），`cargo clean` 加
+  `CARGO_BUILD_JOBS=2` 兩次嘗試都沒用，才用
+  `log show --predicate 'process == "syspolicyd"'` 查到逐字的
+  `rejecting due to lack of matching active rule` → `GK
+  evaluateScanResult` → `Prompt shown, waiting for response` → 逾時後
+  `Terminating process due to Gatekeeper rejection`，確認是 Gatekeeper
+  而非記憶體。懷疑跟同一輪硬碟改名有關——`/Volumes/AgentOSBuild` 這個
+  磁碟映像檔換了掛載路徑後等同「重新出現」，Gatekeeper 對它的信任快取
+  可能失效，導致上面產生的每個執行檔都要重新逐一評估；**未證實，僅為
+  最可能的推測**。**修復一定要在真正的 Terminal.app 執行，不能在這個
+  對話（Claude 桌面版）的 Bash 工具裡跑**：使用者先執行
+  `sudo spctl developer-mode enable-terminal` 仍然失敗，因為那個設定
+  只信任 Terminal.app 產生的程序鏈（`ps -o pid,ppid,command` 追出來
+  這個對話的父程序是 `claude.app`，不是 Terminal.app），對這裡的 Bash
+  工具無效。改由使用者自己開一個 Terminal.app 視窗執行同一條建置指令
+  才成功。**下次若又遇到同樣的 Gatekeeper 攔截，直接請使用者在
+  Terminal.app 執行，不要在對話裡重試、也不要以為 `enable-terminal`
+  沒生效——它只是信任範圍不含這個對話。**
+- **意外發現一份未合併的部署版本，記錄避免下次搞混**：部署前發現
+  `BUILDS.md` 有一筆 2026-08-21 的紀錄——`34c61b8 feat: show each
+  Slot's PID and Claude's resumed conversation id`，來自分支
+  `feat/slot-pid-session-display`，**從未合併進 `main`、沒有 PR、沒有
+  Linear issue**，是使用者當時直接指示部署的。也就是說在這次部署
+  之前，頂層 `AgentOS Console.app` 跑的其實不是 `main` 的任何一個
+  commit，而是這個獨立分支。本次部署改回 `main`（`f7aae29`），等於
+  把 Slot 標題列的 PID／Claude session id 顯示從頂層版本移除。已向
+  使用者確認：不需要保留這個功能，維持現狀。該分支本身**沒有刪除**，
+  仍在本地與遠端（`feat/slot-pid-session-display`），舊版存檔仍在
+  `builds/2026-08-21-34c61b8/`，之後要恢復功能可重新部署該分支，或
+  補 Linear issue 走 PR 正式合併
+- 打包：2026-09-01 18:29 已從 `f7aae29` 重新建置並以 `ditto` 部署至
+  `/Volumes/OWC1M2/AgentOSConsole/`，存檔於 `builds/2026-09-01-f7aae29/`，
+  `BUILDS.md` 已更新。已以 `strings -a` 確認部署的二進位含
+  `tauri-plugin-dialog-2.7.2` 的原始碼路徑字面值（本次新增依賴帶進來
+  的內嵌 registry 路徑），足以證明變更已編入
+- 分支收尾：本地與遠端 `LOO-35-launch-modal-browse-folder` 均已刪除，
+  兩個 worktree 皆與 `origin/main`（`f7aae29`）同步且工作樹乾淨
+
 ## 切換介面風格與 styles.css token 化（PR #50）
 
 這一輪**沒有走 Finn-loop**：規格來自設計交接包
@@ -1635,6 +1742,49 @@ env -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_CODE_SESSION_ID \
 而非 5,000 行歷史。Codex 這類走一般緩衝區的 CLI 則完全符合設計。這是兩種格子
 表現不同的原因。
 
+## Agent View 可能接管仍存活的桌面版對話
+
+2026-08-20 調查，**尚未查出根因**，記錄於此避免重複調查；決定等根因或
+結論更明確再考慮是否建立 issue。
+
+**症狀**：在 AgentOS Console 的 slot 開 Claude 的 Agent View（`←` 鍵或
+`claude agents`），點擊清單裡一項桌面版正在使用中的對話，slot 會成功
+把它接管走，但桌面版之後無法再進入同一個對話。錯誤原文：
+
+```
+Error: Session <id> is currently running as a background agent (bg).
+Use `claude agents` to find and attach to it, or add --fork-session
+to branch off a copy.
+```
+
+實際發生過一次，代價是使用者以為救不回來，把整個對話刪除；那個對話正是
+LOO-34 handoff（PR #55）當天的工作記錄。
+
+**觸發條件比想像窄**：正常的桌面版對話並不會出現在 Agent View——它按
+`status` 分組顯示（`Need input:` / `Working:`），而
+`entrypoint: "claude-desktop"` 的 session 天生沒有 `status` 欄位，落不進
+任何分組。實測當天 4 個桌面版對話一個都不在清單上。出事的那個對話會
+出現，是因為事發前它已經被標成 `"sessionKind":"bg"`；**這個標記是怎麼
+出現的沒有查出來**——已排除 Remote Control 是觸發原因，往下要拆桌面版
+本身才查得到，成本不低，決定先掛著等它自然復發再抓現行。
+
+**中了怎麼辦**：先停掉 slot 裡接管它的那個 CLI（把該 slot 停掉），再回
+桌面版試一次進入——那道保護看的是持有者程序活不活著，程序死了應該就會
+放行。**這一步未實測**，上次是直接刪了對話，沒機會驗證。無論如何，
+第一原則是**不要刪除對話**，那是唯一不可逆的動作。
+
+**這不是 AgentOS Console 的缺陷**：Agent View 是 CLI 自己畫的 TUI，App
+只是在 PTY 裡跑 `claude`，管不到它列什麼、也攔不掉那個按鍵。App 自己的
+Continue（`claude_resume.rs` 的 `live_session_ids()`）是安全的，濾掉的
+判準是「pid 還活著」而非 `entrypoint`，不會撞上這個問題。
+
+**App 側可能的緩解方案**（未建立 issue，見「後續候選」第 7 項）：不解析
+TUI 畫面（CLI 一改版就會打爛），而是偵測「接管」這個動作本身——
+`~/.claude/sessions/*.json` 裡同一個 sessionId 的持有者從
+`entrypoint: claude-desktop` 換成 `entrypoint: cli`，且新 pid 是某個 slot
+PTY 子程序的後代，兩者同時成立就在該 slot 跳警示，教使用者停掉這個
+slot、而不是去刪對話。這個方案不需要知道 bg 標記從何而來就能做。
+
 ## 後續候選
 
 依價值密度排序，尚未建立 issue。原第 1 項「App icon」已由 PR #52 完成
@@ -1664,6 +1814,10 @@ env -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_CODE_SESSION_ID \
    是可互動的參考稿）已於 2026-08-19 應使用者要求從本機刪除（移至
    `~/.Trash`，未進版控故 git 歷史也沒有）。若之後要做，token 已就位，
    只需改 `styles.css` 與少量 class，但視覺參考需要使用者重新提供。
+7. **偵測 Agent View 接管桌面版對話並警示** — 見「Agent View 可能接管
+   仍存活的桌面版對話」章節。App 側偵測方案已有設計（比對
+   `~/.claude/sessions/*.json` 的 entrypoint 與持有 pid），不需要先查出
+   桌面版 session 變成 `bg` 的觸發條件就能做；後者仍待自然復發時現場抓。
 
 ## 本機預覽方式
 
