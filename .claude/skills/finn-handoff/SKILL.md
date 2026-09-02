@@ -8,7 +8,7 @@ description: Use after a Finn-loop PR for this repo has been merged and the user
 One pass closes one merged issue: clean branches, sync both worktrees, rebuild
 and redeploy the packaged App when code changed, record the outcome in
 `status.md`, and ship that record through its own PR. The App is used from
-Finder, so a merge that never reaches `/Volumes/OWC1M2/AgentOSConsole/` is not
+Finder, so a merge that never reaches `/Volumes/WDSSD/AI_Drive/AgentOSConsole/` is not
 finished. Never `git push` to `main` directly and never merge — the user merges.
 
 ## 1. Confirm the merge
@@ -35,7 +35,7 @@ verbatim, and its description plus the PR body are the only sources for the
 canonical file list and `+A／−D` counts (`變更範圍`). Short SHAs everywhere
 in `status.md`. If you resume at step 4 in a fresh session, re-run this step
 first, and take packaging facts from the last section of
-`/Volumes/OWC1M2/AgentOSConsole/BUILDS.md` — never write facts you did not
+`/Volumes/WDSSD/AI_Drive/AgentOSConsole/BUILDS.md` — never write facts you did not
 just read.
 
 ## 2. Clean branches and sync both worktrees
@@ -49,7 +49,7 @@ git switch --detach origin/main
 git diff --quiet origin/main <branch> -- <paths the PR touched> && echo identical
 git branch -d <branch>          # passes because upstream still exists
 git push origin --delete <branch>
-git -C /Volumes/1TBM2/AI_Drive/Codex_Projects/agentsconsole pull --ff-only
+git -C /Volumes/WDSSD/AI_Drive/Codex_Projects/agentsconsole pull --ff-only
 ```
 
 Both worktrees must end clean and at the same SHA. If `-d` still refuses,
@@ -64,14 +64,14 @@ Otherwise:
 
 1. `pgrep -x agentos-console` — if the App is running, **stop and ask the user
    to quit it**; do not overwrite a running bundle.
-2. `ls /Volumes/AgentOSBuild || hdiutil attach /Volumes/1TBM2/AI_Drive/agentos-build.sparseimage`
+2. `ls /Volumes/AgentOSBuild || hdiutil attach /Volumes/WDSSD/AI_Drive/agentos-build.sparseimage`
    (ExFAT cannot host the Rust build; the APFS image is the target dir).
 3. From `frontend/`: `CARGO_TARGET_DIR=/Volumes/AgentOSBuild/target npm run tauri:build`
    — run in the background, it prints `Finished 1 bundle at: …/AgentOS Console.app`.
 4. Deploy with `ditto`, never `cp -R` (it breaks the bundle signature):
    ```bash
    SRC="/Volumes/AgentOSBuild/target/release/bundle/macos/AgentOS Console.app"
-   DST=/Volumes/OWC1M2/AgentOSConsole
+   DST=/Volumes/WDSSD/AI_Drive/AgentOSConsole
    ditto "$SRC" "$DST/builds/$(date +%F)-<short-sha>/AgentOS Console.app"
    ditto "$SRC" "$DST/AgentOS Console.app"
    ```

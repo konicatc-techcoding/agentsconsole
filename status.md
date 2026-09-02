@@ -1,6 +1,6 @@
 # AgentOS Console — 工作交接狀態
 
-最後更新：2026-09-01
+最後更新：2026-09-02
 
 ## 下次對話直接使用
 
@@ -10,9 +10,13 @@ LOO-34 與 LOO-35 之間另有三個沒有 Linear issue 的 PR：PR #50（切換
 風格 + styles.css token 化，來自 design_handoff_console_restyle/ 的設計
 交接）、PR #52（修正打包版從沒有圖示，使用者提供來源圖）、PR #55
 （LOO-34 的 handoff 紀錄本身）。最新基線為 f7aae29，Linear 的
-agent-ready 佇列為空。App 已打包並部署於 /Volumes/OWC1M2/AgentOSConsole/
-（2026-09-01 更新為 f7aae29，含 LOO-35 的 Launch modal Browse 按鈕），
-從 Finder 點開即可正常使用。沒有功能性缺陷；唯一的未完成事項是
+agent-ready 佇列為空。App 已打包並部署於
+/Volumes/WDSSD/AI_Drive/AgentOSConsole/（2026-09-02 從
+/Volumes/OWC1M2/AgentOSConsole/ 搬移過來，OWC1M2 當時只剩 31GB／已用
+97%，且此時兩顆硬碟都已是 APFS，不再需要當初隔開的理由；內容為
+2026-09-01 更新的 f7aae29，含 LOO-35 的 Launch modal Browse 按鈕），
+從 Finder 點開即可正常使用，**Dock 捷徑若指向舊路徑需要重新拖拉一次**。
+沒有功能性缺陷；唯一的未完成事項是
 documentation-only PR 是否豁免 Closes LOO-NNN 這個流程決定，已被推遲
 三次。搜尋有兩項已知的 xterm 上游限制且決定不修。另記錄一項 Agent View
 可能接管桌面版對話的已知風險，尚未查出根因，見「Agent View 可能接管
@@ -142,11 +146,23 @@ LOO-23 加入每格終端的 scrollback 搜尋，但合併後即發現完全失�
   與 `rust`（macos-latest，`cargo fmt --all --check` 與 `cargo test`），
   `strict` 為 true，即合併前分支必須為最新
 - 目前 Linear issue：無；下一步使用 `/finn-spec` 建立新規格
-- 打包產物：`/Volumes/OWC1M2/AgentOSConsole/`，頂層為使用中的
+- 打包產物：`/Volumes/WDSSD/AI_Drive/AgentOSConsole/`，頂層為使用中的
   `AgentOS Console.app`（目前為 `f7aae29`），
   `builds/` 存歷次版本，
   `BUILDS.md` 記錄各版對應的 commit。無 updater，更新須重新 build 後以
   `ditto` 覆蓋——**用 `ditto` 而非 `cp -R`**，後者可能破壞 app bundle 的簽章
+  **2026-09-02 更新**：原路徑 `/Volumes/OWC1M2/AgentOSConsole/` 已搬移
+  至此。原因：當初隔開放在 OWC1M2 是因為 worktree 所在的外接硬碟是
+  ExFAT、不能承載 Tauri 建置（見「本機預覽方式」的 ExFAT 說明），需要
+  另一顆 APFS 硬碟；該外接硬碟後來已重新格式化並改名為 `WDSSD`（APFS），
+  原本隔開的理由不再成立，加上 `OWC1M2` 當時只剩 31GB（已用 97%），
+  搬到還有 204GB 的 `WDSSD` 更穩妥。搬移前用 `find | sort` 比對兩邊檔案
+  清單完全一致、對全部 10 個歷史存檔版本逐一 `codesign -dv` 驗證通過，
+  才刪除舊路徑；沒有走 finn-handoff 流程（未動任何程式碼、非某個 LOO
+  issue 的一部分），純粹是使用者直接指示的環境整理。`.claude/skills/
+  finn-handoff/SKILL.md` 裡的硬編路徑已同步更新（含另外兩處早該修正、
+  仍指向已改名 `1TBM2` 的殘留路徑）。**Dock 捷徑若原本指向舊路徑，
+  重新拖拉 `AgentOS Console.app` 到 Dock 即可**
 - 最近完成的 Linear issue：`LOO-35 在 Launch modal 新增資料夾瀏覽按鈕，避免手動輸入絕對路徑`
 - LOO-35 URL：<https://linear.app/loopent/issue/LOO-35/在-launch-modal-新增資料夾瀏覽按鈕避免手動輸入絕對路徑>
 - LOO-35 狀態：`Done`；PR <https://github.com/konicatc-techcoding/agentsconsole/pull/56>，
@@ -1853,12 +1869,20 @@ UTF-8`）。這些檔案是建置過程中即時產生的，事前清除無效�
 在外接碟上建置 Tauri。
 
 解法是把建置目錄放在 APFS 稀疏映像裡。映像已建立於
-`/Volumes/1TBM2/AI_Drive/agentos-build.sparseimage`（20 GB 上限，稀疏，
-用多少佔多少）。重開機或重新插拔外接碟後不會自動掛載，每次先掛載：
+`/Volumes/WDSSD/AI_Drive/agentos-build.sparseimage`（2026-09-02 路徑更新，
+硬碟從 `1TBM2` 改名為 `WDSSD`；20 GB 上限，稀疏，用多少佔多少）。重開機
+或重新插拔外接碟後不會自動掛載，每次先掛載：
 
 ```bash
-hdiutil attach /Volumes/1TBM2/AI_Drive/agentos-build.sparseimage
+hdiutil attach /Volumes/WDSSD/AI_Drive/agentos-build.sparseimage
 ```
+
+**2026-09-02 附註（未驗證，未執行）**：這份說明的前提——「worktree 所在
+的外接硬碟是 ExFAT」——寫下時是真的，但 `1TBM2` 改名為 `WDSSD` 之後現在
+是 APFS（`diskutil info` 確認），理論上這個隔離建置目錄的 workaround
+可能已經不再必要，可以直接在 worktree 上建置。**沒有驗證過**，只是
+搬 `AgentOSConsole` 部署路徑時順帶發現；要不要改動整套建置流程是更大
+的決定，不在這次搬移的範圍內，留給之後有需要時再測。
 
 再從 worktree 的 `frontend/` 啟動，不要啟動 FastAPI：
 
